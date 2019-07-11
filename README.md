@@ -3,3 +3,4 @@
 
 # oracle-dba-scripts
 A set of scripts useful for managing Unix/Linux Oracle database environments.
+Scripts I fund useful in managing UNIX/LINUX Oracle database environments. Written in Python, Perl, and Bash/Ksh (mostly Python because....well, Python Rocks!!!)
