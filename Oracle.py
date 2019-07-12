@@ -13,6 +13,7 @@
 #               DumpConfig(ConfigFile)                                                           #
 #               ErrorCheck(Stdout, ComponentList=['ALL_COMPONENTS'])                             #
 #               LookupError(Error)                                                               #
+#               PrintError(Sql, Stdout, ErrorList=[])                                            #
 ##################################################################################################
 
 # --------------------------------------
@@ -429,4 +430,32 @@ def LookupError(Error):
   return(MsgList)
 # ---------------------------------------------------------------------------
 # End LookupError()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : PrintError()
+# Desc: Print a formatted error message.
+# Args: ErrorMsg (the error message to be printed)
+# Retn: <none>
+# ---------------------------------------------------------------------------
+def PrintError(Sql, Stdout, ErrorList=[]):
+  print('\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
+  print('%s\n' % Sql)
+  print('----')
+  print(Stdout)
+  print('----')
+  print
+  for Error in ErrorList:
+    OracleError = Error[0]
+    ErrorString = Error[1]
+    Explanation = LookupError(OracleError)
+    if (len(Explanation) > 0):
+      print('\nExplanation:')
+      print('---------------')
+      for line in Explanation:
+        print(line)
+  print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n')
+  return
+# ---------------------------------------------------------------------------
+# End PrintError()
 # ---------------------------------------------------------------------------
