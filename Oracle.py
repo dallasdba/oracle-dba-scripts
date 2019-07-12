@@ -10,6 +10,7 @@
 #               ChunkString(InStr, Len)                                                          #
 #               CheckPythonVersion()                                                             #
 #               ConvertSize(bytes)                                                               #
+#               DumpConfig(ConfigFile)                                                           #
 ##################################################################################################
 
 # --------------------------------------
@@ -242,6 +243,44 @@ def ConvertSize(bytes):
        return '0B'
 # ---------------------------------------------------------------------------
 # End ConvertSize()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : DumpConfig()
+# Desc: Dumps the configuration file to stdout.
+# Args: <none>
+# Retn: <none>
+# ---------------------------------------------------------------------------
+def DumpConfig(ConfigFile):
+  Config = SafeConfigParser()
+
+  # Load the configuration file.
+  # -----------------------------
+  if (IsReadable(ConfigFile)):
+    Config.read(ConfigFile)
+    ConfigSections = Config.sections()
+  else:
+    print('\nConfiguration file does not exist or is not readable: %s' % ConfigFile)
+    exit(1)
+
+  print('\nConfiguration: %s' % ConfigFile)
+  print('-------------------------------------------------------------------')
+  print('Sections: %s' % ConfigSections)
+  print(ConfigSections)
+  for Section in ConfigSections:
+    print('\n[%s]' % Section)
+    for Option in sorted(Config.options(Section)):
+      try:
+        Value = Config.get(Section, Option)
+      except:
+        print('\n%s' % traceback.format_exc())
+        print('Error parsing config file. Oracle.py->DumpConfig->ConfigConfig(%s)\n' % ConfigFile)
+        exit(1)
+      print('%-40s = %-40s' % (Option, Value))
+    print
+  return
+# ---------------------------------------------------------------------------
+# End DumpConfig()
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
