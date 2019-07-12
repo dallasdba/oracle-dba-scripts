@@ -5,6 +5,8 @@
 #               code here in order to simplify managing changes to duplicate code across dozens  #
 #               of scripts.                                                                      #
 #                                                                                                #
+#  Classes:     ResultSet()                                                                      #
+#                                                                                                #
 #  Functions:   LoadOratab(Oratab='')                                                            #
 #               SetOracleEnv(Sid, Oratab='/etc/oratab')                                          #
 #               ChunkString(InStr, Len)                                                          #
@@ -14,6 +16,7 @@
 #               ErrorCheck(Stdout, ComponentList=['ALL_COMPONENTS'])                             #
 #               LookupError(Error)                                                               #
 #               PrintError(Sql, Stdout, ErrorList=[])                                            #
+#                                                                                                #
 ##################################################################################################
 
 # --------------------------------------
@@ -459,3 +462,57 @@ def PrintError(Sql, Stdout, ErrorList=[]):
 # ---------------------------------------------------------------------------
 # End PrintError()
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Clas: ResultSet()
+# Desc: Runs a query in sqlplus
+# ---------------------------------------------------------------------------
+class ResultSet:
+  def __init__(self, sel):
+    self.table = []
+    self.row_count = 0
+    self.errors = []
+    self.rc = 0
+    self.stdout = ''
+    colsep = '~'
+    Sql  = "set pagesize      0\n"
+    Sql += "set heading     off\n"
+    Sql += "set lines     32767\n"
+    Sql += "set feedback    off\n"
+    Sql += "set echo        off\n"
+    Sql += "set colsep      '" + colsep + "'\n"
+    Sql += "\n"
+    Sql += sel + ';'
+
+    (self.rc, self.stdout, self.errors) = RunSqlplus(Sql, True, ConnectString = "/ as sysdba")
+    if (self.rc == 0):
+      for row in self.stdout.split('\n'):
+        columns = map(str.strip,row.split(colsep))
+        self.table.append(columns)
+      self.row_count = len(self.table)
+    else:
+      self.table.append([])
+      self.row_count = 0
+
+  def print_table(self):
+    for row in self.table:
+      print(row)
+
+  def get_table(self):
+      return self.table
+
+  def get_row_count(self):
+    return self.row_count
+
+  def get_errors(self):
+    return self.errors
+
+  def get_sqlout(self):
+    return self.stdout
+
+  def get_resultcode(self):
+    return self.rc
+# ---------------------------------------------------------------------------
+# End ResultSet()
+# ---------------------------------------------------------------------------
+  
