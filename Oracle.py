@@ -8,6 +8,7 @@
 #  Functions:   LoadOratab(Oratab='')                                                            #
 #               SetOracleEnv(Sid, Oratab='/etc/oratab')                                          #
 #               ChunkString(InStr, Len)                                                          #
+#               CheckPythonVersion()                                                             #
 ##################################################################################################
 
 # --------------------------------------
@@ -152,11 +153,10 @@ def LoadOratab(Oratab=''):
 #       OracleHome = $ORACLE_HOME
 # ---------------------------------------------------------------------------
 def SetOracleEnv(Sid, Oratab='/etc/oratab'):
-  OracleSid = ''
+  OracleSid  = ''
   OracleHome = ''
-
   OratabDict = LoadOratab()
-  SidCount = len(OratabDict.keys())
+  SidCount   = len(OratabDict.keys())
 
   if (SidCount > 0):
     if (Sid in OratabDict.keys()):
@@ -199,6 +199,26 @@ def ChunkString(InStr, Len):
   return((InStr[i:i+Len] for i in range(0, len(InStr), Len)))
 # ---------------------------------------------------------------------------
 # End ChunkString()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : CheckPythonVersion()
+# Desc: Checks the version of Python and prints error and exit(1) if not
+#       within required range.
+# Args: rv=requried version
+# Retn: 0 or exit(1)
+# ---------------------------------------------------------------------------
+def CheckPythonVersion():
+  import sys
+
+  v = float(str(sys.version_info[0]) + '.' + str(sys.version_info[1]))
+  if v >= PyMinVer and v <= PyMaxVer:
+    return(str(sys.version_info[0]) + '.' + str(sys.version_info[1]) + '.' + str(sys.version_info[2]))
+  else:
+    print( "\nError: The version of your Python interpreter (%1.1f) must between %1.1f and %1.1f\n" % (v, PyMinVer, PyMaxVer) )
+    exit(1)
+# ---------------------------------------------------------------------------
+# End CheckPythonVersion()
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
