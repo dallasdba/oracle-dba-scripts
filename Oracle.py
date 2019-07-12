@@ -9,6 +9,7 @@
 #               SetOracleEnv(Sid, Oratab='/etc/oratab')                                          #
 #               ChunkString(InStr, Len)                                                          #
 #               CheckPythonVersion()                                                             #
+#               ConvertSize(bytes)                                                               #
 ##################################################################################################
 
 # --------------------------------------
@@ -219,6 +220,28 @@ def CheckPythonVersion():
     exit(1)
 # ---------------------------------------------------------------------------
 # End CheckPythonVersion()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : ConvertSize()
+# Desc: Reduces the size of a number from Bytes .. Yeta Bytes
+# Args: s    = numeric_string
+#       tSep = thousands_separation_character (default is ',')
+#       dSep = decimal_separation_character (default is '.')
+# Retn: formatted string
+#---------------------------------------------------------------------------
+def ConvertSize(bytes):
+   size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+   i = int(floor(log(bytes,1024)))
+   p = pow(1024,i)
+   s = round(bytes/p,2)
+
+   if (s > 0):
+       return '%s %s' % (s,size_name[i])
+   else:
+       return '0B'
+# ---------------------------------------------------------------------------
+# End ConvertSize()
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
