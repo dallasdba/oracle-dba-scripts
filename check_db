@@ -1,0 +1,1201 @@
+#!/bin/env python
+
+##################################################################################################
+#  Name:        check_db                                                                         #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Verifies database compliance with CBRE policies & Oracle best practices.         #
+#                                                                                                #
+#  Usage: check_db [Options]                                                                     #
+#                                                                                                #
+#  usage: check_db [options]                                                                     #
+#                                                                                                #
+#  options:                                                                                      #
+#    -a,            run a check_db using this list of application types, ex. exadata,app1,app2   #
+#    -s,            show application types defined in the check_db.ini file.                     #
+#    -h, --help     show this help message and exit                                              #
+#    -v Verbose     Vervose output                                                               #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 08/21/2012 1.00 Randy Johnson    Initial release.                                              #
+# 11/12/2012 1.10 Randy Johnson    Fix for "SP2-0027: Input is too long (> 2499 characters)"     #
+#                                  caused by SQL line length exceeding the limit. Put each parm  #
+#                                  in the where clause on a separate line.                       #
+#                                                                                                #
+# Todo's                                                                                         #
+# Add config_backup checks.                                                                      #
+#                                                                                                #
+#                                                                                                #
+#                                                                                                #
+##################################################################################################
+
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+import traceback
+import re
+from datetime import datetime
+from sys import exit, argv, stdout, exc_info, path
+from optparse import OptionParser
+from ConfigParser import SafeConfigParser
+from subprocess import Popen, PIPE, STDOUT, call
+from string import find, split, join, lower, upper, strip
+from decimal import *
+from os.path import exists, basename, dirname
+from os import environ
+import signal
+
+# For handling termination in stdout pipe.
+#  ex. when you run: oerrdump | head
+#--------------------------------------------
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+
+# --------------------------------------
+# ---- Function Definitions ------------
+# --------------------------------------
+
+# Def  : formatExceptionInfo()
+# Desc : Format and print Python stack trace
+# Args : maxTBlevel (default 5). Levels of the call stack.
+# Retn : cla=name of exception class, exc=details of exception,
+#        trbk=traceback info (call stack)
+#---------------------------------------------------------------------------
+def formatExceptionInfo(maxTBlevel=5):
+  cla, exc, trbk = exc_info()
+  excName = cla.__name__
+  try:
+    excArgs = exc.__dict__["args"]
+  except KeyError:
+    excArgs = "<no args>"
+  excTb = traceback.format_tb(trbk, maxTBlevel)
+
+  print excName, excArgs
+  for line in excTb:
+    print line
+  return(excName, excArgs, excTb)
+# End formatExceptionInfo()
+
+
+# Def : SetOracleEnv()
+# Desc: Setup your environemnt, eg. ORACLE_HOME, ORACLE_SID. (Parses oratab
+#       file).
+# Args: Sid = The ORACLE_SID of the home you want to configure for
+# Retn: OracleHome = $ORACLE_HOME
+#---------------------------------------------------------------------------
+def SetOracleEnv(Sid, Oratab):
+  OracleSid = ''
+  OracleHome = ''
+
+  if (Sid in Oratab.keys()):
+    OracleSid  = Sid
+    OracleHome = Oratab[OracleSid]
+    environ['ORACLE_SID']   = OracleSid
+    environ['ORACLE_HOME']  = OracleHome
+  return(OracleSid, OracleHome)
+# End SetOracleEnv()
+
+# Def : LoadOratab()
+# Desc: Parses the oratab file and returns a List of lists containing:
+#       SID, ORACLE_HOME, Stop/Start Flag
+# Args: none.
+# Retn: OratabLL
+#---------------------------------------------------------------------------
+def LoadOratab():
+  OracleSid =  ''
+  OracleHome = ''
+  Bootflag   = ''
+  Oratab     = {}
+
+  try:
+    otab = open(OratabFile)
+  except:
+    formatExceptionInfo()
+    print 'Cannot open oratab file: ' + OratabFile + ' for read.'
+    exit(1)
+
+  OratabContents = otab.read().split('\n')
+  for line in OratabContents:
+    pos = line.find('#')
+    if (pos >= 0):                     # Commend character found.
+      if (pos > 0):                    # Comment isn't at the beginning of the line. (there is something to preserve)
+        line = line[0:pos]
+    line = line.strip()
+    if (line != ''):
+      Count = line.count(':')
+      if (Count == 2):
+        (OraSid, OraHome, Bootflag) = line.split(':')
+        Oratab[OraSid] = OraHome
+  return(Oratab)
+# End LoadOratab()
+
+# Def : ErrorCheck()
+# Desc: Check tnsping, sqlplus, crsctl, srvctl output for errors.
+# Args: Output(output you want to scan for errors)
+# Retn: Returns 0=no errors or 1=error found, and error stack
+#-------------------------------------------------------------------------
+def ErrorCheck(StdOut, ComponentList):
+  FacilityList = []
+  ErrorStack   = []
+  rc           = 0
+
+  # Determine what errors to check for....
+  for key in sorted(FacilitiesDD.keys()):
+    if (ComponentList[0].upper() == 'ALL_COMPONENTS'):
+      for Component in ComponentList:
+        FacilityList.append(key.upper())
+    else:
+      for Component in ComponentList:
+        if (Component == FacilitiesDD[key]['Component']):
+          FacilityList.append(key.upper())
+
+  # Component:
+  #  Facility class is major error type such as SP1, SP2, IMP, TNS, ...
+  #  Component class is the application such as sqlplus, rdbms, imp, network.
+  #  A component can have several error facilities. For example the sqlplus 
+  #  has 5:
+  #    grep sqlplus  /u01/app/oracle/product/11.2.0.3/dbhome_1/lib/facility.lis
+  #    cpy:sqlplus:*:
+  #    sp1:sqlplus:*:
+  #    sp2:sqlplus:*:
+  #    sp3:sqlplus:*:
+  #    spw:sqlplus:*:
+  #  
+  #  The error SP2-06063 breaks down as Component=sqlplus, Facility=sp2, Error=06063. See below:
+  #    SP2-06063 : 06063,0, "When SQL*Plus starts, and after CONNECT commands, the site profile\n"
+  #    SP2-06063 : // *Document: NO
+  #    SP2-06063 : // *Cause:  Usage message.
+  #    SP2-06063 : // *Action:
+
+  for line in StdOut.split('\n'):
+    for Facility in FacilityList:
+      # Check for warning and error messages
+      matchObj = re.match('.*' + Facility + '-[0]*.*', line)
+      matchObj = re.search(Facility + '-[0-9]+', line)
+      if (matchObj):
+        ErrorString = matchObj.group()
+        rc = 1
+        ErrorStack.append([Facility, ErrorString, line])
+  return(rc, ErrorStack)
+# End ErrorCheck()
+
+
+# Def : PrintError()
+# Desc: Print a formatted error message.
+# Args: ErrorMsg (the error message to be printed)
+# Retn:
+#---------------------------------------------------------------------------
+def PrintError(ErrorStack):
+  print '\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'
+  for row in ErrorStack:
+    ErrorMsg = LookupMessage(row[1])           # list structure: [facility, ErrorCode, OutputString]
+    print row[2]
+    for line in ErrorMsg:
+      print line
+  print '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n'
+  return
+# End PrintError()
+
+
+# Def : PrintDbInfo()
+# Desc: Prints a dump of the DbInfo variable.
+# Args: DbInfo
+# Retn:
+#---------------------------------------------------------------------------
+def PrintDbInfo(DbInfo):
+  print '\n----------------------------------------------------------------------'
+  print '-- Active Database Parameters ----------------------------------------'
+  print '----------------------------------------------------------------------'
+  print 'Database Parameter                      Value'
+  print '--------------------------------------  ------------------------------'
+  for Parm in sorted(DbInfo.keys()):
+    if (Parm != 'Status'):
+      print '%-40s %-40s' % (Parm, DbInfo[Parm])
+  print '----------------------------------------------------------------------'
+  print '-- End of Report: Active Database Parameters -------------------------'
+  print '----------------------------------------------------------------------\n'
+  return
+# End PrintDbInfo()
+
+
+# Def : GetDbInfo()
+# Desc: Calls sqlplus and runs queries to collect database information from
+#       the database.
+# Args: Oracle SID, ParmList
+# Retn: DbInfo
+#---------------------------------------------------------------------------
+def GetDbInfo(Sid, ParmList):
+  DbInfo     = {}
+  ParmString = ''
+  ParmQry    = ''
+  BackupQry  = ''
+  PreQry     = ''
+  PostQry    = ''
+
+  # Additional parameters...
+  ParmList.append('db_name')
+  ParmList.append('db_unique_name')
+  ParmList.append('service_names')
+  ParmList.append('db_domain')
+  ParmList.append('db_cache_size')
+  ParmList.append('cpu_count')
+  ParmList.append('compatible')
+  ParmList.append('resource_manager_plan')
+  ParmList.append('streams_pool_size')
+  ParmList.append('java_pool_size')
+  ParmList.append('large_pool_size')
+  ParmList.append('pga_aggregate_target')
+  ParmList.append('statistics_level')
+  ParmList.append('memory_target')
+  ParmList.append('memory_max_target')
+  ParmList.append('sga_max_size')
+  ParmList.append('sga_target')
+  ParmList.append('shared_pool_size')
+  ParmList.append('db_create_file_dest')
+  ParmList.append('db_recovery_file_dest')
+  ParmList.append('db_recovery_file_dest_size')
+
+  ###! ParmString = "'" + join(ParmList, '\',\'') + "'"
+  ParmString = "'" + join(ParmList, '\',\n                     \'') + "'"
+  
+  PreQry  = "set lines 2000"                                                + '\n'
+  PreQry += "set pages 0"                                                   + '\n'
+  PreQry += "col name  format a50"                                          + '\n'
+  PreQry += "col value format a70"                                          + '\n'
+  PreQry += "col bytes format 9999999999999999999999999999"                 + '\n'
+  PreQry += "set feedback off"                                              + '\n'
+  PreQry += "set echo off"                                                  + '\n'
+  PreQry += "alter session set nls_date_format='yyyy-mm-dd hh24:mi:ss';"    + '\n'
+
+  ParmQry += "/* This query returns database instance parameters */"         + '\n'
+  ParmQry += "SELECT '" + Sid + "' ||'~'||"                                  + '\n'
+  ParmQry += "       i.ksppinm  ||'~'|| "                                    + '\n'
+  ParmQry += "       sv.ksppstvl"                                            + '\n'
+  ParmQry += "  FROM sys.x$ksppi  i,"                                        + '\n'
+  ParmQry += "       sys.x$ksppsv sv"                                        + '\n'
+  ParmQry += " WHERE  i.indx = sv.indx"                                      + '\n'
+  ParmQry += "   AND i.ksppinm in (" + ParmString + ");"                     + '\n'
+
+  # current_sga_size
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'current_sga_usage'||'~'||"
+  ParmQry +=        "sum(value)"
+  ParmQry += "  FROM sys.v$sga;" + '\n'
+
+  # Connected Instance
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'instance_name'||'~'||"
+  ParmQry +=        "instance_name"
+  ParmQry += "  FROM sys.v$instance;" + '\n'
+
+  # Database Version
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'db_version'||'~'||"
+  ParmQry +=        "banner" + '\n'
+  ParmQry += "  FROM sys.v$version" + '\n'
+  ParmQry += " WHERE  banner like 'Oracle Database %';" + '\n'
+
+  # Storage for data files
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'datafile_bytes'||'~'||"
+  ParmQry +=         "sum(bytes)"
+  ParmQry +=  " FROM dba_data_files;" + '\n'
+
+  # Storage for temp files
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'tempfile_bytes'||'~'||"
+  ParmQry +=         "sum(bytes)"
+  ParmQry +=  " FROM dba_temp_files;" + '\n'
+
+  # Storage for redo logs
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'redofile_bytes'||'~'||"
+  ParmQry +=         "sum(bytes)"
+  ParmQry +=  " FROM v$log;" + '\n'
+
+  # Storage for controlfiles
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'controlfile_bytes'||'~'|| "
+  ParmQry +=         "sum(block_size*file_size_blks)"
+  ParmQry +=  " FROM v$controlfile;" + '\n'
+
+  # Total storage (datafiles + tempfiles + redo logs + controlfiles)
+  ParmQry += "SELECT '" + Sid + "' ||'~total_storage~'|| "                   + '\n'
+  ParmQry += "        (dfiles.bytes + tfiles.bytes + "
+  ParmQry +=         "rfiles.bytes + cfiles.bytes)"                          + '\n'
+  ParmQry += "  FROM (select 'a' col1, sum(bytes) bytes"
+  ParmQry +=         " FROM dba_data_files)                     dfiles,"     + '\n'
+  ParmQry += "       (SELECT 'a' col1, sum(bytes) bytes"
+  ParmQry +=         " FROM dba_temp_files)                     tfiles,"     + '\n'
+  ParmQry += "       (SELECT 'a' col1, sum(bytes) bytes"
+  ParmQry +=         " FROM v$log)                              rfiles,"     + '\n'
+  ParmQry += "       (SELECT 'a' col1, "
+  ParmQry +=        "sum(block_size*file_size_blks) bytes"
+  ParmQry +=         " FROM v$controlfile)  cfiles"                          + '\n'
+  ParmQry += " WHERE dfiles.col1 = tfiles.col1"                              + '\n'
+  ParmQry += "   AND dfiles.col1 = rfiles.col1"                              + '\n'
+  ParmQry += "   AND dfiles.col1 = cfiles.col1;"                             + '\n'
+
+  # instance_status
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'instance_status'||'~'||status"                         + '\n'
+  ParmQry += "  FROM sys.v$instance;"                                        + '\n'
+
+  # dbid
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'dbid'||'~'||dbid"                                      + '\n'
+  ParmQry += "  FROM sys.v$database;"                                        + '\n'
+
+  ###~ $UserCheckSQL         = "select count(*) from dba_users where username='CVBK'";
+  # backup_user_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_user_check'||'~'||count(*)"                   + '\n'
+  BackupQry += "  FROM sys.user$"                                            + '\n'
+  BackupQry += " WHERE name = 'CVBK';"                                       + '\n'
+
+  ###~ $PasswordCheckSQL     = "select count(*) from sys.user\$ where name='CVBK' and password='838DE34A7BC42C60'";
+  # backup_password_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_password_check'||'~'||count(*)"               + '\n'
+  BackupQry += "  FROM sys.user$"                                            + '\n'
+  BackupQry += " WHERE name = 'CVBK'"                                        + '\n'
+  BackupQry += "   AND password='838DE34A7BC42C60';"                         + '\n'
+
+  ###~ $SelectDatabaseSQL    = "select count(*) from dba_tab_privs where grantee='CVBK' and owner='SYS' and privilege='SELECT' and table_name='V_\$DATABASE'";
+  # backup_database_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_database_check'||'~'||count(*)"               + '\n'
+  BackupQry += "  FROM dba_tab_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND owner='SYS'"                                          + '\n'
+  BackupQry += "   AND privilege='SELECT'"                                   + '\n'
+  BackupQry += "   AND table_name='V_$DATABASE';"                            + '\n'
+
+  ###~ $SelectDatafileSQL    = "select count(*) from dba_tab_privs where grantee='CVBK' and owner='SYS' and privilege='SELECT' and table_name='V_\$DATAFILE'";
+  # backup_datafile_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_datafile_check'||'~'||count(*)"               + '\n'
+  BackupQry += "  FROM dba_tab_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND owner='SYS'"                                          + '\n'
+  BackupQry += "   AND privilege='SELECT'"                                   + '\n'
+  BackupQry += "   AND table_name='V_$DATAFILE';"                            + '\n'
+
+  ###~ $SelectTablespacesSQL = "select count(*) from dba_tab_privs where grantee='CVBK' and owner='SYS' and privilege='SELECT' and table_name='DBA_TABLESPACES'";
+  # backup_tablespace_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_tablespace_check'||'~'||count(*)"             + '\n'
+  BackupQry += "  FROM dba_tab_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND owner='SYS'"                                          + '\n'
+  BackupQry += "   AND privilege='SELECT'"                                   + '\n'
+  BackupQry += "   AND table_name='DBA_TABLESPACES';"                        + '\n'
+
+  ###~ $SelectArchiveDestSQL = "select count(*) from dba_tab_privs where grantee='CVBK' and owner='SYS' and privilege='SELECT' and table_name='V_\$ARCHIVE_DEST'";
+  # backup_archivedest_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_archivedest_check'||'~'||count(*)"            + '\n'
+  BackupQry += "  FROM dba_tab_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND owner='SYS'"                                          + '\n'
+  BackupQry += "   AND privilege='SELECT'"                                   + '\n'
+  BackupQry += "   AND table_name='V_$ARCHIVE_DEST';"                        + '\n'
+
+  ###~ $SelectAnyTableSQL    = "select count(*) from dba_sys_privs where grantee='CVBK' and privilege='SELECT ANY TABLE'";
+  # backup_select_any_table_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_select_any_table_check'||'~'||count(*)"       + '\n'
+  BackupQry += "  FROM dba_sys_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND privilege='SELECT ANY TABLE';"                        + '\n'
+
+  ###~ $AlterSystemSQL       = "select count(*) from dba_sys_privs where grantee='CVBK' and privilege='ALTER SYSTEM'";
+  # backup_alter_system_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_alter_system_check'||'~'||count(*)"           + '\n'
+  BackupQry += "  FROM dba_sys_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND privilege='ALTER SYSTEM';"                            + '\n'
+
+  ###~ $SysDBASQL            = "select COUNT(*) from v\$pwfile_users where username='CVBK' and SYSDBA='TRUE'";
+  # backup_pwfile_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_pwfile_check'||'~'||count(*)"                 + '\n'
+  BackupQry += "  FROM v$pwfile_users"                                       + '\n'
+  BackupQry += " WHERE username='CVBK'"                                      + '\n'
+  BackupQry += "   AND sysdba='TRUE';"                                       + '\n'
+
+  PostQry += "EXIT" + '\n'
+  Queries = PreQry + ParmQry + BackupQry + PostQry
+  
+  # Fetch parameters from the database
+  try:
+    # dcli uses...  shell=True, stdin=PIPE, stdout=PIPE, close_fds=True
+    proc = Popen([Sqlplus, '-s', '/', 'as', 'sysdba'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False) 
+    (SqlOut, SqlErr) = proc.communicate(ParmQry)
+  except:
+    formatExceptionInfo()
+    print 'Failed to connect to database: ' + Sid + ' (database may be shutdown)'
+    return(proc.returncode)
+  
+  SqlOut = SqlOut.strip()      # remove leading/trailing whitespace
+
+  # Check for sqlplus errors
+  # Components are installed applications/components such as sqlplus, import, export, rdbms, network, ...
+  # ComponentList contains a list of all components for which the error code will be searched. 
+  # For example a component of rdbms will result in ORA-nnnnn errors being included in the search. 
+  # ALL_COMPONENTS is an override in the ErrorCheck function that results in *all* installed components 
+  # being selected. Searching all component errors is pretty fast so for now we'll just search them all.
+  # -------------------------------------------------------------------------------------------------------
+  #ComponentList = ['sqlplus','rdbms','network']
+  ComponentList = ['ALL_COMPONENTS']
+  (rc, ErrorStack) = ErrorCheck(SqlOut, ComponentList)
+  if (rc != 0):
+    DbInfo['Status'] = 'Failure'
+    PrintError(ErrorStack)
+    print ' Error Retrieving info from ' + Sid + '.'
+  else:
+    DbInfo['Status'] = 'Success'
+    for line in SqlOut.split('\n'):
+      if (line.count('~') == 2):
+        (Sid, Parm, Value) = line.split('~')
+        if (Sid == environ['ORACLE_SID']):
+          DbInfo[Parm] = Value
+
+  return(DbInfo)
+# End GetDbInfo()
+
+
+# Def : GetLogswitchInfo()
+# Desc: Calls sqlplus and runs queries to collect log switch activity.
+# Args: Oracle SID
+# Retn: LogSwitchInfo
+#---------------------------------------------------------------------------
+def GetLogswitchInfo(Sid):
+  LogSwitchInfo = {}
+
+  LswQry  = "set lines 2000"                                                + '\n'
+  LswQry += "set pages 0"                                                   + '\n'
+  LswQry += "col name  format a50"                                          + '\n'
+  LswQry += "col value format a70"                                          + '\n'
+  LswQry += "col bytes format 9999999999999999999999999999"                 + '\n'
+  LswQry += "set feedback off"                                              + '\n'
+  LswQry += "set echo off"                                                  + '\n'
+  LswQry += "alter session set nls_date_format='yyyy-mm-dd hh24:mi:ss';"    + '\n'
+  LswQry += "/* This query returns database instance parameters */"         + '\n'
+  LswQry += "SELECT '" + Sid + "' ||'~'||"                                  + '\n'
+  LswQry += "       i.ksppinm  ||'~'|| "                                    + '\n'
+  LswQry += "       sv.ksppstvl"                                            + '\n'
+  LswQry += "  from sys.x$ksppi  i,"                                        + '\n'
+  LswQry += "       sys.x$ksppsv sv"                                        + '\n'
+  LswQry += " where i.indx = sv.indx"                                       + '\n'
+  LswQry += "   and i.ksppinm in (" + ParmString + ");"                     + '\n'
+
+  # Fetch parameters from the database
+  try:
+    proc = Popen([Sqlplus, '-s', '/', 'AS', 'SYSDBA'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False)
+    (SqlOut, SqlErr) = proc.communicate(LswQry)
+  except:
+    formatExceptionInfo()
+    print 'Failed to connect to database: ' + Sid + ' (database may be shutdown)'
+    return(proc.returncode)
+
+  # Check for sqlplus errors
+  # Components are installed applications/components such as sqlplus, import, export, rdbms, network, ...
+  # ComponentList contains a list of all components for which the error code will be searched. 
+  # For example a component of rdbms will result in ORA-nnnnn errors being included in the search. 
+  # ALL_COMPONENTS is an override in the ErrorCheck function that results in *all* installed components 
+  # being selected. Searching all component errors is pretty fast so for now we'll just search them all.
+  # -------------------------------------------------------------------------------------------------------
+  #ComponentList = ['sqlplus','rdbms','network']
+  ComponentList = ['ALL_COMPONENTS']
+  (rc, ErrorStack) = ErrorCheck(SqlOut, ComponentList)
+  if (rc != 0):
+    LogSwitchInfo['Status'] = 'Failure'
+    PrintError(ErrorStack)
+    print ' Error Retrieving info from ' + Sid + '.'
+  else:
+    LogSwitchInfo['Status'] = 'Success'
+    for line in SqlOut.split('\n'):
+      (Sid, Parm, Value) = line.split('~')
+      if (Sid == environ['ORACLE_SID']):
+        LogSwitchInfo[Parm] = Value
+  return(LogSwitchInfo)
+# End GetLogswitchInfo()
+
+
+# Def : CheckActualParms()
+# Desc: Calls sqlplus and runs queries to collect database parameter
+#       settings.
+# Args: ParmsDict
+# Retn: ActualParms
+#---------------------------------------------------------------------------
+def CheckActualParms(Sid, ParmsList):
+  ActualParms = {}
+  ParmString = "'" + join(ParmsList, '\',\'') + "'"
+
+  ParmQry  = "set lines 2000"                                                + '\n'
+  ParmQry += "set pages 0"                                                   + '\n'
+  ParmQry += "col name  format a50"                                          + '\n'
+  ParmQry += "col value format a70"                                          + '\n'
+  ParmQry += "col bytes format 9999999999999999999999999999"                 + '\n'
+  ParmQry += "set feedback off"                                              + '\n'
+  ParmQry += "set echo off"                                                  + '\n'
+  ParmQry += "alter session set nls_date_format='yyyy-mm-dd hh24:mi:ss';"    + '\n'
+  ParmQry += "/* This query returns database instance parameters */"         + '\n'
+  ParmQry += "SELECT '" + Sid + "' ||'~'||"                                  + '\n'
+  ParmQry += "       i.ksppinm  ||'~'|| "                                    + '\n'
+  ParmQry += "       sv.ksppstvl"                                            + '\n'
+  ParmQry += "  FROM sys.x$ksppi  i,"                                        + '\n'
+  ParmQry += "       sys.x$ksppsv sv"                                        + '\n'
+  ParmQry += " WHERE  i.indx = sv.indx"                                      + '\n'
+  ParmQry += "   AND i.ksppinm in (" + ParmString + ");"                     + '\n'
+  ParmQry += "EXIT"                                                          + '\n'
+
+  # Fetch parameters from the database
+  try:
+    proc = Popen([Sqlplus, '-s', '/', 'AS', 'SYSDBA'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False)
+    (SqlOut, SqlErr) = proc.communicate(ParmQry)
+  except:
+    formatExceptionInfo()
+    print 'Failed to connect to database: ' + Sid + ' (database may be shutdown)'
+    return(proc.returncode)
+    
+  # Check for sqlplus errors
+  # Components are installed applications/components such as sqlplus, import, export, rdbms, network, ...
+  # ComponentList contains a list of all components for which the error code will be searched. 
+  # For example a component of rdbms will result in ORA-nnnnn errors being included in the search. 
+  # ALL_COMPONENTS is an override in the ErrorCheck function that results in *all* installed components 
+  # being selected. Searching all component errors is pretty fast so for now we'll just search them all.
+  # -------------------------------------------------------------------------------------------------------
+  #ComponentList = ['sqlplus','rdbms','network']
+  ComponentList = ['ALL_COMPONENTS']
+  (rc, ErrorStack) = ErrorCheck(SqlOut, ComponentList)
+  if (rc != 0):
+    #ActualParms['Status'] = 'Failure'
+    PrintError(ErrorStack)
+    print ' Error Retrieving info from ' + Sid + '.'
+  else:
+    #DbInfo['Status'] = 'Success'
+    for line in SqlOut.split('\n'):
+      (Sid, Parm, Value) = line.split('~')
+      if (Sid == environ['ORACLE_SID']):
+        ActualParms[Parm] = Value
+  return(ActualParms)
+# End CheckActualParms()
+
+
+# Def : ReportDbInfo()
+# Desc: Prints a detailed report of database configuration information.
+# Args: DbInfo
+# Retn: Report Text
+#---------------------------------------------------------------------------
+def ReportDbInfo(DbInfo):
+  Report = ''
+  FirstLoop = True
+  if (DbInfo['Status'] == 'Success'):
+    memory_max_target = int(DbInfo['memory_max_target'])
+    memory_target     = int(DbInfo['memory_target'])
+    sga_max_size      = int(DbInfo['sga_max_size'])
+    sga_target        = int(DbInfo['sga_target'])
+    shared_pool_size  = int(DbInfo['shared_pool_size'])
+    statistics_level  = DbInfo['statistics_level'].lower()
+
+    if (memory_max_target > 0 and memory_target > 0):
+      MemoryManagement = 'AMM'
+    elif (sga_target > 0 and (statistics_level == 'typical' or statistics_level == 'all')):
+      MemoryManagement = 'ASMM'
+    else:
+      MemoryManagement = 'None'
+
+    db_name                    = DbInfo['db_name']
+    db_unique_name             = DbInfo['db_unique_name']
+    db_domain                  = DbInfo['db_domain']
+    db_version                 = DbInfo['db_version']
+    resource_manager_plan      = DbInfo['resource_manager_plan']
+    cpu_count                  = DbInfo['cpu_count']
+    instance_name              = DbInfo['instance_name']
+    statistics_level           = DbInfo['statistics_level']
+    db_create_file_dest        = DbInfo['db_create_file_dest']
+    db_recovery_file_dest      = DbInfo['db_recovery_file_dest']
+    db_recovery_file_dest_size = splitThousands(DbInfo['db_recovery_file_dest_size'] )
+    memory_max_target          = splitThousands(DbInfo['memory_max_target']          )
+    memory_target              = splitThousands(DbInfo['memory_target']              )
+    sga_max_size               = splitThousands(DbInfo['sga_max_size']               )
+    sga_target                 = splitThousands(DbInfo['sga_target']                 )
+    pga_aggregate_target       = splitThousands(DbInfo['pga_aggregate_target']       )
+    db_cache_size              = splitThousands(DbInfo['db_cache_size']              )
+    shared_pool_size           = splitThousands(DbInfo['shared_pool_size']           )
+    streams_pool_size          = splitThousands(DbInfo['streams_pool_size']          )
+    large_pool_size            = splitThousands(DbInfo['large_pool_size']            )
+    java_pool_size             = splitThousands(DbInfo['java_pool_size']             )
+    current_sga_usage          = splitThousands(DbInfo['current_sga_usage']          )
+    tempfile_bytes             = splitThousands(DbInfo['tempfile_bytes']             )
+    redofile_bytes             = splitThousands(DbInfo['redofile_bytes']             )
+    controlfile_bytes          = splitThousands(DbInfo['controlfile_bytes']          )
+    total_storage              = splitThousands(DbInfo['total_storage']              )
+    datafile_bytes             = splitThousands(DbInfo['datafile_bytes']             )
+    tempfile_bytes             = splitThousands(DbInfo['tempfile_bytes']             )
+    controlfile_bytes          = splitThousands(DbInfo['controlfile_bytes']          )
+    redofile_bytes             = splitThousands(DbInfo['redofile_bytes']             )
+
+    # Extract the database version from: "Oracle Database 11g Enterprise Edition Release 11.2.0.3.0 - 64bit Production"
+    db_version = db_version[db_version.find('Release')+8:]
+    db_version = db_version.split(' ')[0]
+
+    Report += ' General Information:                                          Resource Management:'
+    Report += '\n ------------------------------------------------------------  ------------------------------------------------------------'
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('db_version',     db_version,    'cpu_count', cpu_count                         )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('db_name',        db_name,       'resource_manager_plan', resource_manager_plan )
+    Report += '\n %-28s = %29s              ' % ('db_unique_name', db_unique_name                                                )
+    Report += '\n %-28s = %29s              ' % ('instance_name',  instance_name                                                 )
+    Report += '\n %-28s = %29s              ' % ('db_domain',      db_domain                                                     )
+
+    Report += '\n\n Memory Configuration:                                         Memory Pool Sizes:'
+    Report += '\n ------------------------------------------------------------  ------------------------------------------------------------'
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('Memory Management',    MemoryManagement,     'db_cache_size',     db_cache_size     )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('statistics_level',     statistics_level,     'shared_pool_size',  shared_pool_size  )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('sga_target',           sga_target,           'streams_pool_size', streams_pool_size )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('sga_max_size',         sga_max_size,         'large_pool_size',   large_pool_size   )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('memory_target',        memory_target,        'java_pool_size',    java_pool_size    )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('memory_max_target',    memory_max_target,    'current_sga_usage', current_sga_usage )
+    Report += '\n %-28s = %29s              ' % ('pga_aggregate_target', pga_aggregate_target)
+
+    Report += '\n\n Storage Configuration:                                        Storage Utilization:'
+    Report += '\n ------------------------------------------------------------  ------------------------------------------------------------'
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('db_create_file_dest',        db_create_file_dest,        'Datafiles',       datafile_bytes   )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('db_recovery_file_dest',      db_recovery_file_dest,      'Tempfiles',       tempfile_bytes   )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('db_recovery_file_dest_size', db_recovery_file_dest_size, 'Redologs',        redofile_bytes   )
+    Report += '\n %-28s   %29s  %-28s = %29s' % ('',                           '',                         'Controlfiles',    controlfile_bytes)
+    Report += '\n %-28s   %29s  %-28s = %29s' % ('',                           '',                         'Total Storage',   total_storage    )
+  return(Report)
+# End ReportDbInfo()
+
+# def GetDbState()
+# Desc: Get the current state of the database (down, mounted, open)
+# Args: $0 is the database connect string
+# Retn: MOUNTED/OPEN/STARTED
+#-------------------------------------------------------------------------
+def GetDbState(Sid):
+  StateQry    = ''
+  DbState    = 'STOPPED'
+  rc         = 0
+  ErrorStack = []
+
+  StateQry  = "set lines 2000"                                + '\n'
+  StateQry += "set pages 0"                                   + '\n'
+  StateQry += "set feedback off"                              + '\n'
+  StateQry += "set echo off"                                  + '\n'
+  StateQry += "set pagesize 0"                                + '\n'
+  StateQry += "SELECT '" + Sid + "'||'~'||"
+  StateQry +=        "'db_state'||'~'||upper(status)"         + '\n'
+  StateQry += "  FROM v$instance;"                            + '\n'
+  StateQry += "EXIT"                                          + '\n'
+
+  # Fetch parameters from the database
+  proc = Popen([Sqlplus, '-s', '/', 'as', 'sysdba'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False)
+  (SqlOut, SqlErr) = proc.communicate(StateQry)
+
+  SqlOut = SqlOut.strip()      # remove leading/trailing whitespace
+
+  if (SqlOut.find('ORA-01034') >= 0):
+    DbState = 'STOPPED'
+  else:
+    strlen = len(Sid + '~db_state~')
+    pos = SqlOut.find(Sid + '~db_state~')
+    DbState = SqlOut[strlen:]
+  return DbState
+# End GetDbState()
+
+
+# Def : PrintOptions()
+# Desc: Prints the command line options specified.
+# Args:
+# Retn:
+#---------------------------------------------------------------------------
+def PrintOptions():
+  print '\n-------------------------------------------------------------------'
+  print '-- Command Line Options -------------------------------------------'
+  print '-------------------------------------------------------------------'
+  print ' AppType     = ', Options.AppType.split(',')
+  print ' ShowTypes   = ', Options.ShowTypes
+  print ' ORACLE_SID  = ', Sid
+  print '-------------------------------------------------------------------'
+  print '-- End of Report: Command Line Options ----------------------------'
+  print '-------------------------------------------------------------------\n'
+# End PrintOptions()
+
+
+# Sub : TnsCheck()
+# Desc: Verifies a tnsping lookup
+# Args: ORACLE_SID
+# Retn: 0 if successful, 1 if TNS Lookup failed (TNS-03505), >1 Other errors
+#----------------------------------------------------------------------------
+def TnsCheck(TnsName):
+  rc           = 0
+  TnsRc        = 0
+  TnsOut       = ''
+  TnsErr       = ''
+  ErrorStack   = []
+
+  try:
+    proc = Popen([Tnsping, TnsName], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False)
+    (TnsOut, TnsErr) = proc.communicate()
+  except:
+    formatExceptionInfo()
+    print 'tnsping failed: ' + TnsName + ' (check tnsnames.ora file)'
+    return(proc.returncode)
+
+  TnsOut = TnsOut.strip()
+  
+  # Check for tns errors
+  # Components are installed applications/components such as sqlplus, import, export, rdbms, network, ...
+  # ComponentList contains a list of all components for which the error code will be searched. 
+  # For example a component of rdbms will result in ORA-nnnnn errors being included in the search. 
+  # ALL_COMPONENTS is an override in the ErrorCheck function that results in *all* installed components 
+  # being selected. Searching all component errors is pretty fast so for now we'll just search them all.
+  # Once we are more confident in selecting the components to search we can specify those components.
+  # -------------------------------------------------------------------------------------------------------
+  #ComponentList = ['network']
+  ComponentList = ['ALL_COMPONENTS']
+  (rc, ErrorStack) = ErrorCheck(TnsOut, ComponentList)
+
+  if (rc != 0):
+    PrintError(ErrorStack)
+
+  return(rc)
+# End TnsCheck()
+
+# Def : splitThousands()
+# Desc: Simple function to format numbers with commas to separate thousands.
+# Args: s    = numeric_string
+#       tSep = thousands_separation_character (default is ',')
+#       dSep = decimal_separation_character (default is '.')
+# Retn: formatted string
+#---------------------------------------------------------------------------
+def splitThousands( s, tSep=',', dSep='.'):
+  '''Splits a general float on thousands. GIGO on general input'''
+  if s == None:
+    return(0)
+  if not isinstance( s, str ):
+    s = str( s )
+
+  cnt=0
+  numChars=dSep+'0123456789'
+  ls=len(s)
+  while cnt < ls and s[cnt] not in numChars: cnt += 1
+
+  lhs = s[ 0:cnt ]
+  s = s[ cnt: ]
+  if dSep == '':
+    cnt = -1
+  else:
+    cnt = s.rfind( dSep )
+  if cnt > 0:
+    rhs = dSep + s[ cnt+1: ]
+    s = s[ :cnt ]
+  else:
+    rhs = ''
+
+  splt=''
+  while s != '':
+    splt= s[ -3: ] + tSep + splt
+    s = s[ :-3 ]
+
+  return(lhs + splt[ :-1 ] + rhs)
+# End splitThousands
+
+
+# Def : ReportParms()
+# Desc: Prints a report showing the database parameters that do not conform
+#       to the provisioning plan.
+# Args: FailedParmsDD
+# Retn:
+#---------------------------------------------------------------------------
+def ReportParms(AppType, ActualParms, RecommendedParms):
+  Report    = ''
+  ParmsList = []
+
+  for Parm in sorted(RecommendedParms.keys()):
+    RecommendedParmVal = RecommendedParms[Parm]
+    RecommendedParmVal = RecommendedParmVal.strip().upper()
+    if (RecommendedParmVal.count('-') > 0):
+      RecommendedParmVal = re.sub(r'\s', '', RecommendedParmVal)
+      RecommendedParmVal = join(RecommendedParmVal.split('-'), '-')
+    elif (RecommendedParmVal.count(',') > 0):
+    	RecommendedParmVal = re.sub(r'\s', '', RecommendedParmVal)
+    	RecommendedParmVal = join(RecommendedParmVal.split(','), ',')
+
+    if(Parm in ActualParms.keys()):
+      ActualParmVal = ActualParms[Parm]
+      ActualParmVal = ActualParmVal.strip().upper()
+    else:
+      ActualParmVal = ''
+    ParmsList.append([Parm, RecommendedParmVal, ActualParmVal])
+
+  if (len(ParmsList) > 0):
+    Report += '\n All Parameters for: ' + AppType + '\n\n'
+    Report += ' Parameter                                                                  Actual                              Recommended\n'
+    Report += ' ----------------------------------------  ---------------------------------------  ---------------------------------------\n'
+    for (Parm, ActualParmVal, RecommendedParmVal) in ParmsList:
+      Report += ' %-40s  %39s  %39s\n' % (Parm, RecommendedParmVal, ActualParmVal)
+  return(Report)
+# End ReportParms()
+
+# Def : ReportFailedParms()
+# Desc: Prints a report showing the database parameters that do not conform
+#       to the provisioning plan.
+# Args: FailedParmsDD
+# Retn:
+#---------------------------------------------------------------------------
+def ReportFailedParms(AppType, ActualParms, RecommendedParms):
+  Report      = ''
+  FailureList = []
+
+  for Parm in sorted(RecommendedParms.keys()):
+    #print RecommendedParm
+    RecommendedParmVal     = RecommendedParms[Parm]
+    RecommendedParmVal     = RecommendedParmVal.strip().upper()
+    RecommendedParmValMin  = ''
+    RecommendedParmValMax  = ''
+    RecommendedParmValList = []
+    Delimiter              = ''
+    DashDelimCount         = RecommendedParmVal.count('-')
+    CommaDelimCount        = RecommendedParmVal.count(',')
+     
+    if (DashDelimCount > 0 and CommaDelimCount > 0):
+    	print 'Invalid value for', Parm, '=', RecommendedParmVal
+    else:
+      if (DashDelimCount == 1):
+        Delimiter = '-'
+      elif (CommaDelimCount >= 1):
+        Delimiter = ','
+
+    if (DashDelimCount):
+      RecommendedParmVal = re.sub(r'\s', '', RecommendedParmVal)
+      (RecommendedParmValMin,RecommendedParmValMax) = RecommendedParmVal.split(Delimiter)
+      RecommendedParmValMin = Decimal(RecommendedParmValMin.strip())
+      RecommendedParmValMax = Decimal(RecommendedParmValMax.strip())
+      RecommendedParmVal    = ''
+    elif (CommaDelimCount):
+      RecommendedParmVal = re.sub(r'\s', '', RecommendedParmVal)
+      RecommendedParmValList = RecommendedParmVal.split(Delimiter)
+      RecommendedParmVal     = ''
+    else:
+      try: 
+        RecommendedParmVal = Decimal(RecommendedParmVal)
+      except:
+        pass
+    
+    if (Parm in ActualParms.keys()):
+      ActualParmVal = ActualParms[Parm]
+      ActualParmVal = ActualParmVal.strip().upper()
+      try: 
+        ActualParmVal = Decimal(ActualParmVal)
+      except:
+        pass
+    else:
+      ActualParmVal = ''
+
+    if (DashDelimCount): # if the recommended value is a low-high numeric range...
+      try:
+        ActualParmVal = Decimal(ActualParmVal)
+      except:
+        pass
+      if (not ((ActualParmVal >= RecommendedParmValMin) and (ActualParmVal <= RecommendedParmValMax))):
+        FailureList.append([Parm, RecommendedParmVal, ActualParmVal])
+    
+    elif (CommaDelimCount): # if the recommended value is a list (a,b,c) of values...
+      if (not (ActualParmVal in RecommendedParmValList)):
+      	RecommendedParmVal = join(RecommendedParmValList, ',')
+      	FailureList.append([Parm, RecommendedParmVal, ActualParmVal])
+    
+    else: # if the recommended value requires an exact match...
+      if (RecommendedParmVal != ActualParmVal):
+        FailureList.append([Parm, RecommendedParmVal, ActualParmVal])
+
+  if (len(FailureList) > 0):
+    Report += ' Failed Parameters: ' + AppType
+    Report += '\n\n Parameter                                                                  Actual                              Recommended'
+    Report += '\n ----------------------------------------  ---------------------------------------  ---------------------------------------'
+    for (RecommendedParm, RecommendedParmVal, ActualParmVal) in FailureList:
+      Report += '\n %-40s  %39s  %39s' % (RecommendedParm, ActualParmVal, RecommendedParmVal)
+  return(Report)
+# End ReportFailedParms()
+
+# Def : MapToSection()
+# Desc: Converts section names received on the command line so the text
+#       case matches the case of the sections in the ini file. This
+#       effectively makes section lookup case in-sensitive.
+# Args: Section name received on the command line from the -f optoin.
+# Retn: newSection - text case corrected section name.
+#---------------------------------------------------------------------------
+def MapToSection(optSection):
+  SectionMap = []
+  Sections   = []
+
+  Sections = Config.sections()
+  for iniSection in Sections:
+    #print optSection, iniSection
+    if(optSection.upper() == iniSection.upper()):
+      return iniSection
+
+  return ''
+# End MapToSection
+
+# Def : LoadFacilities()
+# Desc: Parses the ficiliy file and returns a list of lists (2 dim array)
+#       containing:
+#         facility:component:rename:description
+# Args: Facility file name.
+# Retn: FacilitiesDD
+#---------------------------------------------------------------------------
+def LoadFacilities(FacilitiesFile):
+  FacDict = {}
+  FacDD   = {}
+
+  try:
+    facfil = open(FacilitiesFile, 'r')
+  except:
+    print 'Cannot open facilities file: ' + FacilitiesFile + ' for read.'
+    exit(1)
+
+  FacFileContents = facfil.read().split('\n')
+  for line in FacFileContents:
+    if (not (re.search(r'^\s*$', line))):   # skip blank lines
+      if (line.find('#') >= 0):
+        line=line[0:line.find('#')]
+      if (line.count(':') == 3):   # ignore lines that do not contain 3 :'s
+        (Facility, Component, OldName, Description) = line.split(':')
+        FacList = [strip(Facility), strip(Component), strip(OldName), strip(Description)]
+        if (Facility != ''):
+          FacDict = {
+           'Component'   : strip(Component),
+           'OldName'      : strip(OldName),
+           'Description' : strip(Description)
+          }
+          FacDD[strip(Facility)] = FacDict
+  return(FacDD)
+# End LoadFacilities()
+
+# Def : LookupMessage()
+# Desc: Parses the ficiliy file and returns a list of lists (2 dim array)
+#       containing:
+#         facility:component:rename:description
+# Args: Facility file name.
+# Retn: FacilitiesDD
+#---------------------------------------------------------------------------
+def LookupMessage(FacilityCode):
+  Msg         = []
+  HeaderFound = False
+  
+  
+  Facility, Code = FacilityCode.split('-')
+  MessagesFile = OracleHome + '/' + FacilitiesDD[Facility.lower()]['Component'] + '/' + 'mesg' + '/' + Facility.lower() + 'us.msg'
+
+  try:
+    msgfil = open(MessagesFile, 'r')
+  except:
+    print 'Cannot open Messages file: ' + MessagesFile + ' for read.'
+    exit(1)
+
+  MsgFileContents = msgfil.readlines()
+  for line in MsgFileContents:
+    # lines I'm looking for look like this "00003, 00000, "INTCTL: error while se..."
+    # So just looking for something that starts with a string of digits and contains
+    # the error code I'm looking for.
+    if (HeaderFound):
+        matchObj = re.match(r'//,*', line)
+        if (matchObj):
+          Msg.append(line.strip())
+        else:
+          return(Msg)
+    else:
+      matchObj = re.search('[0]*' + Code, line)
+      if (matchObj):
+          Msg.append(line.strip())
+          HeaderFound = True
+  return(Msg)
+# End LookupMessage()
+
+# --------------------------------------
+# ---- End Function Definitions --------
+# --------------------------------------
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):      # if this is true, then this script is *not* being imported by another Python script.
+  Interactive   = stdout.isatty()
+  Cmd           = basename(argv[0])
+  CmdPrefix     = Cmd.split('.')[0]
+  CmdDesc       = 'CheckDatabase'
+  ConfigDir     = '/home/oracle/dba/etc'
+  Version       = '1.10'
+  OratabFile    = '/etc/oratab'
+  Config        = SafeConfigParser()
+  Now           = datetime.now()
+  Report        = ''
+  CheckDbIni    = ConfigDir + '/' + CmdPrefix + '.ini'
+  ###! Sid           = ''
+
+  try:
+    # The next two lines check to see if there is a config file (and that it 
+    # can be opened for read). If not then throw and exception and exit(1).
+    IniFile = open(CheckDbIni,'rb')
+    IniFile.close()
+    Config.read(CheckDbIni)
+  except:
+    formatExceptionInfo()
+    print "Cannot read configuration file: " + CheckDbIni
+    exit(1)
+
+  # Process command line options
+  # ----------------------------------
+  ArgParser = OptionParser()
+  ArgParser.add_option("-a",                      dest="AppType",   default='exadata,peoplesoft', type=str, help="Type of application check (PeopleSoft,Exadata,...)", metavar='AppType')
+  ArgParser.add_option("-s", action="store_true", dest="ShowTypes", default=False,                          help="Display application types available.")
+  ArgParser.add_option("-v", action="store_true", dest="Verbose",   default=False,                          help="Verbose mode.")
+  Options, args = ArgParser.parse_args()
+  argc = len(args)
+
+  print '\n============================================================================================================================'
+  print '%s: Release %s Production - Database Check utility for Oracle 11g %45s' % (CmdDesc, Version, Now.strftime("%Y-%m-%d %H:%M"))
+  print '============================================================================================================================'
+
+  # Show all Sections, Options, Values in the ini file.
+  if (Options.ShowTypes == True):
+    iniSections = sorted(Config.sections())
+    print ' Configured Application Types from: ' + basename(CheckDbIni) + '\n'
+    Sections = Config.sections()
+    for Section in iniSections:
+      print ' [' + Section + ']'
+      for Option in sorted(Config.options(Section)):
+        Value = Config.get(Section, Option)
+        print ' %-40s = %-40s' % (Option, Value)
+      print
+    exit(0)
+
+  Oratab = LoadOratab()
+
+  if (argc >= 1):
+    Sid = args[0]
+  elif ('ORACLE_SID' in environ.keys()):
+    if (environ['ORACLE_SID'] != ''):
+      Sid = environ['ORACLE_SID']
+    else:
+      print '\n  Invalid value for ORACLE_SID.'
+      print '\n  Exiting...'
+      exit(1)
+  else:
+    print '\n  No ORACLE_SID found. You must either set ORACLE_SID'
+    print '  or provide an instance name on the command line.'
+    print '\n  For example: ' + Cmd + ' dbm1'
+    print '\n  Exiting...'
+    exit(1)
+
+  # Setup the Oracle environment and setup Oracle commands.
+  # --------------------------------------------------------
+  (OracleSid, OracleHome) = SetOracleEnv(Sid, Oratab)
+  if (OracleHome):
+    Sqlplus  = OracleHome + '/bin/sqlplus'
+    Tnsping  = OracleHome + '/bin/tnsping'
+
+    # Load error information used for error message lookup if a 
+    # Sqlplus, lsnrctl, etc. error occurs.
+    # -------------------------------------------------------------
+    FacilitiesFile = OracleHome + '/lib/facility.lis'
+    FacilitiesDD = LoadFacilities(FacilitiesFile)
+  else:
+    print 'Error setting the ORACLE_HOME using', Sid
+    print 'This is likely due to a lookup failure in the oratab file.'
+
+    print '\n  Contents of oratab file follows:\n'
+    print '  ORACLE_SID             ORACLE_HOME'
+    print '  ---------------------- -----------------------------------------------'
+    for OraSid in sorted(Oratab.keys()):
+      print '  %-20s   %-50s' % (OraSid, Oratab[OraSid])
+    exit(1)
+  
+  # Configure the application type filter. AppTypes correspond to sections in the ini file.
+  AppTypes = []
+  for AppType in split(Options.AppType, ','):
+    if (AppType != ''):
+      TypeLookup = MapToSection(AppType)
+      if (TypeLookup != ''):
+        AppTypes.append(TypeLookup)
+      else:
+        print 'Application type [' + AppType + '] not found in ini file and will be skipped.'
+
+  print ' ORACLE_SID   =', Sid 
+  print ' ORACLE_HOME  =', OracleHome
+  if (len(AppTypes) >= 1):
+  	print ' Applications =', join(AppTypes, ', ')
+  else:
+  	print ' Applications = <none>', '\n'
+  print
+
+
+  # Collect parameters to check from the ini file
+  # ------------------------------------------------------------
+  AllParmsToCheck = []
+  for AppType in AppTypes:
+    if AppType != 'Thresholds' and AppType != 'BackupConfig':
+      for item in Config.items(AppType):
+        AllParmsToCheck.append(item[0])         # master list of all parms (for all apps) to check
+
+  DbState = GetDbState(OracleSid);
+  if (DbState != 'OPEN'):
+    print "Database must be open to continue."
+    print "Current state:", DbState
+    exit(1)
+
+  # Login to the database and run the queries to collect metrics.
+  # -------------------------------------------------------------
+  DbInfo = GetDbInfo(Sid, AllParmsToCheck)
+
+  # Generate Reports
+  # ------------------------------------------------------------
+  # Database Info Rerport
+  Report += ReportDbInfo(DbInfo)
+
+  if (len(AppTypes) >= 1):
+    # Report Good Parameters (set to recommended values)
+    # ------------------------------------------------------------
+    if (Options.Verbose):
+      Report += '\n\n --------------------------------------------------------------------------------------------------------------------------\n'
+      for AppType in AppTypes:
+        ParmsToCheck = {}
+        for Option in sorted(Config.options(AppType)):
+          Value = Config.get(AppType, Option)
+          ParmsToCheck[Option] = Value
+        Report += ReportParms(AppType, DbInfo, ParmsToCheck)
+    
+    # Report Failed Parameters (not set to recommended values)
+    # ------------------------------------------------------------
+    Report += '\n\n --------------------------------------------------------------------------------------------------------------------------\n'
+    tmp = ''
+    for AppType in AppTypes:
+      ParmsToCheck = {}
+      for Option in sorted(Config.options(AppType)):
+        Value = Config.get(AppType, Option)
+        ParmsToCheck[Option] = Value
+      tmp = ReportFailedParms(AppType, DbInfo, ParmsToCheck)
+      if (tmp != ''):
+        Report += '\n' + tmp
+      Report += '\n'
+
+  print Report
+  print '============================================================================================================================'
+  print 'End of Report                                                                   %44s' % (Now.strftime("%Y-%m-%d %H:%M"))
+  print '============================================================================================================================'
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+

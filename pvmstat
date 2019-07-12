@@ -1,0 +1,102 @@
+#!/bin/env python
+
+##################################################################################################################
+#  Name:        pvmstat                                                                                          #
+#  Author:      Randy Johnson                                                                                    #
+#  Description: Pretty Vmstat Reporting                                                                          #
+#                                                                                                                #
+# History:                                                                                                       #
+#                                                                                                                #
+# Date       Ver. Who              Change Description                                                            #
+# ---------- ---- ---------------- ----------------------------------------------------------------------------- #
+# 11/28/2018 1.00 Randy Johnson    Initial release.                                                              #
+##################################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse   import OptionParser
+#from sys        import stdout
+from sys        import exit
+from sys        import argv
+from sys        import version_info
+from subprocess import Popen
+from os.path    import basename
+from subprocess import PIPE
+from subprocess import STDOUT
+
+# --------------------------------------
+# -- Function/Class Definitions --------
+# --------------------------------------
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0])
+  Vmstat         = '/usr/bin/vmstat'
+  Version        = '1.00'
+  VersionDate    = 'Wed Nov 28 18:35:06 CST 2018'
+  DevState       = 'Dedvelopment'
+  CmdDesc        = 'Vmstat Report'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  ArgParser      = OptionParser()
+
+  ArgParser.add_option("--v", action="store_true",  dest="ShowVer",    default=False, help="print version info.")
+
+  Option, Args = ArgParser.parse_args()
+  #Argc = len(Args)
+
+  ShowVer   = Option.ShowVer
+
+  if (ShowVer):
+    print('\n' + Banner)
+    exit(0)
+
+  #if (Cleanup):
+  #  if (isfile(WorkFilename)):
+  #    unlink(WorkFilename)
+
+  try:
+   f = open('./vmstat.out')
+  except:
+   print('Cannot open file for read.')
+   exit()
+
+  VmstatOut  = f.readlines()
+  Heading1   = VmstatOut.pop(0)
+  Heading2   = VmstatOut.pop(0)
+  MaxWidth   = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+  VmstatNew  = []
+  
+  for line in VmstatOut:
+    col = 0
+    for val in line.split():
+      length = len(val)
+      if (length > MaxWidth[col]):
+        MaxWidth[col] = length
+      col += 1
+
+  print(Heading1)
+  print(Heading2)
+  Heading2 = Heading2.split()
+  for col in range(17):
+    Heading2[col] = ' ' + Heading2[col].ljust(MaxWidth[col])
+  Heading2 = ''.join(Heading2)
+  
+  print(Heading2)
+  for line in VmstatOut:
+    col = 0
+    Elements = line.split()
+    for col in range(17):
+      Elements[col] = Elements[col].rjust(MaxWidth[col])
+    VmstatNew.append(Elements)
+    print(''.join(Elements))
+  
+  
+  exit()
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+

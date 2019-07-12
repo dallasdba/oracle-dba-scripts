@@ -1,0 +1,312 @@
+#!/bin/env python
+
+##################################################################################################
+# Name:        restore_spfile                                                                    #
+# Author:      Randy Johnson                                                                     #
+# Description: Restores the spfile from RMAN backuppiece.                                        #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 11/18/2014 1.00 Randy Johnson    Initial release.                                              #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
+# 10/09/2015 2.01 Randy Johnson    Changed getpgid() to getpid()                                 #
+# 07/13/2017 3.00 Randy Johnson    Renamed to restore_spfile. Added program description to       #
+#                                  Usage.                                                        #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from os           import getgid
+from os           import unlink
+from optparse     import OptionParser
+from os.path      import basename
+from os           import getpid
+from os.path      import join as pathjoin
+from re           import search
+from re           import IGNORECASE
+from re           import compile
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from socket       import gethostname
+from sys          import argv
+from sys          import exit
+from subprocess   import Popen
+from subprocess   import PIPE
+from subprocess   import STDOUT
+from Oracle       import GetClustername
+from Oracle       import GetNodes
+from Oracle       import RunRman
+from Oracle       import RunSqlplus
+from Oracle       import PrintError
+from Oracle       import SetOracleEnv
+
+
+# --------------------------------------
+# ---- Function Definitions ------------
+# --------------------------------------
+# Def : RestoreSpfile()
+# Desc: Restores the spfile from backup and starts the database to mount
+#       state using the restored spfile.
+# Args: <none>
+# Retn: <none>
+#---------------------------------------------------------------------------
+def RestoreSpfile():
+
+  # Ensure the database is down...
+  # ---------------------------------
+  DbState = GetDbState();
+  if (DbState != 'DOWN'):
+    print('The database must be down to run this command.')
+    exit(1)
+
+  # Punch out a minimal init.ora file that contains just the db_name='yyyyy' parameter.
+  # ------------------------------------------------------------------------------------
+  try:
+    h_TmpInitfile = open(TmpInitfile, 'w')
+    h_TmpInitfile.write("db_name = '" + DbName + "'\n")
+    h_TmpInitfile.close()
+  except:
+    print("Failed to create temporary init.ora file:", TmpInitfile)
+    exit(1)
+
+  # Start the database for recovery of spfile...
+  # ----------------------------------------------
+  RCV = "startup nomount pfile='" + TmpInitfile + "'"
+  print(RCV)
+  Stdout = RunRman(RCV + ";", False)
+
+  # Restore the spfile from back to a temporary init.ora file...
+  # --------------------------------------------------------------
+  RCV="restore spfile to pfile '" + TmpInitfile + "' from '" + BackupPiece + "'"
+  print(RCV)
+  rc, Stdout, ErrorList = RunRman(RCV + ";", True)
+  if (rc != 0):
+    print("Error occured in call to RunRman()")
+    PrintError(RCV, Stdout, ErrorList)
+    exit(rc)
+
+  # Shutdown the database for restart with the temporary init.ora file...
+  # -----------------------------------------------------------------------
+  RCV = "shutdown immediate"
+  print(RCV)
+  Stdout = RunRman(RCV + ";", False)
+
+  # Startup the database using the temporary init.ora file...
+  # ------------------------------------------------------------
+  Sql = "startup nomount pfile='" + TmpInitfile + "'"
+  print(Sql)
+  Stdout = RunSqlplus(Sql, False)
+
+  # Create spfile from temporary init.ora file...
+  # -----------------------------------------------
+  Sql = "create spfile='" + Spfile + "' from pfile='" + TmpInitfile + "'"
+  print(Sql)
+  Stdout = RunSqlplus(Sql + ";", False)
+
+  # Shutdown the database for restart with new spfile.
+  # ----------------------------------------------------
+  Sql = "shutdown immediate"
+  print(Sql)
+  Stdout = RunSqlplus(Sql, False)
+
+  # Remove the old temporary init.ora file and permanent init.ora files.
+  # ----------------------------------------------------------------------
+  try:
+    unlink(TmpInitfile)
+    unlink(PrmInitfile)
+  except:
+    pass
+
+  # Create init[ORACLE_SID].ora file
+  # ----------------------------------
+  print("write to file:" + PrmInitfile + " >> spfile='" + Spfile + "'")
+  try:
+    h_PrmInitfile = open(PrmInitfile, 'w')
+    h_PrmInitfile.write("spfile='" + Spfile + "'\n")
+    h_PrmInitfile.close()
+  except:
+    print("Error writing to ifile:", PrmInitfile)
+
+  # Startup the database to mount state using the newly restored spfile.
+  # ----------------------------------------------------------------------
+  Sql = "startup nomount"
+  print(Sql)
+  Stdout = RunSqlplus(Sql, False)
+# End RestoreSpfile()
+
+
+# Sub : GetDbState()
+# Desc: Get the current state of the database (down, mounted, open)
+# Args: <none>
+# Retn: DOWN, STARTED, MOUNTED, OPEN, UNKNOWN
+# ------------------------------------------------------------------------
+def GetDbState():
+  DbState    = 'DOWN'
+  rc         = 0
+  ErrorStack = []
+
+  Sql  = "set pagesize 0\n";
+  Sql += "select 'DB_STATUS:' ||'" + Colsep + "'|| upper(status) from v$instance;";
+
+  Stdout = RunSqlplus(Sql, False)
+
+  DbDown = compile(r'.*ORA-01034.*')
+  if (DbDown.search(Stdout)):
+    return('DOWN')
+  else:
+    Key = compile(r'^.*DB_STATUS:.*')
+    for line in Stdout.split('\n'):
+      if (Key.search(line)):
+        DbState = line.split(Colsep)[1]
+        DbState.strip()
+        return(Stdout)
+  return('UNKNOWN')
+# End GetDbState()
+
+# Sub : GetParameter()
+# Desc: Retrieves a parameter value from v$parameter view.
+# Args: ParmName (parameter name)
+# Retn: ParmValue (parameter value)
+# ------------------------------------------------------------------------
+def GetParameter(ParmName):
+
+  Sql  = "set pagesize 0\n";
+  Sql += "select 'NAME:' ||'" + Colsep + "'|| value from v$parameter where upper(name) = '" + ParmName + "';";
+
+  Stdout = RunSqlplus(Sql)
+
+  DbDown = compile(r'^.*ORA-01034.*')
+  if (DbDown.search(Stdout)):
+    print('Database is not started.')
+  else:
+    Key = compile(r'^.*NAME:.*')
+    for line in Stdout.split('\n'):
+      if (Key.search(line)):
+        ParmValue = line.split(Colsep)[1]
+        ParmValue.strip()
+        ParmValue = ParmValue.upper()
+        return(ParmValue)
+  return(Stdout)
+# End GetParameter()
+
+# --------------------------------------
+# ---- End Function Definitions --------
+# --------------------------------------
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Restore Spfile via RMAN'
+  Version        = '3.00'
+  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Colsep         = '!~!'
+  Oratab         = '/etc/oratab'
+  Hostname       = gethostname().split('.')[0]
+  EnvScript      = 'env.sh'
+  Pid            = 0
+  ThisNodeId     = Hostname[-1:]
+
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nPerform the following tasks:'
+  Usage += '\n  1) Startup mount the local instance using a minimal init.ora file (created by this'
+  Usage += '\n     program. (startup nomount pfile=...)'
+  Usage += '\n  2) Restore spfile from backuppiece to a temporary pfile.'
+  Usage += '\n  3) Stop the local instance.'
+  Usage += '\n  4) Create $ORACLE_HOME/dbs/init{ORACLE_SID}.ora pointing to the new spfile.'
+  Usage += '\n  5) Startup mount the local instance using temporary pfile.'
+  Usage += '\n  6) Create spfile (in ASM diskgroup)) from temporary pfile.'
+  Usage += '\n  7) Shutdown the local instance.'
+  Usage += '\n  8) Start the local instance to verify the init.ora file and spfile are'
+  Usage += '\n     properly created.'
+  Usage += '\n\nparms [options] [parm_filter]'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("-b",                       dest="BackupPiece", default='',    type=str, help="backuppiece filename.")
+  ArgParser.add_option("-d",                       dest="DbName",      default='',    type=str, help="database name.")
+  ArgParser.add_option("-e",  action="store_true", dest="ExtDg",       default=False,           help="use extended diskgroup names.")
+  ArgParser.add_option("--v", action="store_true", dest="ShowVer",     default=False,           help="print version info.")
+
+  Options, args = ArgParser.parse_args()
+  argc = len(args)
+
+  BackupPiece = Options.BackupPiece
+  DbName      = Options.DbName
+  ExtDg       = Options.ExtDg
+  ShowVer     = Options.ShowVer
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  if (BackupPiece == ''):
+    print('\nBackupPiece is required, ex:\n\n    %s -d MYDB -b /tmp/c-490790694-20141121-02' % (Cmd))
+    exit(1)
+
+  if (DbName == ''):
+    print('\nBackupPiece is required, ex:\n\n    %s -d MYDB -b /tmp/c-490790694-20141121-02' % (Cmd))
+    exit(1)
+
+  # Verify backuppiece before proceeding.
+  # ---------------------------------------
+  try:
+    junk = open(BackupPiece, 'r')
+  except:
+    print('Cannot open backuppiece for read:', BackupPiece)
+    exit(1)
+
+  # Get the names of the compute nodes in this cluster.
+  # ----------------------------------------------------
+  NodeDict = GetNodes()
+
+  if (NodeDict != {}):
+    NodeList = sorted(NodeDict.keys())
+    NodeCount = len(NodeDict.keys())
+  else:
+    print("Invalid node list, node count.")
+    exit(1)
+
+  if (ExtDg):
+    # Get the cluster prefix (x26u for example)
+    # ------------------------------------------
+    ClusterName = GetClustername()
+    if(ClusterName != ''):
+      ClusterName = ClusterName.split('-')[0].upper()
+    else:
+      print("Invalid cluster name")
+      exit(1)
+
+  # Set the Oracle environment for this database.
+  # ----------------------------------------------
+  OraInst, OraHome = SetOracleEnv(DbName + ThisNodeId)
+
+  Pid          = str(getpid())
+  TmpInitfile  = '/tmp/initTmp.ora.' + Pid
+  PrmInitfile  = pathjoin(OraHome,'dbs','init' + DbName + ThisNodeId + '.ora')
+
+  if (ExtDg == False):
+    DataDg       = '+DATA'
+    DbUniqueName = DbName
+  else:
+    DataDg       = DataDg + '_' + ClusterName.upper()
+    DbUniqueName = DbName + '_' + ClusterName
+
+  Spfile = DataDg + '/' + DbUniqueName.upper() + '/spfile' + DbName + '.ora'
+
+  # Restore and install the Spfile into ASM.
+  RestoreSpfile()
+
+  exit(0)

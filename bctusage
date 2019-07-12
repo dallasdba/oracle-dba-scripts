@@ -1,0 +1,161 @@
+#!/bin/env python
+
+##################################################################################################
+#  Name:        bctusage                                                                         #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Reports block change tracking usage.                                             #
+#                                                                                                #
+#  Usage: bctusage [options]                                                                     #
+#                                                                                                #
+#  Options:                                                                                      #
+#    -h, --help    show this help message and exit                                               #
+#   --s            print SQL query.                                                              #
+#   --v            print version info.                                                           #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 10/30/2015 1.00 Randy Johnson    Initial write.                                                #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Report Block Change Tracking Usage'
+  Version        = '1.10'
+  VersionDate    = 'Sun Oct 30 09:11:05 MDT 2016'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  ArgParser      = OptionParser()
+  Sid            = 0
+  InStr          = ''
+  ConnStr        = ''
+  InstList       = []
+
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,            help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer',    action='store_true', default=False,            help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  Show      = Options.Show
+  ShowVer   = Options.ShowVer
+
+  if (ShowVer == True):
+    print('\n%s' % Banner)
+    exit()
+
+  Sql += "column file#             format 999                      heading 'FileId'\n"
+  Sql += "column completion_time   format a23                      heading 'Completion Time'\n"
+  Sql += "column tablespace        format a30                      heading 'Tablespace'\n"
+  Sql += "column dbf_blocks        format 999,999,999,999,999,999  heading 'Total Blocks'\n"
+  Sql += "column blocks_read       format 999,999,999,999,999,999  heading 'Blocks Read'\n"
+  Sql += "column blocks_written    format 999,999,999,999,999,999  heading 'Blocks Written'\n"
+  Sql += "set pages 30\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "          TO_CHAR(completion_time, 'YYYY-MM-DD HH24:MI') completion_time\n"
+  Sql += "       , df.tablespace_name                              tablespace\n"
+  Sql += "       , bac.file#                                       file#\n"
+  Sql += "       , bac.datafile_blocks                             dbf_blocks\n"
+  Sql += "       , bac.blocks_read                                 blocks_read\n"
+  Sql += "       , bac.blocks                                      blocks_written\n"
+  Sql += "       , bac.used_change_tracking                        bct\n"
+  Sql += "    FROM v$backup_datafile bac\n"
+  Sql += "       , dba_data_files    df\n"
+  Sql += "   WHERE df.file_id = bac.file#\n"
+  Sql += "ORDER BY completion_time, tablespace_name;\n\n"
+
+  Sql += "column file#             format 999                      heading 'FileId'\n"
+  Sql += "column avg_dbf_blocks    format 999,999,999,999,999,999  heading 'Avg File Blocks'\n"
+  Sql += "column avg_blocks_read   format 999,999,999,999,999,999  heading 'Avg Blocks Read'\n"
+  Sql += "column pct_blocks_read   format 99.999                   heading 'Pct Blocks Read For Backup'\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         file#\n"
+  Sql += "       , avg(datafile_blocks)                              avg_dbf_blocks\n"
+  Sql += "       , avg(blocks_read)                                  avg_blocks_read\n"
+  Sql += "       , round(avg(blocks_read/datafile_blocks) * 100,9)   pct_blocks_read\n"
+  Sql += "    FROM v$backup_datafile\n"
+  Sql += "   WHERE incremental_level > 0\n"
+  Sql += "     AND used_change_tracking = 'YES'\n"
+  Sql += "GROUP BY file#\n"
+  Sql += "ORDER BY file#;\n\n"
+
+  Sql += "column filename   format a80  heading 'File'\n"
+  Sql += "column status     format a10  heading 'Status'\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         initcap(status) status\n"
+  Sql += "       , filename\n"
+  Sql += "    FROM v$block_change_tracking;"
+
+  Sql = Sql.strip()
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

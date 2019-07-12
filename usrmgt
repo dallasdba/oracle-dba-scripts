@@ -1,0 +1,847 @@
+#!/bin/env python
+
+###################################################################################################
+# Name:         usrmgt                                                                            #
+# Author:       Randy Johnson                                                                     #
+# Description:  Creates roles, user accounts, grants roles, grants privileges to the SYSADM       #
+#               objects to SYSADM_SELECT_ROLE, and SYSADM_ADMIN_ROLE roles.                       #
+# Dependencies: Sqlplus                                                                           #
+#                                                                                                 #
+#               User Table: PS_CCSF_USERS                                                         #
+#                                                                                                 #
+#                Name          Type                                                               #
+#                ------------- -----------------                                                  #
+#                USERID        VARCHAR2(30 CHAR)                                                  #
+#                COMPANY_NAME  VARCHAR2(70 CHAR)                                                  #
+#                DESCR         VARCHAR2(30 CHAR)                                                  #
+#                PRIVILEGE     VARCHAR2(10 CHAR)                                                  #
+#                EFFDT         DATE                                                               #
+#                STATUS1       VARCHAR2(30 CHAR)                                                  #
+#                                                                                                 #
+# Usage: usrmgt [options]                                                                         #
+#                                                                                                 #
+# Options:                                                                                        #
+#   -h, --help  show this help message and exit                                                   #
+#   -a          Apply Rules                                                                       #
+#   --v         Version Information#                                                              #
+#                                                                                                 #
+# History:                                                                                        #
+#                                                                                                 #
+# Date       Ver. Who              Change Description                                             #
+# ---------- ---- ---------------- -------------------------------------------------------------- #
+# 07/04/2016 1.00 Randy Johnson    Initial release.                                               #
+# 07/07/2016 1.10 Randy Johnson    Add check for custom roles and create if missing.              #
+# 07/08/2016 1.20 Randy Johnson    Added CheckTable function and logic to handle missing          #
+#                                  UserTable.                                                     #
+###################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+import traceback
+import sys
+from datetime     import datetime
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from os.path      import join as pathjoin
+from re           import search
+from re           import compile
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from sys          import stdout
+from signal       import signal
+from subprocess   import PIPE
+from Oracle       import IsReadable
+from Oracle       import GetParameter
+from Oracle       import Logger
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+from Oracle       import PrintError
+
+
+# ---------------------------------------------------------------------------
+# Def : LoadUserTable()
+# Desc: Loads contents of the user table.
+# Args: UserTable = the name of the user table.
+# Retn: UserDict, contains the contents of the user table.
+# ---------------------------------------------------------------------------
+def LoadUserTable(UserTable):
+  UserDict = {}
+  UserList = []
+
+  # Load the User Table
+  # -------------------------------
+  Sql  = "set linesize 32767\n"
+  Sql += "set pagesize 0\n"
+  Sql += "set feedback off\n"
+  Sql += "set echo off\n"
+  Sql += "alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss';\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         userid       || '" + ColSep  + "' ||\n"
+  Sql += "         company_name || '" + ColSep  + "' ||\n"
+  Sql += "         descr        || '" + ColSep  + "' ||\n"
+  Sql += "         privilege    || '" + ColSep  + "' ||\n"
+  Sql += "         effdt        || '" + ColSep  + "' ||\n"
+  Sql += "         status1\n"
+  Sql += "    FROM " + UserTable + "\n"
+  Sql += "   WHERE upper(status1) = 'ACTIVE'\n"
+  Sql += "ORDER BY userid, privilege;"
+  
+  # Execute the report
+  if (ConnStr != ''):
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk)
+
+  if(RetCode != 0):
+    print("\nError occured executing the following SQL:")
+    PrintError(Sql, Stdout, ErrorList)
+    exit(RetCode)
+  
+  for line in Stdout.split('\n'):
+    if (line != ''):
+      UserRec      = line.split(ColSep)
+      USERID       = UserRec[0]
+      COMPANY_NAME = UserRec[1]
+      DESCR        = UserRec[2]
+      PRIVILEGE    = UserRec[3]
+      EFFDT        = UserRec[4]
+      STATUS1      = UserRec[5]
+  
+      UserDict[USERID.upper() + ColSep + PRIVILEGE.upper()] = {
+         'UserId'        : USERID
+        ,'Company'       : COMPANY_NAME
+        ,'Description'   : DESCR
+        ,'Privilege'     : PRIVILEGE
+        ,'EffectiveDate' : EFFDT
+        ,'Status'        : STATUS1
+      }
+      
+  # Create a ist of all UserId's from the UserTable
+  for Userkey in UserDict:
+    UserId = Userkey.split('~')[0]
+    if (UserId not in UserList) and (UserId not in RejectedUserList):
+      UserList.append(UserId)
+
+  return(UserDict,UserList)
+# ---------------------------------------------------------------------------
+# End LoadUserTable()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : CheckTable()
+# Desc: Checks for the existance of a table.
+# Args: Role
+# Retn: True=Role exists / False=Role does not exist. 
+# ---------------------------------------------------------------------------
+def CheckTable(Table):
+  try:
+    Schema, TableName = Table.split('.')
+  except:
+    Schema    = OwnerSchema
+    TableName = Table
+
+  Sql  = "set linesize 32767\n"
+  Sql += "set pagesize 0\n"
+  Sql += "set feedback off\n"
+  Sql += "set echo off\n"
+  Sql += "alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss';\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         count(*)\n"
+  Sql += "    FROM DBA_TABLES\n"
+  Sql += "   WHERE UPPER(owner)      = '" + Schema.upper()    + "'\n"
+  Sql += "     AND UPPER(table_name) = '" + TableName.upper() + "';"
+  
+  # Execute the report
+  if (ConnStr != ''):
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk)
+
+  if(RetCode != 0):
+    print("\nError occured executing the following SQL:")
+    PrintError(Sql, Stdout, ErrorList)
+    exit(RetCode)
+
+  if (Stdout == '0'):
+    return(False)
+  elif (Stdout == '1'):
+    return(True)
+  else:
+    return('unknown')      
+# ---------------------------------------------------------------------------
+# End CheckTable()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : CheckRole()
+# Desc: Checks for the existance of a role.
+# Args: Role
+# Retn: True=Role exists / False=Role does not exist. 
+# ---------------------------------------------------------------------------
+def CheckRole(Role):
+
+  Sql  = "set linesize 32767\n"
+  Sql += "set pagesize 0\n"
+  Sql += "set feedback off\n"
+  Sql += "set echo off\n"
+  Sql += "alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss';\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         count(*)\n"
+  Sql += "    FROM DBA_ROLES\n"
+  Sql += "   WHERE upper(role) = '" + Role.upper() + "';"
+  
+  # Execute the report
+  if (ConnStr != ''):
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk)
+
+  if(RetCode != 0):
+    print("\nError occured executing the following SQL:")
+    PrintError(Sql, Stdout, ErrorList)
+    exit(RetCode)
+
+  if (Stdout == '0'):
+    return(False)
+  elif (Stdout == '1'):
+    return(True)
+  else:
+    return('unknown')      
+# ---------------------------------------------------------------------------
+# End CheckRole()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : CreateRole()
+# Desc: Creates a custom role in the database.
+# Args: Role
+# Retn: <none>
+# ---------------------------------------------------------------------------
+def CreateRole(Role):
+
+  # Load the User Table
+  # -------------------------------
+  Sql  = SqlHeader + "\n"
+  Sql += "CREATE ROLE " + Role.upper() + ";"
+  
+  # Execute the report
+  if (ConnStr != ''):
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk)
+
+  if(RetCode != 0):
+    print("\nError occured executing the following SQL:")
+    PrintError(Sql, Stdout, ErrorList)
+    exit(RetCode)
+  
+  return()
+# ---------------------------------------------------------------------------
+# End CreateRole()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : LoadMissingPrivileges()
+# Desc: Finds missing privileges.
+# Args: <none>
+# Retn: PrivDict, a dictionary containing the missing privileges by UserId.
+# ---------------------------------------------------------------------------
+def LoadMissingPrivileges():
+  PrivDict = {}
+
+  # Load up missing grants for the Admin Role
+  # ------------------------------------------
+  Sql  = "set linesize 32767\n"
+  Sql += "set pagesize 0\n"
+  Sql += "set feedback off\n"
+  Sql += "set echo on\n"
+  Sql += "set echo off\n"
+  Sql += "\n"
+  Sql += "SELECT " + SqlHeader + "\n"
+  Sql += "       OWNER       || '" + ColSep  + "' ||\n"
+  Sql += "       OBJECT_NAME || '" + ColSep  + "' ||\n"
+  Sql += "       PRIVILEGE\n"
+  Sql += "  FROM (SELECT 'SELECT' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , OBJECT_NAME\n"
+  Sql += "          FROM DBA_OBJECTS OBJ\n"
+  Sql += "         WHERE OBJECT_TYPE IN ('TABLE','VIEW')\n"
+  Sql += "           AND upper(OWNER) = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND STATUS = 'VALID'\n"
+  Sql += "         MINUS\n"
+  Sql += "        SELECT 'SELECT' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , TABLE_NAME AS OBJECT_NAME\n"
+  Sql += "          FROM DBA_TAB_PRIVS PRV\n"
+  Sql += "         WHERE OWNER = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND GRANTEE = '" + AdminRole + "'\n"
+  Sql += "           AND PRIVILEGE = 'SELECT'\n"
+  Sql += "         MINUS\n"
+  Sql += "        SELECT 'SELECT' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , OBJECT_NAME\n"
+  Sql += "          FROM DBA_RECYCLEBIN\n"
+  Sql += "         WHERE upper(OWNER) = '" + OwnerSchema + "'\n"
+  Sql += "           AND TYPE in ('TABLE','VIEW')\n"
+  Sql += "        UNION\n"
+  Sql += "        SELECT 'INSERT' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , OBJECT_NAME\n"
+  Sql += "          FROM DBA_OBJECTS OBJ\n"
+  Sql += "         WHERE OBJECT_TYPE = 'TABLE'\n"
+  Sql += "           AND upper(OWNER) = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND STATUS = 'VALID'\n"
+  Sql += "         MINUS\n"
+  Sql += "        SELECT 'INSERT' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , TABLE_NAME AS OBJECT_NAME\n"
+  Sql += "          FROM DBA_TAB_PRIVS PRV\n"
+  Sql += "         WHERE OWNER = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND GRANTEE = '" + AdminRole + "'\n"
+  Sql += "           AND PRIVILEGE = 'INSERT'\n"
+  Sql += "         MINUS\n"
+  Sql += "        SELECT 'INSERT' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , OBJECT_NAME\n"
+  Sql += "          FROM DBA_RECYCLEBIN\n"
+  Sql += "         WHERE upper(OWNER) = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND TYPE in ('TABLE','VIEW')\n"
+  Sql += "        UNION\n"
+  Sql += "        SELECT 'UPDATE' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , OBJECT_NAME\n"
+  Sql += "          FROM DBA_OBJECTS OBJ\n"
+  Sql += "         WHERE OBJECT_TYPE = 'TABLE'\n"
+  Sql += "           AND upper(OWNER) = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND STATUS = 'VALID'\n"
+  Sql += "         MINUS\n"
+  Sql += "        SELECT 'UPDATE' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , TABLE_NAME AS OBJECT_NAME\n"
+  Sql += "          FROM DBA_TAB_PRIVS PRV\n"
+  Sql += "         WHERE OWNER = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND GRANTEE = '" + AdminRole + "'\n"
+  Sql += "           AND PRIVILEGE = 'UPDATE'\n"
+  Sql += "         MINUS\n"
+  Sql += "        SELECT 'UPDATE' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , OBJECT_NAME\n"
+  Sql += "          FROM DBA_RECYCLEBIN\n"
+  Sql += "         WHERE upper(OWNER) = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND TYPE in ('TABLE','VIEW')\n"
+  Sql += "        UNION\n"
+  Sql += "        SELECT 'DELETE' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , OBJECT_NAME\n"
+  Sql += "          FROM DBA_OBJECTS OBJ\n"
+  Sql += "         WHERE OBJECT_TYPE = 'TABLE'\n"
+  Sql += "           AND upper(OWNER) = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND STATUS = 'VALID'\n"
+  Sql += "         MINUS\n"
+  Sql += "        SELECT 'DELETE' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , TABLE_NAME AS OBJECT_NAME\n"
+  Sql += "          FROM DBA_TAB_PRIVS PRV\n"
+  Sql += "         WHERE OWNER = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND GRANTEE = '" + AdminRole + "'\n"
+  Sql += "           AND PRIVILEGE = 'DELETE'\n"
+  Sql += "         MINUS\n"
+  Sql += "        SELECT 'DELETE' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , OBJECT_NAME\n"
+  Sql += "          FROM DBA_RECYCLEBIN\n"
+  Sql += "         WHERE upper(OWNER) = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND TYPE in ('TABLE','VIEW')\n"
+  Sql += "       );"
+  
+
+  # Execute the report
+  if (ConnStr != ''):
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk)
+  
+  if(RetCode != 0):
+    print("\nError occured executing the following SQL:")
+    PrintError(Sql, Stdout, ErrorList)
+    exit(RetCode)
+  
+  for line in Stdout.split('\n'):
+    if (line != ''):
+      PrivRec   = line.split(ColSep)
+      SCHEMA    = PrivRec[0]
+      OBJECT    = PrivRec[1]
+      PRIVILEGE = PrivRec[2]
+  
+      if (AdminRole + ColSep + SCHEMA + ColSep + ColSep + OBJECT in PrivDict):
+        Privilege = PrivDict[AdminRole + ColSep + SCHEMA + ColSep + ColSep + OBJECT]['Privilege']
+        PrivDict[AdminRole + ColSep + SCHEMA + ColSep + ColSep + OBJECT]['Privilege'] = Privilege + ',' + PRIVILEGE
+      else:
+        PrivDict[AdminRole + ColSep + SCHEMA + ColSep + ColSep + OBJECT] = {
+           'Schema'    : SCHEMA   
+          ,'Object'    : OBJECT   
+          ,'Privilege' : PRIVILEGE
+        }
+  
+  for key in PrivDict:
+    SCHEMA    = PrivDict[key]['Schema'] 
+    OBJECT    = PrivDict[key]['Object'] 
+    PRIVILEGE = PrivDict[key]['Privilege'] 
+    GrantList.append("GRANT " + PRIVILEGE + " ON " + SCHEMA + "." + OBJECT + " TO " + AdminRole + ";")
+
+
+  # Load up missing grants for the Select Role
+  # -------------------------------------------
+  Sql  = "set linesize 32767\n"
+  Sql += "set pagesize 0\n"
+  Sql += "set feedback off\n"
+  Sql += "set echo on\n"
+  Sql += "set echo off\n"
+  Sql += "\n"
+  Sql += "SELECT " + SqlHeader + "\n"
+  Sql += "       OWNER       || '" + ColSep  + "' ||\n"
+  Sql += "       OBJECT_NAME || '" + ColSep  + "' ||\n"
+  Sql += "       PRIVILEGE\n"
+  Sql += "  FROM (SELECT 'SELECT' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , OBJECT_NAME\n"
+  Sql += "          FROM DBA_OBJECTS OBJ\n"
+  Sql += "         WHERE OBJECT_TYPE IN ('TABLE','VIEW')\n"
+  Sql += "           AND upper(OWNER) = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND STATUS = 'VALID'\n"
+  Sql += "         MINUS\n"
+  Sql += "        SELECT 'SELECT' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , TABLE_NAME AS OBJECT_NAME\n"
+  Sql += "          FROM DBA_TAB_PRIVS PRV\n"
+  Sql += "         WHERE OWNER = '" + OwnerSchema.upper() + "'\n"
+  Sql += "           AND GRANTEE = '" + SelectRole + "'\n"
+  Sql += "           AND PRIVILEGE = 'SELECT'\n"
+  Sql += "         MINUS\n"
+  Sql += "        SELECT 'SELECT' AS PRIVILEGE\n"
+  Sql += "             , upper(OWNER) AS OWNER\n"
+  Sql += "             , OBJECT_NAME\n"
+  Sql += "          FROM DBA_RECYCLEBIN\n"
+  Sql += "         WHERE upper(OWNER) = '" + OwnerSchema + "'\n"
+  Sql += "           AND TYPE in ('TABLE','VIEW')\n"
+  Sql += "       );"
+  
+  # Execute the report
+  if (ConnStr != ''):
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk)
+  
+  if(RetCode != 0):
+    print("\nError occured executing the following SQL:")
+    PrintError(Sql, Stdout, ErrorList)
+    exit(RetCode)
+  
+  for line in Stdout.split('\n'):
+    if (line != ''):
+      PrivRec   = line.split(ColSep)
+      SCHEMA    = PrivRec[0]
+      OBJECT    = PrivRec[1]
+      PRIVILEGE = PrivRec[2]
+  
+      if (SelectRole + ColSep + SCHEMA + ColSep + ColSep + OBJECT in PrivDict):
+        Privilege = PrivDict[SelectRole + ColSep + SCHEMA + ColSep + ColSep + OBJECT]['Privilege']
+        PrivDict[SelectRole + ColSep + SCHEMA + ColSep + ColSep + OBJECT]['Privilege'] = Privilege + ',' + PRIVILEGE
+      else:
+        PrivDict[SelectRole + ColSep + SCHEMA + ColSep + ColSep + OBJECT] = {
+           'Schema'    : SCHEMA   
+          ,'Object'    : OBJECT   
+          ,'Privilege' : PRIVILEGE
+        }
+  return(PrivDict)
+# ---------------------------------------------------------------------------
+# End LoadMissingPrivileges()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : LoadMissingUsers()
+# Desc: Identifies missing user accounts.
+# Args: <none>
+# Retn: MissingUserDict, a dictionary containing the missing user accounts.
+# ---------------------------------------------------------------------------
+def LoadMissingUsers():
+  MissingUserDict = {}
+
+  Sql  = "set linesize 32767\n"
+  Sql += "set pagesize 0\n"
+  Sql += "set feedback off\n"
+  Sql += "set echo on\n"
+  Sql += "set echo off\n"
+  Sql += "\n"
+  Sql += "SELECT " + SqlHeader + "\n"
+  Sql += "       upper(ut.userid)         || '" + ColSep  + "' ||\n"
+  Sql += "       upper(dba.username)      || '" + ColSep  + "' ||\n"
+  Sql += "       dba.account_status       || '" + ColSep  + "' ||\n"
+  Sql += "       dba.default_tablespace   || '" + ColSep  + "' ||\n"
+  Sql += "       dba.temporary_tablespace\n"
+  Sql += "  FROM dba_users dba\n"
+  Sql += "     , " + UserTable + " ut\n"
+  Sql += " WHERE upper(ut.userid) = upper(dba.username(+));"
+    
+  if (ConnStr != ''):
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk)
+  
+  if(RetCode != 0):
+    print("\nError occured executing the following SQL:")
+    PrintError(Sql, Stdout, ErrorList)
+    exit(RetCode)
+  
+  for line in Stdout.split('\n'):
+    if (line != ''):
+      MissingUserRec  = line.split(ColSep)
+      USERID          = MissingUserRec[0]
+      USERNAME        = MissingUserRec[1]
+      ACCOUNT_STATUS  = MissingUserRec[2]
+      DFT_TABLESPACE  = MissingUserRec[3]
+      TMP_TABLESPACE  = MissingUserRec[4]
+  
+      if (ValidateUserId.match(USERID)):
+        if (USERID.find('-') >= 0):
+          RejectedUserList.append(USERID)
+        else:        
+          MissingUserDict[USERID] = {
+             'UserName'            : USERNAME
+            ,'AccountStatus'       : ACCOUNT_STATUS
+            ,'DefaultTablespace'   : DFT_TABLESPACE
+            ,'TemporaryTablespace' : TMP_TABLESPACE
+          }
+      else:
+        RejectedUserList.append(USERID)
+
+  return(MissingUserDict)
+# ---------------------------------------------------------------------------
+# End LoadMissingUsers()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : LoadDbaRoleGrants()
+# Desc: Identifies all privileges granted to the AdminRole and the SelectRole
+# Args: <none>
+# Retn: DbaRoleGrantsDict, a dictionary containing privileges granted to the 
+#       AdminRole and the SelectRole.
+# ---------------------------------------------------------------------------
+def LoadDbaRoleGrants():
+  DbaRoleGrantsDict = {}
+  
+  Sql  = "set linesize 32767\n"
+  Sql += "set pagesize 0\n"
+  Sql += "set feedback off\n"
+  Sql += "set echo on\n"
+  Sql += "set echo off\n"
+  Sql += "\n"
+  Sql += "SELECT grantee           || '" + ColSep  + "' ||\n"
+  Sql += "       granted_role\n"
+  Sql += "  FROM dba_role_privs\n"
+  Sql += " WHERE upper(granted_role) IN ( '" + AdminRole + "','" + SelectRole + "','CONNECT', 'RESOURCE')\n"
+  Sql += "   AND upper(grantee) in ('" + "', '".join(UserList).upper() + "')\n"
+  Sql += " UNION\n"
+  Sql += "SELECT grantee           || '" + ColSep  + "' ||\n"
+  Sql += "       privilege AS granted_role\n"
+  Sql += "  FROM dba_sys_privs\n"
+  Sql += " WHERE upper(privilege) = ( 'ALTER SESSION')\n"
+  Sql += "   AND upper(grantee) in ('" + "', '".join(UserList).upper() + "');"
+
+  if (ConnStr != ''):
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk)
+  
+  if(RetCode != 0):
+    print("\nError occured executing the following SQL:")
+    PrintError(Sql, Stdout, ErrorList)
+    exit(RetCode)
+
+  DbaRoleGrantsDict = {}
+  for line in Stdout.split('\n'):
+    if (line != ''):
+      DbaRoleRec     = line.split(ColSep)
+      USERNAME       = DbaRoleRec[0]
+      ROLE           = DbaRoleRec[1]
+      DbaRoleGrantsDict[USERNAME + '~' + ROLE] = 'GRANTED'
+ 
+  return(DbaRoleGrantsDict)
+# ---------------------------------------------------------------------------
+# End LoadDbaRoleGrants()
+# ---------------------------------------------------------------------------
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd              = basename(argv[0])
+  CmdDesc          = 'User Management (' + Cmd + ')'
+  Version          = '1.20'
+  VersionDate      = 'Fri Jul  8 15:37:04 CDT 2016'
+  DevState         = 'Development'
+  Banner           = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Now              = datetime.now()
+  ErrChk           = True
+  ConnStr          = ''
+  Sql              = ''
+  SqlHeader        = '/***** ' + CmdDesc + ' *****/'
+  ColSep           = '~'
+  EtcDir           = '/home/oracle/dba/etc'
+  TmpDir           = '/home/oracle/dba/tmp'
+  LogDir           = '/home/oracle/dba/log'
+  UserTable        = 'SYSADM.PS_CCSF_USERS'
+  AdminRole        = 'SYSADM_ADMIN_ROLE'
+  SelectRole       = 'SYSADM_SELECT_ROLE'
+  CustomRoles      = [AdminRole, SelectRole]
+  OwnerSchema      = 'SYSADM'
+  GrantList        = []
+  UserDict         = {}
+  PrivDict         = {}
+  UserList         = []
+  MissingUserDict  = {}
+  CreateUserList   = []
+  ModifyUserList   = []
+  TmpTablespace    = 'TEMP'
+  DftTablespace    = 'USERS'
+  RejectedUserList = []
+  ValidateUserId   = compile(r'[A-Za-z]\w*')
+
+  # Start logging - Everything from stdout will be logged from this point.
+  # -----------------------------------------------------------------------
+  LogTime = datetime.now().strftime("%Y%m%d.%H%M%S")
+  LogFile = pathjoin(LogDir, Cmd + '.' + LogTime + '.log')
+  try:
+    Log = open(LogFile, 'wb')
+    Log.close()
+  except:
+    print('\nCannot open log file for write: %s' % LogFile)
+    exit(1)
+  sys.stdout = Logger(LogFile)
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # ------------------------------------------------
+  # Imports that are conditional on Python Version.
+  # ------------------------------------------------
+  if (version_info[0] >= 3):
+    from configparser import SafeConfigParser
+  else:
+    from ConfigParser import SafeConfigParser
+  # ------------------------------------------------
+
+  # Process command line options
+  # ----------------------------------
+  #Usage = 'parms [options] [parm_filter]'
+  ArgParser = OptionParser()
+  ArgParser.add_option("-a",  action="store_true", dest="ApplyRules", default=False, help="Apply Rules")
+  ArgParser.add_option("--v", action="store_true", dest="ShowVer",    default=False, help="Version Information")
+
+  Options, args = ArgParser.parse_args()
+  argc = len(args)
+
+  ApplyRules    = Options.ApplyRules
+  ShowVer       = Options.ShowVer
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  Now = datetime.now()
+  print('\n============================================================================================================================')
+  print('User Management Utility, v%4s %93s' % (Version, Now.strftime("%Y-%m-%d %H:%M")))
+  print('============================================================================================================================')
+
+  DbName = GetParameter('db_name')
+  print("\nDatabase: %s" % DbName)
+  
+  # Check/setup the Oracle environment
+  # ------------------------------------
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+  
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+  
+  # Verify the UserTable exists.
+  # ------------------------------------
+  TableExists = CheckTable(UserTable)
+  if (TableExists != True):
+    print("\nUser Table Not Found: " + UserTable)
+    print("\nCreate a user table to manage user accounts & privileges.")
+    print("Minimum requirements for the user table follow...")
+    print("")
+    print(" Name          Type             ")
+    print(" ------------- -----------------")
+    print(" USERID        VARCHAR2(30 CHAR)")
+    print(" COMPANY_NAME  VARCHAR2(70 CHAR)")
+    print(" DESCR         VARCHAR2(30 CHAR)")
+    print(" PRIVILEGE     VARCHAR2(10 CHAR)")
+    print(" EFFDT         DATE             ")
+    print(" STATUS1       VARCHAR2(30 CHAR)")
+    exit(1)
+
+  # Verify/create custom roles.
+  # ------------------------------------
+  for Role in CustomRoles:
+    RoleExists = CheckRole(Role)
+    if (RoleExists != True):
+      print("\nCreating role: " + Role)
+      CreateRole(Role)
+
+  UserDict, UserList = LoadUserTable(UserTable)
+  PrivDict           = LoadMissingPrivileges()
+  MissingUserDict    = LoadMissingUsers()
+  
+  # Generate DDL to remediate missing privileges.
+  # ------------------------------------
+  for key in PrivDict:
+    SCHEMA    = PrivDict[key]['Schema'] 
+    OBJECT    = PrivDict[key]['Object'] 
+    PRIVILEGE = PrivDict[key]['Privilege'] 
+    GrantList.append("GRANT " + PRIVILEGE + " ON " + SCHEMA + "." + OBJECT + " TO " + SelectRole + ";")
+
+  # Generate DDL to remediate missing user accounts.
+  # ------------------------------------
+  for UserId in MissingUserDict:
+    USERNAME       = MissingUserDict[UserId]['UserName']
+    ACCOUNT_STATUS = MissingUserDict[UserId]['AccountStatus']
+    DFT_TABLESPACE = MissingUserDict[UserId]['DefaultTablespace']
+    TMP_TABLESPACE = MissingUserDict[UserId]['TemporaryTablespace']
+
+    if (USERNAME == ''):
+      CreateUserList.append("CREATE USER " + UserId.lower() + " IDENTIFIED BY changeme DEFAULT TABLESPACE " + DftTablespace.lower() + " TEMPORARY TABLESPACE " + TmpTablespace.lower() + ";")
+      CreateUserList.append("GRANT CONNECT, RESOURCE, ALTER SESSION TO " + UserId.lower() + ";")
+    else:
+      if (DFT_TABLESPACE != DftTablespace):
+        ModifyUserList.append("ALTER USER " + UserId.lower() + " DEFAULT TABLESPACE " + DftTablespace.lower() + ";")
+      if (TMP_TABLESPACE != TmpTablespace):
+        ModifyUserList.append("ALTER USER " + UserId.lower() + " TEMPORARY TABLESPACE " + TmpTablespace.lower() + ";")
+      if (ACCOUNT_STATUS.upper() == 'EXPIRED & LOCKED' or ACCOUNT_STATUS.upper() == 'LOCKED'):
+        ModifyUserList.append("ALTER USER " + UserId.lower() + " ACCOUNT UNLOCK;")
+    
+  DbaRoleGrantsDict = LoadDbaRoleGrants()
+    
+  # Generate DDL to remediate roles and system privileges.
+  # --------------------------------------------------------
+  for Rolekey in UserDict:
+    UserId = Rolekey.split('~')[0]
+    Role   = Rolekey.split('~')[1]
+    if (UserId not in RejectedUserList):
+      if (Rolekey not in DbaRoleGrantsDict):
+          ModifyUserList.append("GRANT " + Role + " TO " + UserId.lower() + ";")
+      if (UserId + '~' + 'CONNECT' not in DbaRoleGrantsDict):
+          ModifyUserList.append("GRANT CONNECT TO " + UserId.lower() + ";")
+      if (UserId + '~' + 'RESOURCE' not in DbaRoleGrantsDict):
+          ModifyUserList.append("GRANT RESOURCE TO " + UserId.lower() + ";")
+      if (UserId + '~' + 'ALTER SESSION' not in DbaRoleGrantsDict):
+          ModifyUserList.append("GRANT ALTER SESSION TO " + UserId.lower() + ";")
+
+  for UserId in MissingUserDict:
+    USERNAME       = MissingUserDict[UserId]['UserName']
+    ACCOUNT_STATUS = MissingUserDict[UserId]['AccountStatus']
+    DftTablespace  = MissingUserDict[UserId]['DefaultTablespace']
+    TmpTablespace  = MissingUserDict[UserId]['TemporaryTablespace']
+
+  if(RejectedUserList != []):
+    print("\nUserId's Rejected due to invalid characters:")
+    print("----------------------------------------------------------------------------------------------------------------------------")
+    for UserId in RejectedUserList:
+      print(UserId)
+
+  if(CreateUserList != []):
+    print("\nThe following users must be created:")
+    print("----------------------------------------------------------------------------------------------------------------------------")
+    for Sql in CreateUserList:
+      print(Sql)
+  else:
+    print("\nNo missing user accounts found.")
+
+  if(ModifyUserList != []):
+    print('\nThe following modifications must be made to existing user accounts:')
+    print("----------------------------------------------------------------------------------------------------------------------------")
+    for Sql in ModifyUserList:
+      print(Sql)
+  else:
+    print("\nNo user account modifications required.")
+
+  if(GrantList != []):
+    print("\nThe following privileges must be granted:")
+    print("----------------------------------------------------------------------------------------------------------------------------")
+    for Sql in GrantList:
+      print(Sql);
+  else:
+    print("\nNo missing missing privileges found.")
+
+  # Execute changes in the database.
+  # ---------------------------------
+  if (ApplyRules == True):
+    if(CreateUserList != []):
+      print("\nCreating new user accounts...")
+      for Sql in CreateUserList:
+        if (ConnStr != ''):
+          (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+        else:
+          (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk)        
+        if(RetCode != 0):
+          print("\nError occured executing the following SQL:")
+          PrintError(Sql, Stdout, ErrorList)
+          exit(RetCode)
+    
+    if(GrantList != []):
+      print("\nGranting missing privileges...")
+      for Sql in GrantList:
+        if (ConnStr != ''):
+          (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+        else:
+          (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk)        
+        if(RetCode != 0):
+          print("\nError occured executing the following SQL:")
+          PrintError(Sql, Stdout, ErrorList)
+          exit(RetCode)
+    
+    if(ModifyUserList != []):
+      print('\nModifying user accounts...')
+      for Sql in ModifyUserList:
+        if (ConnStr != ''):
+          (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+        else:
+          (RetCode, Stdout, ErrorList) = RunSqlplus(Sql, ErrChk)        
+        if(RetCode != 0):
+          print("\nError occured executing the following SQL:")
+          PrintError(Sql, Stdout, ErrorList)
+          exit(RetCode)
+
+  Now = datetime.now()
+  print('\n============================================================================================================================')
+  print('Processing Complete%105s' % (Now.strftime("%Y-%m-%d %H:%M")))
+  print('============================================================================================================================')
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+
+

@@ -1,0 +1,701 @@
+#!/bin/env python
+
+##################################################################################################
+# Name:        logfile_maintenance                                                               #
+# Author:      Randy Johnson                                                                     #
+# Description: Discovers database alert logs and calls logrotate to manage them. Calls adrci and #
+#              purges old diag files. Discovers and removes old database audit files. See        #
+#              logfile_maintenance.cfg file for tunables.                                        #
+#                                                                                                #
+# Usage:       logfile_maintenance -h                                                            #
+#              usage: logfile_maintenance [options]                                              #
+#                                                                                                #
+#              options:                                                                          #
+#                -h, --help     show this help message and exit                                  #
+#                -c CONFIGFILE  configuration file                                               #
+#                -d             dump config file                                                 #
+#                -f             logrotate -f, rebuild logrotate state file                       #
+#                -s             show only                                                        #
+#                -v             print version info                                               #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 03/23/2017 1.00 Randy Johnson    This is a rewrite of the logfile_cleanup script. I converted  #
+#                                  the script to Python (from bash), reduced the upkeep needed   #
+#                                  the old logrotate.conf script (when databases are added and   #
+#                                  removed from the system. Also moved tunables to a config file #
+#                                  so the main script doesn't need to be modified when           #
+#                                  adjustments to tunables are needed.                           #
+# 04/06/2017 1.10 Randy Johnson    Minor cosmetic changes. Improved -show output.                #
+# 06/01/2017 1.20 Randy Johnson    Changed ROTATE_COUNT to ROTATE_MAXCOUNT, changed LrCount to   #
+#                                  LrMaxCount. Added maxage option for logrotate (ROTATE_MAXAGE) #
+#                                  LrMaxAge.                                                     #
+# 07/13/2017 1.21 Randy Johnson    Added program description to Usage. Changed -v option to --v  #
+##################################################################################################
+
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+import sys
+from datetime   import datetime, timedelta
+from optparse   import OptionParser
+from os         import access
+from os         import environ
+from os         import listdir
+from os         import path
+from os         import walk
+from os         import unlink
+from os         import X_OK as ExecOk
+from os         import W_OK as WriteOk
+from os         import R_OK as ReadOk
+from os.path    import isdir
+from os.path    import isfile
+from os.path    import abspath
+from os.path    import basename
+from os.path    import dirname
+from os.path    import getmtime
+from os.path    import join as pathjoin
+from os.path    import sep as pathsep
+from os         import stat
+from re         import compile
+from re         import match
+from re         import search
+from sys        import argv
+from sys        import exc_info
+from sys        import exit
+from sys        import stdout
+from sys        import version_info
+from subprocess import Popen
+from subprocess import PIPE
+from signal     import SIGPIPE
+from signal     import SIG_DFL
+from subprocess import STDOUT
+from time       import strftime, gmtime
+
+# --------------------------------------
+# ---- Function Definitions ------------
+# --------------------------------------
+# ---------------------------------------------------------------------------
+# Clas: Logger()
+# Desc: Tee's print output to a file.
+# ---------------------------------------------------------------------------
+class Logger(object):
+  def __init__(self,text):
+    from sys import stdout
+    self.logfile = text
+    self.terminal = stdout
+    self.log = open(self.logfile, "w")
+
+    if (version_info[0] >= 3):
+      self.encoding = stdout.encoding
+      self.flush = stdout.flush
+      self.errors = stdout.errors
+
+  def write(self, message):
+    self.terminal.write(message)
+    self.log.write(message)
+# ---------------------------------------------------------------------------
+# End Logger()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : IsExecutable()
+# Desc: Verifies that a file is readable and executable.
+# Args: Filepath = Fully qualified filename.
+# Retn: 1 file is readable and executable by the current user.
+#       0 file failed isfile, read or execute check.
+# ---------------------------------------------------------------------------
+def IsExecutable(Filepath):
+  if (isfile(Filepath) and access(Filepath, ReadOk) and access(Filepath, ExecOk)):
+    return True
+  else:
+    return False
+# ---------------------------------------------------------------------------
+# End IsExecutable()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : FindFiles()
+# Desc: Searches for any file matching the pattern.
+# Args: StartingDir, Pattern
+# Retn: list structure containing FQN of files found.
+#---------------------------------------------------------------------------
+def FindFiles(StartingDir, Pattern, MaxDays=0):
+  Found    = compile(Pattern)
+  FileList = []
+
+  if (MaxDays > 0):
+    Now = datetime.now()
+    Ago = Now - timedelta(days=MaxDays)
+
+  for (path, subdirs, files) in walk(StartingDir):
+    for filename in files:
+      if Found.match(filename):
+        if (MaxDays > 0):
+          Mtime = datetime.fromtimestamp(getmtime(pathjoin(path, filename)))
+          if (Mtime < Ago):
+            FileList.append(pathjoin(path, filename))
+        else:
+          FileList.append(pathjoin(path, filename))
+  return(FileList)
+# ---------------------------------------------------------------------------
+# End FindFiles()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : LoadConfig()
+# Desc: Parses the config file and returns a dictionary structure of:
+#        {key : value, key : value, ...}
+# Args: ConfigFile
+# Retn: ConfigDict (dictionary object)
+# ---------------------------------------------------------------------------
+def LoadConfig(ConfigFile, ForceUpper=True):
+  ConfigDict = {}
+
+  # If an oratab file name has been passed in...
+  if (isfile(ConfigFile)):
+    try:
+      cf = open(ConfigFile)
+    except:
+      print(format_exc())
+      PrintError('\nERROR', 'Cannot open config file for read: %s' % ConfigFile)
+      exit(1)
+
+  ConfigFileContents = cf.read().split('\n')
+  for line in ConfigFileContents:
+    if (line.find('#') >= 0):                     # Comment character found.
+      line = line[0:line.find('#')]
+    line = line.strip()
+    if (line != ''):
+      pos = line.find(':')
+      if (pos >= 1):
+        if (ForceUpper) :
+          key = line[0:pos].strip().upper()
+        else :
+          key = line[0:pos].strip()
+        value = line[pos+1:].strip()
+        ConfigDict[key] = value
+
+  return(ConfigDict)
+# ---------------------------------------------------------------------------
+# End LoadConfig()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : WriteLrConfigFile()
+# Desc: Locates all alert log files and creates a logrotate.conf file.
+# Args: LrConfigFile
+# Retn:
+# ---------------------------------------------------------------------------
+def WriteLrConfigFile(ConfigFile, ForceUpper=True):
+
+  try:
+    f = open(LrConfigFile, 'w')
+  except:
+    print('ERROR: Cannot open logrotate config file for write: %s' % LrConfigFile)
+    exit(1)
+
+  f.write("%s\n" % LrFrequency.lower())
+  f.write("rotate %s\n" % LrMaxCount)
+  f.write("maxage %s\n" % LrMaxAge)
+  f.write("maxsize %s\n" % LrMaxSize.upper())
+  f.write("compress\n")
+  f.write("missingok\n")
+  f.write("notifempty\n")
+  f.write("copytruncate\n\n")
+
+  AlertLogList = FindFiles(OracleBase, AlertLogMask)
+  for AlertLog in AlertLogList :
+    f.write("%s {}\n" % AlertLog)
+
+  OtherLogList = FindFiles(LogDir, OtherLogMask)
+  for OtherLog in OtherLogList :
+    f.write("%s {}\n" % OtherLog)
+  f.close()
+# ---------------------------------------------------------------------------
+# End WriteLrConfigFile()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : RunLogrotate()
+# Desc: Calls logrotate
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def RunLogrotate(Logrotate, LrStateFile, LrConfigFile, ForceRotate=False):
+  Stdout = ''
+
+  if (ForceRotate):
+    Logrotate = [Logrotate, '-f', '-v', '-s', LrStateFile, LrConfigFile]
+  else:
+    Logrotate = [Logrotate, '-v', '-s', LrStateFile, LrConfigFile]
+
+  proc = Popen(Logrotate, bufsize=-1, stdin=PIPE, stdout=PIPE, stderr=STDOUT, \
+   shell=False, universal_newlines=True, close_fds=True)
+  for line in iter(proc.stdout.readline, ""):
+    print('  ' + line.strip())
+
+    proc.stdout.close()
+    rc = proc.wait()
+    return()
+# ---------------------------------------------------------------------------
+# End RunLogrotate()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : RunAdrci()
+# Desc: Calls adrci and runs commands passed in..
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def RunAdrci(Adrci, AdrCmd):
+  Stdout        = ''
+  AdrciJunkList = []
+
+  AdrciJunkList.append(compile(r'ADRCI: Release.*'))
+  AdrciJunkList.append(compile(r'Copyright \(c\).*'))
+  AdrciJunkList.append(compile(r'ADR base = .*'))
+  AdrciJunkList.append(compile(r'adrci> ADR Homes:.*'))
+  AdrciJunkList.append(compile(r'adrci>.*'))
+
+  proc = Popen([Adrci], bufsize=-1, stdin=PIPE, stdout=PIPE, stderr=STDOUT, \
+   shell=False, universal_newlines=True, close_fds=True)
+  proc.stdin.write(AdrCmd)
+
+  # Fetch the output
+  Stdout, StdErr = proc.communicate()
+
+  tmp = []
+  Stdout = Stdout.strip()
+  for line in Stdout.split('\n'):
+    line = line.strip()
+    if (line != ''):
+      junk = False
+      for Found in AdrciJunkList:
+        if (Found.match(line)):
+          junk = True
+      if (not junk):
+        tmp.append(line)
+
+  return('\n'.join(tmp))
+# ---------------------------------------------------------------------------
+# End RunAdrci()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : LoadOratab()
+# Desc: Parses the oratab file and returns a dictionary structure of:
+#        {'dbm'      : '/u01/app/oracle/product/11.2.0.3/dbhome_1',
+#         'biuat'    : '/u01/app/oracle/product/11.2.0.3/dbhome_1',
+#         ...
+#        }
+#       Note** the start/stop flag is parsed but not saved.
+#       If the fully qualified oratab file name is passed in it is prepended
+#       to a list of standard locations (/etc/oratab, /var/opt/oracle/oratab)
+#       This list of oratab locations are then searched in order. The first
+#       one to be successfully opened will be used.
+# Args: Oratab (optional, defaults to '')
+# Retn: OratabDict (dictionary object)
+# ---------------------------------------------------------------------------
+def LoadOratab(Oratab=''):
+  OraSid     = ''
+  OraHome    = ''
+  OraFlag    = ''
+  OratabDict = {}
+  OratabLoc  = ['/etc/oratab','/var/opt/oracle/oratab']
+
+  # If an oratab file name has been passed in...
+  if (Oratab != ''):
+    # If the oratab file name passed in is not already in the list of common locations...
+    if (not (Oratab in OratabLoc)):
+      OratabLoc.insert(0, Oratab)
+
+  for Oratab in OratabLoc:
+    if (isfile(Oratab)):
+      try:
+        otab = open(Oratab)
+        break                          # exit the loop if the file can be opened.
+      except:
+        print('\n%s' % traceback.format_exc())
+        print('\nCannot open oratab file: ' + Oratab + ' for read.')
+        return {}
+
+  OratabContents = otab.read().split('\n')
+  for line in OratabContents:
+    pos = line.find('#')
+    if (pos >= 0):                     # Comment character found.
+      line = line[0:pos]
+    line = line.strip()
+    if (line != ''):
+      Count = line.count(':')
+      if (Count == 2):
+        try:
+          (OraSid, OraHome, OraFlag) = line.split(':')
+          OratabDict[OraSid] = OraHome
+        except:
+          pass
+      elif (Count == 1):
+        try:
+          (OraSid, OraHome) = line.split(':')
+          OratabDict[OraSid] = OraHome
+        except:
+          pass
+  return(OratabDict)
+# ---------------------------------------------------------------------------
+# End LoadOratab()
+# ---------------------------------------------------------------------------
+# --------------------------------------
+# ---- End Function Definitions --------
+# --------------------------------------
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):      # if this is true, then this script is *not* being imported by another Python script.
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Logfile Maintenance'
+  Version        = '1.21'
+  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ' Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  HomeDir        = '/home/oracle/dba'
+  LogDir         = pathjoin(HomeDir, 'log')
+  EtcDir         = pathjoin(HomeDir, 'etc')
+  TmpDir         = pathjoin(HomeDir, 'tmp')
+  LrStateFile    = pathjoin(EtcDir, ("%s_logrotate.state" % Cmd))
+  LrConfigFile   = pathjoin(EtcDir, ("%s_logrotate.cfg" % Cmd))
+  LogFile        = pathjoin(LogDir, ("%s.log" % Cmd))
+  ConfigDict     = {}
+  CfgOptions     = []
+  AlertLogMask   = r'alert_.*\.log$'     # alert_*.log
+  OtherLogMask   = r'.*\.log$'           # *.log
+  AuditMask      = r'.*_.*_.*_.*\.aud$'  # *_*_*_*.aud
+  OratabDict     = {}
+  Logrotate      = '/usr/sbin/logrotate'
+  LrMaxSize      = '200M'                # max size for alert logs
+  LrMaxCount     = '12'                  # max count of backlogs to keep.
+  LrMaxAge       = '360'                 # max days of backlogs to keep.
+  LrFrequency    = 'weekly'              # logrotate retention
+  OracleBase     = '/u01/app/oracle'     # starting directory for searching for alert logs, trc, trm, and aud files...
+  AdrciShortDays = 15                    # 15 days (default is 30)
+  AdrciLongDays  = 45                    # 45 days (default is 365)
+  AuditMaxDays   = 30                    # Used for the *.aud, *.trc and *.trm cleanup (find command)
+  OraHome        = ''
+  Adrci          = ''
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nDiscover database alert logs and call logrotate to manage them. Call adrci and'
+  Usage += '\npurge old diag files. Discover and remove old database audit files. See'
+  Usage += '\nlogfile_maintenance.cfg file for tunables. See also Logfile Management.docx for'
+  Usage += '\nmore information.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("-c",        dest="ConfigFile",  default='',    type=str,                      help="configuration file")
+  ArgParser.add_option("-d",        dest="DumpConfig",  default=False,           action="store_true", help="dump config file")
+  ArgParser.add_option("-f",        dest="ForceRotate", default=False,           action="store_true", help="logrotate -f, rebuild logrotate state file")
+  ArgParser.add_option("-s",        dest="Show",        default=False,           action="store_true", help="show only")
+  ArgParser.add_option("--v",       dest="ShowVer",     default=False,           action="store_true", help="print version info")
+
+  Options, args = ArgParser.parse_args()
+
+  # Save command line options to global variables.
+  # -----------------------------------------------
+  ConfigFile  = Options.ConfigFile.strip()
+  DumpConfig  = Options.DumpConfig
+  ForceRotate = Options.ForceRotate
+  Show        = Options.Show
+  ShowVer     = Options.ShowVer
+
+  # Set default config file name if none specified on command line...
+  # --------------------------------------------------------------------
+  if (ConfigFile == ''):
+    ConfigFile  = pathjoin(EtcDir, Cmd + '.cfg')
+
+  if (ShowVer == True):
+    print('\n%s' % Banner)
+    exit(0)
+
+  # Attach stdout to LogFile
+  # ---------------------------
+  sys.stdout = Logger(LogFile)
+
+  # Read in ConfigFile
+  # -------------------------------------------------
+  ConfigDict = LoadConfig(ConfigFile)
+  for key in ConfigDict:
+    val = ConfigDict[key]
+    if (val.upper() == 'TRUE'):
+      ConfigDict[key] = True
+    if (val.upper() == 'FALSE'):
+      ConfigDict[key] = False
+
+  # Print out the contents of the configuration file
+  # ---------------------------------------------------
+  if (DumpConfig) :
+    if (ConfigDict == {}):
+      print('\nNo configuration entries found.')
+    else:
+      print('\n-------------------------------------------------------------------')
+      for key in ConfigDict :
+        print('%-20s : %-50s' % (key,ConfigDict[key]))
+      print('-------------------------------------------------------------------')
+    exit(0)
+
+  # Override defaults with config file options...
+  # ----------------------------------------------
+  try :
+    Logrotate = ConfigDict['LOGROTATE']
+  except :
+    pass
+  try :
+    OracleBase = ConfigDict['ORACLE_BASE']
+  except :
+    pass
+  try :
+    LrMaxSize = ConfigDict['ROTATE_MAXSIZE'].lower()
+  except :
+    pass
+  try :
+    LrMaxCount = ConfigDict['ROTATE_MAXCOUNT'].lower()
+  except :
+    pass
+  try :
+    LrMaxAge = ConfigDict['ROTATE_MAXAGE'].lower()
+  except :
+    pass
+  try :
+    LrFrequency = ConfigDict['ROTATE_FREQUENCY'].lower()
+  except :
+    pass
+  try :
+    Adrci = ConfigDict['ADRCI']
+  except :
+    pass
+  try :
+    AdrciShortDays = int(ConfigDict['ADRCI_SHORT_DAYS'])
+  except :
+    pass
+  try :
+    AdrciLongDays = int(ConfigDict['ADRCI_LONG_DAYS'])
+  except :
+    pass
+  try :
+    AuditMaxDays = int(ConfigDict['AUDIT_RETENTION'])
+  except :
+    pass
+
+  # Validate logrotate binary...
+  # ------------------------------
+  if (Logrotate != ''):
+    if (not IsExecutable(Logrotate)):
+      print("\nERROR: logrotate command is not executable. Check file permissions: %s" % Logrotate)
+      exit(1)
+  else:
+    print("\nERROR: %s command not found. Check logrotate setting in configuration file: %s" % ConfigFile)
+    exit(1)
+
+  # Validate Adrci binary...
+  # --------------------------
+  if (Adrci != ''):
+    if (IsExecutable(Adrci)):
+      OraHome = pathsep.join(dirname(Adrci).split(pathsep)[:-1])
+      environ['ORACLE_HOME'] = OraHome
+      Adrci = pathjoin(OraHome, 'bin', 'adrci')
+    else:
+      Adrci = ''
+      del environ['ORACLE_HOME']
+
+  # If Adrci binary is invalid or not specified in config file then try and find one using the oratab file...
+  # -------------------------------------------------------------------------------------------------------
+  if (Adrci == ''):
+    OratabDict = LoadOratab()
+    for DbName in sorted(OratabDict):
+      filepath = OratabDict[DbName]
+      if (IsExecutable(pathjoin(filepath, 'bin', 'adrci'))):
+        # May need further adrci validation tests here...
+        print("\nADRCI found in oratab using database: %s" % DbName)
+        OraHome = filepath
+        environ['ORACLE_HOME'] = OraHome
+        Adrci = pathjoin(pathjoin(filepath, 'bin', 'adrci'))
+        break
+
+  # Valid Adrci binary could not be found...
+  # ------------------------------------------
+  if (Adrci == ''):
+    print("\nERROR: Cannot find adrci command. Check adrci_home in configuration file: %s" % ConfigFile)
+    exit(1)
+
+  Now = datetime.now()
+  print("\n===========================================================================================")
+  print("%s Started %63s" % (CmdDesc, Now.strftime("%Y-%m-%d %H:%M")))
+  print("===========================================================================================")
+  print("Config File................. %s" % ConfigFile)
+  print("Log Fle..................... %s" % LogFile)
+
+  print("\nADRCI Options")
+  print("  ADRCI Command............. %s" % Adrci)
+  print("  Purge Short Days.......... %s" % AdrciShortDays)
+  print("  Purge Long Days........... %s" % AdrciLongDays)
+
+  print("\nAudit File Deletion Options")
+  print("  Starting Directory........ %s" % OracleBase)
+  print("  Audit Retention (days).... %s" % AuditMaxDays)
+  print("  Audit File Mask........... %s" % AuditMask)
+
+  print("\nLogrotate Options")
+  print("  Logrotate Command......... %s" % Logrotate)
+  print("  Starting Directory........ %s" % OracleBase)
+  print("  Alert Log Mask............ %s" % AlertLogMask)
+  print("  Log Rotate State File..... %s" % LrStateFile)
+  print("  Log Rotate Config File.... %s" % LrConfigFile)
+  print("  Force Rotation............ %s" % ForceRotate)
+  print("  %s" % LrFrequency)
+  print("  rotate %s" % LrMaxCount)
+  print("  maxage %s" % LrMaxAge)
+  print("  maxsize %s" % LrMaxSize.upper())
+  print("  compress")
+  print("  copytruncate")
+  print("  missingok")
+  print("  notifempty")
+
+  # Generate the logrotate configuration file. This is done every execution.
+  WriteLrConfigFile(LrConfigFile)
+
+  # Verify logrotate state file. Remove the file if ForceRotate option specified.
+  # This is not required by logrotate -f, rather it is a convenient way to zero
+  # out the state file if it has too many stale entries (too many file entries that
+  # no longer exist).
+  # -------------------------------------------------------------------------------
+  if (Show):
+    print("\nShow only:")
+    if (isfile(LrStateFile)):
+      if (ForceRotate):
+        print("  Remove logrotate state file: %s" % LrStateFile)
+        print("    rm %s" % LrStateFile)
+  else:
+    if (isfile(LrStateFile)):
+      if (ForceRotate):
+        print("\nRemoving logrotate state file: %s" % LrStateFile)
+        try:
+          unlink(LrStateFile)
+        except:
+          print("\nERROR: Cannot delete logrotate state file: %s" % LrStateFile)
+          exit(1)
+      else:
+        if (not access(LrStateFile, ReadOk)):
+          print("\nERROR: Cannot open logrotate state file for read: %s" % LrStateFile)
+          exit(1)
+        if(not access(LrStateFile, WriteOk)):
+          print("\nERROR: Cannot open logrotate state file for write: %s" % LrStateFile)
+          exit(1)
+
+  # Rotate the logs using logrotate command...
+  # -------------------------------------------
+  if (Show):
+    print("\n  Contents of logrotate configuration file: %s" % LrConfigFile)
+    fcontents = ''
+    try:
+      f = open(LrConfigFile, 'r')
+      fcontents = f.read().strip()
+      f.close()
+    except:
+      print("\n  ERROR: Cannot open logrotate configuration file for read: %s" % LrConfigFile)
+      exit(1)
+    if (fcontents != ''):
+      print('    -----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+      for line in fcontents.split('\n'):
+        print("    %s" % line)
+      print('    -----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+      f.close()
+
+    print('\n  Call logrotate command...')
+    if (ForceRotate):
+      print("    %s -f -v -s %s %s" % (Logrotate, LrStateFile, LrConfigFile))
+    else:
+      print("    %s -v -s %s %s" % (Logrotate, LrStateFile, LrConfigFile))
+  else:
+    print('\nCalling logrotate...')
+    RunLogrotate(Logrotate, LrStateFile, LrConfigFile, ForceRotate)
+
+  # Find and remove old audit files...
+  # -----------------------------------
+  if (Show):
+    print("\n  Check for old audit files...")
+  else:
+    print("\nChecking for old audit files...")
+
+  AuditList = FindFiles(OracleBase, AuditMask, AuditMaxDays)
+  if (AuditList != []):
+    if (Show):
+      print("\n  Remove %s Oracle audit files..." % len(AuditList))
+      for AuditFile in AuditList:
+        print("    rm %s" % AuditFile)
+    else:
+      if (AuditList != []):
+        print("\nRemoving %s Oracle audit files..." % len(AuditList))
+        for AuditFile in AuditList:
+          try:
+            print("  removing %s" % AuditFile)
+            unlink(AuditFile)
+          except:
+            print("  ERROR: Cannot remove audit file: %s" % AuditFile)
+  else:
+    if (Show):
+      print("    No audit files identified for removal.")
+    else:
+      print("  No audit files identified for removal.")
+
+  # Discover ADR Homes
+  # -------------------
+  Stdout = RunAdrci(Adrci, 'SHOW HOMES')
+  DiagHomeList = []
+  if (Stdout != ''):
+    DiagHomeList = Stdout.split('\n')
+
+  # Set ADR Purge Policies...
+  # --------------------------
+  if (Show):
+    print('\n  Set Oracle ADR short/long purge policies to %s/%s days.' % (AdrciShortDays, AdrciLongDays))
+    for DiagHome in DiagHomeList:
+      print('    adrci> SET HOMEPATH %s; SET CONTROL (shortp_policy = %s); SET CONTROL (longp_policy = %s);' % (DiagHome, AdrciShortDays*1440, AdrciLongDays*1440))
+  else:
+    print('\nSetting Oracle ADR short/long purge policies to %s/%s days.' % (AdrciShortDays, AdrciLongDays))
+    for DiagHome in DiagHomeList:
+      AdrciArgs = 'SET HOMEPATH %s; SET CONTROL (shortp_policy = %s); SET CONTROL (longp_policy = %s);' % (DiagHome, AdrciShortDays*1440, AdrciLongDays*1440)
+      Stdout = RunAdrci(Adrci, AdrciArgs)
+      if (Stdout.strip() != ''):
+        if (Stdout.find('DIA-') >= 0):
+          print('\n  ERROR: %s' % AdrciArgs)
+          for line in Stdout.split('\n'):
+            print('  %s' %line)
+
+  # Execute ADR Purge
+  # -------------------
+  if (Show):
+    print('\n  Purge Oracle ADR files more than %s days old...' % AdrciShortDays)
+    for DiagHome in DiagHomeList:
+      print('    adrci> SET HOMEPATH %s; PURGE -age %s;' % (DiagHome, AdrciShortDays*1440))
+  else:
+    print('\nPurging Oracle ADR files more than %s days old...' % AdrciShortDays)
+    for DiagHome in DiagHomeList:
+      AdrciArgs = 'SET HOMEPATH %s; PURGE -age %s;' % (DiagHome, AdrciShortDays*1440)
+      Stdout = RunAdrci(Adrci, AdrciArgs)
+      if (Stdout.strip() != ''):
+        if (Stdout.find('DIA-') >= 0):
+          print('\n  ERROR: %s' % AdrciArgs)
+          for line in Stdout.split('\n'):
+            print('  %s' %line)
+
+  Now = datetime.now()
+  print("\n===========================================================================================")
+  print("%s Complete %62s" % (CmdDesc, Now.strftime("%Y-%m-%d %H:%M")))
+  print("===========================================================================================")
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+

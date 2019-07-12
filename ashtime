@@ -1,0 +1,198 @@
+#!/usr/bin/env python
+
+##################################################################################################
+#  Name:        ashtime                                                                          #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Report db time from ash history.                                                 #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 10/26/2017 1.00 Randy Johnson    Initial write.                                                #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from datetime     import datetime
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+from Oracle       import ValidateDate
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'ASH Time'
+  Version        = '2.11'
+  VersionDate    = 'Thu Oct 26 12:15:38 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  InStr          = ''
+  ConnStr        = ''
+  InstList       = []
+  SqlText        = ''
+  SqlId          = ''
+  Now            = datetime.now()
+  EndTime        = '3000-01-01 00:00:00'
+  LowSnapId      = '0'
+  MaxSnapId      = '9999999999999999999'
+
+           
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nFind busiest time periods in AWR.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('-b',  dest='BeginTime',                       default='1960-01-01 00:00:00', type=str, help="sample_time >= BeginTime   (default 1960-01-01 00:00:00)")
+  ArgParser.add_option('-d',  dest='DbId',                            default='',                    type=str, help="only return rows for a specific db_id.")
+  ArgParser.add_option('-e',  dest='EndTime',                         default=EndTime,               type=str, help="sample_time <= EndTime     (default "  + EndTime + ")")
+  ArgParser.add_option("-l",  dest="LowSnapId",                       default=LowSnapId,             type=str, help="where snap_id >= LowSnapId (default '" + LowSnapId + "')")
+  ArgParser.add_option("-m",  dest="MaxSnapId",                       default=MaxSnapId,             type=str, help="where snap_id <= MaxSnapId (default '" + MaxSnapId + "')")  
+  ArgParser.add_option('-i',  dest='Instances',                       default='',                    type=str, help="where inst_id in 1,2,3,...")
+  ArgParser.add_option("--s", dest="Show",       action="store_true", default=False,                           help="print SQL query.")
+  ArgParser.add_option("--v", dest="ShowVer",    action="store_true", default=False,                           help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  BeginTime   = str(Options.BeginTime)
+  EndTime     = str(Options.EndTime)
+  DbId        = Options.DbId
+  LowSnapId   = str(Options.LowSnapId)
+  MaxSnapId   = str(Options.MaxSnapId)
+  Instances   = Options.Instances
+  Show        = Options.Show
+  ShowVer     = Options.ShowVer
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  if(Instances != ''):
+    InstList = Instances.split(',')
+    try:
+      if (version_info[0] >= 3):
+        InstList = list(map(int, InstList))
+        InstList = list(map(str, InstList))
+      else:
+        InstList = map(int, InstList)
+        InstList = map(str, InstList)
+    except:
+      print("Instance list must be in integer form, eg. -i 1,2,3,4")
+      exit(1)
+
+  if (LowSnapId != '0'):
+    try:
+      junk = int(LowSnapId)  
+    except:
+      print("\nLowSnapId (-l) must be an integer.")
+      exit(1)
+
+  if (MaxSnapId != '0'):
+    try:
+      junk = int(MaxSnapId)  
+    except:
+      print("\nHighSnap (-h) must be an integer.")
+      exit(1)
+
+  (ValidDate, BeginTimeFormat) = ValidateDate(BeginTime)
+  if (ValidDate == False):
+    print("\nInvalid format for BeginTime. Acceptable formats follow:")
+    print("  YYYY-MM-DD")
+    print("  YYYY-MM-DD HH24")
+    print("  YYYY-MM-DD HH24:MI")
+    print("  YYYY-MM-DD HH24:MI:SS")
+    exit(1)
+
+  (ValidDate, EndTimeFormat) = ValidateDate(EndTime)
+  if (ValidDate == False):
+    print("\nInvalid format for EndTime. Acceptable formats follow:")
+    print("  YYYY-MM-DD")
+    print("  YYYY-MM-DD HH24")
+    print("  YYYY-MM-DD HH24:MI")
+    print("  YYYY-MM-DD HH24:MI:SS")
+    exit(1)
+
+  Sql += "column snap_id         format a15            heading 'Snapshot'\n"
+  Sql += "column end_snap        format 9999999999     heading 'End Snap'\n"
+  Sql += "column sample_date     format a24            heading 'Sample Date'\n"
+  Sql += "column sample_time     format a12            heading 'Sample Time'\n"
+  Sql += "column dbtime          format 99999          heading 'DB Time (min)'\n"
+  Sql += "column idletime        format 99999          heading 'Idle Time (min)'\n"
+  Sql += "column total_cpu       format 99999          heading 'Total CPU (min)'\n"
+  Sql += "\n"
+  Sql += "select TO_CHAR(snap_id) snap_id\n"
+  Sql += "     , MIN(TO_CHAR(sample_time, 'yyyy-mm-dd hh24:mi:ss')) sample_date\n" 
+  Sql += "     , MIN(TO_CHAR(sample_time, 'hh24:mi:ss')) sample_time\n" 
+  Sql += "     , count(*) dbtime\n"
+  #Sql += "     , count(*)*10 dbtime\n"
+  Sql += "     , (88*4) - count(*) idletime\n"
+  Sql += "     , 88*4 total_cpu\n"
+  Sql += "  FROM dba_hist_active_sess_history ash\n"
+  Sql += " WHERE 1=1\n"
+  if (DbId != ''):
+    Sql += "     AND ash.dbid = " + DbId + "\n"
+  Sql += "     AND sample_time\n"
+  Sql += " BETWEEN to_date('" + BeginTime + "','" + BeginTimeFormat + "')\n"
+  Sql += "     AND to_date('" + EndTime   + "','" + EndTimeFormat   + "')\n"
+  Sql += "     AND snap_id\n"
+  Sql += " BETWEEN " + LowSnapId + "\n"
+  Sql += "     AND " + MaxSnapId + "\n";  
+  if (InstList != []):
+    Sql += "     AND instance_number IN (" + Instances + ")\n"
+  Sql += "   group by snap_id\n"
+  Sql += " order by 1;\n"
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

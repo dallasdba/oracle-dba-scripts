@@ -1,0 +1,138 @@
+#!/bin/env python
+
+##################################################################################################
+# Name:        rsm                                                                               #
+# Author:      Randy Johnson                                                                     #
+# Description: Generates a SQL Monitor Report                                                    #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 07/16/2014 1.00 Randy Johnson    Initial write.                                                #
+# 07/17/2015 2.00 Randy Johnson    Added prompts for username, password, tnsname.                #
+# 06/12/2017 2.01 Randy Johnson    Cosmetic changes to usage help.                               #
+# 07/13/2017 2.02 Randy Johnson    Added program description to Usage.                           #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Report SQL Monitor'
+  Version        = '2.02'
+  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  InStr          = ''
+  ConnStr        = ''
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nCreate a SQL Monitor Report for a SQL_ID'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("-i",  dest="SqlId",                           default='',     type=str, help="value for sql_id")
+  ArgParser.add_option("-e",  dest="ExecId",                          default='',     type=str, help="value for sql_exec_id")
+  ArgParser.add_option("-t",  dest="Type",                            default='TEXT', type=str, help="report type (text/html/xml/active)")
+  ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,            help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer',    action='store_true', default=False,            help="print version info.")
+  
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  SqlId     = Options.SqlId
+  ExecId    = Options.ExecId
+  Type      = Options.Type
+  Show      = Options.Show
+  ShowVer   = Options.ShowVer
+  
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  if (Type.upper() not in ['TEXT','HTML','XML','ACTIVE']):
+    print("Invalid Report Format. Format must be one of: text, html, xml, active")
+    exit()
+  
+  if (SqlId == ''):
+    if (version_info[0] >= 3):
+      SqlId = input('\nEnter a SQL ID: ')
+    else:
+      SqlId = raw_input('\nEnter a SQL ID: ')
+    if (SqlId == ''):
+      print('\nSQL ID is required.')
+      exit(1)
+
+  Sql += "set heading off\n"
+  Sql += "set pagesize 0\n"
+  Sql += "\n"
+  Sql += "column report format a379 heading 'Report'\n"
+  Sql += "\n"
+  Sql += "SELECT dbms_sqltune.report_sql_monitor(\n"
+  Sql += "         type           =>'" + Type + "',\n"
+  Sql += "         sql_id         =>'" + SqlId  + "',\n"
+  if (ExecId):
+    Sql += "         sql_exec_id    =>'" + ExecId + "',\n"
+  Sql += "         report_level   =>'ALL'\n"
+  Sql += "       ) AS report\n"
+  Sql += "  FROM DUAL;"
+
+  Sql = Sql.strip()
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

@@ -1,0 +1,158 @@
+#!/bin/env python
+
+##################################################################################################################
+#  Name:        getpw (get password)                                                                             #
+#  Author:      Randy Johnson                                                                                    #
+#  Description: Looks up an encoded database password and returns the decoded version of it.                     #
+#                                                                                                                #
+# History:                                                                                                       #
+#                                                                                                                #
+# Date       Ver. Who              Change Description                                                            #
+# ---------- ---- ---------------- ----------------------------------------------------------------------------- #
+# 07/06/2012 1.00 Randy Johnson    Initial release.                                                              #
+# 09/19/2012 2.00 Randy Johnson    Initial release.                                                              #
+# 12/07/2012 2.10 Randy Johnson    Changed encode/decode to use built-in string functions.                       #
+# 07/17/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                                     #
+# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                                           #
+##################################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse   import OptionParser
+from os.path    import basename
+from re         import search
+from sys        import exit
+from sys        import argv
+from sys        import version_info
+
+# ------------------------------------------------
+# Imports that are conditional on Python Version.
+# ------------------------------------------------
+if (version_info[0] >= 3):
+  from base64 import b64decode
+
+# --------------------------------------
+# ---- Function Definitions ------------
+# --------------------------------------
+
+# Function: GetPassword()
+# Retrieve database password from the password file.
+# ------------------------------------------------------------
+def GetPassword(dbName, dbUser):
+  pwdContents = ''
+
+  if(Trace):
+    print()
+    print('TRACE: Entering sub GetPassword(dbName, dbUser)')
+    print('TRACE: Looking up password for:')
+    print('TRACE:   dbName =', dbName)
+    print('TRACE:   dbUser =', dbUser, '\n')
+
+  try:
+    pwdFile = open(pwdFilename, 'r')
+    pwdContents = pwdFile.read()
+
+  except:
+    print('\nCannot open password file for read:', pwdFilename)
+
+  for pwdLine in pwdContents.split('\n'):
+    if (not (search(r'^\s*$', pwdLine))):               # skip blank lines
+      if (not (search(r'^\s#\s*$', pwdLine))):          # skip commented lines
+        if (pwdLine.count(':') == 2):                      # ignore lines that do not contain 2 colon's (:).
+          if(Trace):
+            print('TRACE: Password Line      : ', pwdLine)
+             
+          (pwDbname, pwUser, pwPass) = pwdLine.split(':')
+
+          if ((pwDbname == dbName) and ( pwUser.upper() == dbUser.upper()) and (pwPass != '')):
+            if(Trace):
+              print('TRACE:  -Found a match.')
+              print('TRACE:')
+              print('TRACE: Password found. Returning: ' + pwPass)
+              print('TRACE: Exiting sub GetPassword()\n')
+            return pwPass
+          else:
+            if(Trace):
+              print('TRACE:  -No match found.')
+
+  if(Trace):
+    print('TRACE: End of password file reached.')
+    print('TRACE:')
+    print('TRACE: Password not found. Returning: null')
+    print('TRACE: Exiting sub GetPassword()')
+  return('')
+# End GetPassword()
+
+# --------------------------------------
+# ---- End Function Definitions --------
+# --------------------------------------
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Get Password'
+  Version        = '3.01'
+  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  ArgParser      = OptionParser()
+  pwdFilename    = '/home/oracle/dba/etc/.passwd'
+
+  # Process command line options
+  # ----------------------------------
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nRetrieves password entry from the password file.'
+  Usage += '\n\n' + Cmd + ' database_name user_name [[-t] [-p]]'
+  
+  ArgParser = OptionParser(usage=Usage)
+  ArgParser.add_option("-p",  dest="PlainText", action="store_true", default=False, help="plaintext mode.")
+  ArgParser.add_option("-t",  dest="Trace",     action="store_true", default=False, help="print runtime trace information.")
+  ArgParser.add_option('--v', dest='ShowVer',   action='store_true', default=False, help="print version info.")
+
+  Options, Args = ArgParser.parse_args()
+  argc = len(Args)
+
+  PlainText = Options.PlainText
+  Trace     = Options.Trace  
+  ShowVer   = Options.ShowVer
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  if argc != 2:
+    Usage = '\n' + Cmd + ' v' + Version + '\n\nusage: ' + Usage
+    print(Usage)
+    exit(1)
+  else:
+    dbName = Args[0]
+    dbUser = Args[1]
+
+    Password = GetPassword(dbName, dbUser)
+  
+    if (Password != ''):
+      if (PlainText):
+        print(Password)
+      else:
+        if (Trace):
+          print('TRACE: Decoding password.')
+
+        try:
+          if (version_info[0] >= 3):
+            print(b64decode(Password.encode('utf-8')).decode('utf-8'))
+          else:
+            print(Password.decode('base64','strict'))
+        except:
+          print("\n  Are you sure the password was properly")
+          print("  encoded? Check it with epw and try again.")
+      exit(0)
+    else:
+      print('\nPassword not found.')
+      exit(1)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

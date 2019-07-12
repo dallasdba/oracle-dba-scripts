@@ -1,0 +1,46 @@
+#!/bin/env python
+
+from sys          import argv
+#from socket       import gethostbyaddr
+from sys          import exit
+from sys          import version_info
+
+if (len(argv) >= 2):
+  InFilename = argv[1]
+  print(InFilename)
+else:
+  if (version_info[0] >= 3):
+    InFilename = input("\nInput File: ")
+  else:
+    InFilename = raw_input("\nInput File: ")
+
+if (InFilename == ''):
+  print('\nInput file name is required.')
+  exit(1)
+else:
+  try:
+    InFile = open(InFilename, 'r')
+  except:
+    print('\nCannot open input file for read:', InFilename)
+
+IpList = InFile.read().strip().split('\n')
+
+for IP in IpList:
+  if(IP != ''):
+    OctetsRev = IP.split('.')
+    print('>%s' % '.'.join(OctetsRev))
+    if(len(OctetsRev) == 4):
+      print('<%s.%s.%s.%s' % (OctetsRev[3],OctetsRev[2],OctetsRev[1],OctetsRev[0]))
+    else:
+      print('Invalid IP format: %s' % OctetRev)
+
+    ###! Host = ''
+    ###! try:
+    ###!   Host = gethostbyaddr(IP)
+    ###! except:
+    ###!   print('IP Address lookup failed: %s' % IP)
+    ###! 
+    ###! if(Host != ''):
+    ###!   print(Host)
+exit(0)
+

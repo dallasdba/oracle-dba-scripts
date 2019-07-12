@@ -1,0 +1,122 @@
+#!/bin/env python
+
+##################################################################################################
+#  Name:        instlist                                                                         #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Prints a list of all Oracle database instances running on the local machine.     #
+#               Two reports available: 1) instance name only (sorted by instance name)           #
+#               2) instance name, pmon process id (sorted by instance name).                     #
+#               This script has only been tested on Red Hat / Oracle Linux and may fail on other #
+#               Unix types due to dependency on the output format of the ps command.             #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 08/27/2012 1.00 Randy Johnson    Initial release.                                              #
+# 09/11/2012 1.01 Randy Johnson    Replaced Proc.stdout.readlines() with Proc.communicate().     #
+# 09/11/2012 1.01 Randy Johnson    Added -p option for printing pmon process id.                 #
+# 09/11/2012 1.02 Randy Johnson    Renamed to instlist                                           #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
+# 07/13/2017 2.02 Randy Johnson    Added program description to Usage.                           #
+# 12/10/2018 3.00 Randy Johnson    Changed search to regex pattern matching.                     #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+import os
+from optparse    import OptionParser
+from os.path     import basename
+from re          import compile
+from re          import search
+from signal      import signal
+from subprocess  import Popen
+from subprocess  import PIPE
+from signal      import SIGPIPE
+from signal      import SIG_DFL
+from subprocess  import STDOUT
+from sys         import argv
+from sys         import exit
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):      # if this is true, then this script is *not* being imported by another Python script.
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'List Running Oracle Database Instances'
+  Version        = '3.00'
+  VersionDate    = 'Mon Dec 10 11:37:29 CST 2018'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Ps             = '/bin/ps'
+  ps_data        = r'(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s(\S+)'
+  FoundData      = compile(ps_data)
+  Data           = ()
+  #ps_header      = r'.*(\b\S+\b).*(\b\S+\b).*(\b\S+\b).*(\b\S+\b).*(\b\S+\b).*(\b\S+\b).*(\b\S+\b).*(\b\S+\b).*'
+  #FoundHeader    = compile(ps_header)
+  #Header         = ()
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nReport Oracle database instances running on the local machine. Two reports'
+  Usage += '\navailable: 1) instance name only (sorted by instance name), 2) instance name,'
+  Usage += '\npmon process id (sorted by instance name).'
+  Usage += '\nThis script has only been tested on Red Hat & Oracle Enterprise Linux and may'
+  Usage += '\nfail on other Unix types due to dependency on the output format of the ps'
+  Usage+= '\ncommand.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("-p",  dest="PmonProcess", action="store_true", default=False, help="Display pmon process id.")
+  ArgParser.add_option('--v', dest='ShowVer',     action='store_true', default=False, help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  ShowVer   = Options.ShowVer
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  Proc = Popen([Ps, '-ef'], bufsize=1, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
+
+  # Stderr is just a placeholder. We redirected stderr to stdout as follows 'stderr=STDOUT'.
+  (Stdout,Stderr) = Proc.communicate()
+  Stdout = Stdout.strip()
+
+  if (Options.PmonProcess == True):
+    print('Instance          Pmon PID')
+    print('----------------- -----------')
+
+  # Is this a header rec?
+  #Found = FoundHeader.search(Stdout)
+  #if (Found):
+  #   Header = Found.groups()
+  #   print("%s %s" % (Header[0], Header[7]))
+
+  for Line in Stdout.split('\n'):
+    # Is this a data rec?
+    os = ''
+    pos = -1
+    Found = FoundData.search(Line)
+    if (Found):
+      Data = Found.groups()
+      if (len(Data) <= 6):
+        print("Cannot parse ps data...")
+      else:
+        pos = Data[7].find('ora_pmon_', 0, 9)
+        if (pos >= 0):
+          Pid = Data[1]
+          InstName = Data[7][9:]
+          if (Options.PmonProcess == True):
+            print('%-17s %-12s' % (InstName, Pid))
+          else:
+            print(InstName)
+
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

@@ -1,0 +1,257 @@
+#!/bin/env python
+
+##################################################################################################
+# Name:         update_oratab                                                                    #
+# Author:       Randy Johnson                                                                    #
+# Description:  Adds new instance names the the oratab file on all nodes in the cluster.         #
+# Dependencies: $ASM_HOME/bin/olsnodes                                                           #
+#               ssh                                                                              #
+#               echo                                                                             #
+#               OS account must authendicate (no prompt required) across all nodes in the        #
+#               cluster.                                                                         #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 02/16/2014 1.00 Randy Johnson    Initial release.                                              #
+# 10/09/2015 1.01 Randy Johnson    Removed Pid, getpgid()                                        #
+# 09/30/2015 1.02 Randy Johnson    Updated for non-RAC environments.                             #
+# 07/13/2017 1.03 Randy Johnson    Added program description to Usage.                           #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from datetime     import datetime
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from os.path      import join as pathjoin
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from socket       import gethostname
+from string       import join
+from subprocess   import Popen
+from subprocess   import PIPE
+from subprocess   import STDOUT
+from Oracle       import GetAsmHome
+from Oracle       import GetNodes
+from Oracle       import IsExecutable
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd          = basename(argv[0])
+  CmdDesc      = 'Update Oratab (' + Cmd + ')'
+  Version      = '1.03'
+  VersionDate  = 'Thu Jul 13 12:15:38 CDT 2017'
+  DevState     = 'Production'
+  Banner       = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Oratab       = '/etc/oratab'
+  Hostname     = gethostname().split('.')[0]
+  Now          = datetime.now()
+  Ssh          = '/usr/bin/ssh'
+  Echo         = '/bin/echo'
+  Tail         = '/usr/bin/tail'
+  OraHome      = ''
+  DbName       = ''
+  NodeList     = []
+  ThisNodeId   = Hostname[-1:]
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nAdds an instance entry (ORACLE_SID:ORACLE_HOME) to the /etc/oratab file.'
+  ArgParser = OptionParser(Usage)
+
+  # Process command line options
+  # ----------------------------------
+  #Usage = 'parms [options] [parm_filter]'
+  ArgParser.add_option("-d",                       dest="DbName",      default='',    type=str, help="database name.")
+  ArgParser.add_option("-o",                       dest="OraHome",     default='',    type=str, help="oracle home directory.")
+  ArgParser.add_option("-r",  action="store_true", dest="RAC",         default=False,           help="RAC Environment")
+  ArgParser.add_option("--v", action="store_true", dest="ShowVer",     default=False,           help="print version info.")
+
+  Options, args = ArgParser.parse_args()
+  argc = len(args)
+
+  ShowVer = Options.ShowVer
+  DbName  = Options.DbName
+  OraHome = Options.OraHome
+  RAC     = Options.RAC
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  if (RAC == True):
+    try:
+      x = int(ThisNodeId)
+    except:
+      ThisNodeId = ''
+
+    if (not IsExecutable(Ssh)):
+      print('The following command cannot be found:', Ssh)
+      print('Check Ssh variable in this script for proper location of the ssh command.')
+      exit(1)
+
+    if (not IsExecutable(Echo)):
+      print('The following command cannot be found:', Echo)
+      print('Check Ssh variable in this script for proper location of the echo command.')
+      exit(1)
+
+    if (not IsExecutable(Tail)):
+      print('The following command cannot be found:', Tail)
+      print('Check Tail variable in this script for proper location of the echo command.')
+      exit(1)
+    else:
+      Tail += ' -1'
+
+  if (DbName == ''):
+    if (version_info[0] >= 3):
+      DbName = input('\nEnter database name: ')
+    else:
+      DbName = raw_input('\nEnter database name: ')
+    if (DbName == ''):
+      print('\nDatabase name is required, ex:\n\n    %s -d MYDB' % (Cmd))
+      exit(1)
+
+  if (OraHome == ''):
+    if (version_info[0] >= 3):
+      OraHome = input('\nEnter ORACLE_HOME: ')
+    else:
+      OraHome = raw_input('\nEnter ORACLE_HOME: ')
+    if (OraHome == ''):
+      print('\nOracle home is required, ex:\n\n    %s -o /u01/app/oracle/product/11.2.0.3/dbhome_1' % (Cmd))
+      exit(1)
+
+  print('\n============================================================================================================================')
+  print('%s: Release %s Production, %28s %39s' % (CmdDesc, Version, VersionDate, Now.strftime("%Y-%m-%d %H:%M")))
+  print('============================================================================================================================')
+  print('Gathering information about your configuration...')
+
+  # Setup the ASM environment
+  # -----------------------------
+  if (RAC == True):
+    AsmHome  = GetAsmHome()
+    Olsnodes = pathjoin(AsmHome, 'bin', 'olsnodes')
+    if (not IsExecutable(Olsnodes)):
+      print('The following command cannot be executed by this user account:', Olsnodes)
+      exit(1)
+
+  # Get the names of the compute nodes in this cluster.
+  # ----------------------------------------------------
+  if (RAC == True):
+    NodeDict=GetNodes()
+    for Node in sorted(NodeDict.keys()):
+      NodeList.append(Node)
+
+    NodeCount = len(NodeList)
+
+  print('')
+  if (RAC == True):
+    print('This script appends a new $ORACLE_SID entry to the oratab file on all nodes.')
+  else:
+    print('This script appends a new $ORACLE_SID entry to the oratab file.')
+  print('')
+  print('Requirements:')
+  print('  - The user account must be able to write to the oratab file.')
+  if (RAC == True):
+    print('  - The user account must be trusted (no password required) across all nodes of the cluster.')
+    print('  - It is expected that the instance names will be the database name postfixed with')
+    print('    the node id. For example: DbName = MYDB, Node1 Instance = MYDB1.')
+  print('')
+  print('The following settings will be used for this run:')
+  print('  Db Name        : %s' % DbName)
+  print('  Oracle Home    : %s' % OraHome)
+  if (RAC == True):
+    print('  Node Count     : %s' % str(NodeCount))
+    print('  Node List      : %s' % ', '.join(NodeList))
+
+  if (version_info[0] >= 3):
+    Response = input("\nContinue? y/N ")
+  else:
+    Response = raw_input("\nContinue? y/N ")
+  if (Response.upper() != 'Y'):
+    print('\nExiting. No changes made...')
+    exit(0)
+  else:
+    print('\nConfirmed. Proceeding with changes...\n')
+
+  # Append the new entry to the oratab file on all nodes.
+  # ------------------------------------------------------
+  if (RAC == True):
+    for Node in sorted(NodeDict.keys()):
+      NewEntry = DbName + str(NodeDict[Node]) + ':' + OraHome + ':N'
+      print('Appending %s to %s ...' % (NewEntry, Node))
+      proc = Popen([Ssh, '-q', Node, Echo, NewEntry, '>>', Oratab], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
+      rc = proc.wait()
+      Stdout = proc.stdout.readlines()
+      if (rc != 0):
+        print('Failure appending new oratab entry on node:', Node)
+        print(rc, Stdout)
+        exit(1)
+  else:
+    try:
+      fh = open(Oratab, 'rb')
+    except:
+      print('\nCannot open oratab file for write: %s' % Oratab)
+      print('Failure appending new oratab entry on node:', Hostname)
+      exit(1)
+
+    OratabContents = fh.read()
+    OratabContents = OratabContents.rstrip()
+    OratabList = OratabContents.split('\n')
+    OratabList.append(DbName + ':' + OraHome + ':N')
+    NewOratabContents = '\n'.join(OratabList)
+
+    try:
+      fh = open(Oratab, 'wb')
+    except:
+      print('\nCannot open oratab file for write: %s' % Oratab)
+      print('Failure appending new oratab entry on node:', Hostname)
+      exit(1)
+
+    fh.write(NewOratabContents)
+    fh.close()
+
+  # Print the last line in all oratab files.
+  # -----------------------------------------
+  print('\n\nVerifying %s on %s ...' % (Oratab, ', '.join(NodeList)))
+  if (RAC == True):
+    for Node in sorted(NodeDict.keys()):
+      proc = Popen([Ssh, '-q', Node, Tail, Oratab], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
+      rc = proc.wait()
+      Stdout = proc.stdout.readlines()
+      if (rc != 0):
+        print('Failure verifying new oratab entry on node: %s' % Node)
+        print(rc, Stdout)
+      else:
+        print(Node + ': [' + Stdout[0].strip() + ']')
+  else:
+    try:
+      fh = open(Oratab, 'rb')
+    except:
+      print('\nCannot open oratab file for write: %s' % Oratab)
+      print('Failure appending new oratab entry on node:', Hostname)
+      exit(1)
+
+    OratabContents = fh.read()
+    print(OratabContents)
+    fh.close()
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

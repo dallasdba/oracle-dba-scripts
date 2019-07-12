@@ -1,0 +1,267 @@
+#!/bin/env python
+
+##################################################################################################
+# Name:        ah_what_changed                                                                   #
+# Author:      Randy Johnson                                                                     #
+# Description: Reports SQL Plan Changes                                                          #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 09/21/2017 1.00 Randy Johnson    Initial write.                                                #
+# 10/16/2017 1.10 Randy Johnson    Custom spin off drom what_changed script for Ascension Health.#
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from signal       import SIG_DFL
+from signal       import SIGPIPE
+from signal       import signal
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from Oracle       import ParseConnectString
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ValidateDate
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'AH What Changed'
+  Version        = '1.10'
+  VersionDate    = 'Thu Oct 16 09:42:09 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  ArgParser      = OptionParser()
+  InStr          = ''
+  TnsName        = ''
+  Username       = ''
+  Password       = ''
+  ConnStr        = ''
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nReport significant SQL plan changes.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("-a",  dest="DaysAgo",                       default='',              type=str, help="Days ago")
+  ArgParser.add_option("-b",  dest="BeginTime",                     default='1960-01-01',    type=str, help="Ignore activity before this time.")
+  ArgParser.add_option("-d",  dest="StdDev",                        default='2',             type=str, help="Min Std Deviation")
+  ArgParser.add_option("-e",  dest="Etime",                         default='.1',            type=str, help="Evaluate statements after this date")
+  ArgParser.add_option("-f",  dest="Faster",   action='store_true', default=False,                     help="Faster Plans Only (default slower)")
+  ArgParser.add_option("-i",  dest="SqlId",    action='store_true', default=False,                     help="Matching sql_ids found in the ENKITEC.WHICH_SQL table")
+  #ArgParser.add_option("-i",  dest="SqlId",                         default='',    type=str,           help="Sql ID(s), ex. 196mqnmxgxpv1,dfxjyw5u3gzna,...")
+  ArgParser.add_option("-x",  dest="Execs",                         default='1',   type=str,           help="Min Executions")
+  ArgParser.add_option('--s', dest='Show',     action='store_true', default=False,                     help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer',  action='store_true', default=False,                     help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  DaysAgo   = Options.DaysAgo
+  BeginTime = Options.BeginTime
+  StdDev    = Options.StdDev
+  Etime     = Options.Etime
+  Execs     = Options.Execs
+  SqlId     = Options.SqlId
+  Faster    = Options.Faster
+  Show      = Options.Show
+  ShowVer   = Options.ShowVer
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  (ValidDate, DateTimeFormat) = ValidateDate(BeginTime)
+  if (not ValidDate):
+    print("\nInvalid format for BeginTime. Acceptable formats follow:")
+    print("  YYYY-MM-DD")
+    print("  YYYY-MM-DD HH24")
+    print("  YYYY-MM-DD HH24:MI")
+    print("  YYYY-MM-DD HH24:MI:SS")
+    exit(1)
+
+  #SqlIds = ''
+  #if (SqlId != ''):
+  #  SqlId = ''.join(SqlId.split())
+  #  SqlIds = "'" + "','".join(SqlId.split(',')) + "'"
+
+  Sql += "column execs                format 999,999,999    heading 'Executions'\n"
+  Sql += "column before_etime         format 999,990.99     heading 'Before Ela Time'\n"
+  Sql += "column after_etime          format 999,990.99     heading 'After Ela Time'\n"
+  Sql += "column before_avg_etime     format 999,990.99     heading 'Before Avg Ela Time'\n"
+  Sql += "column after_avg_etime      format 999,990.99     heading 'After Avg Ela Time'\n"
+  Sql += "column min_etime            format 999,990.99     heading 'Min Ela Time'\n"
+  Sql += "column max_etime            format 999,990.99     heading 'Max Ela Time'\n"
+  Sql += "column avg_etime            format 999,990.999    heading 'Avg Ela Time'\n"
+  Sql += "column avg_lio              format 999,999,990.9  heading 'Avg LIO'\n"
+  Sql += "column norm_stddev          format 999,990.9999   heading 'Norm StdDev'\n"
+  Sql += "column begin_interval_time  format a30            heading 'Begin Interval Time'\n"
+  Sql += "column node for 99999\n"
+  Sql += "break on plan_hash_value on startup_time skip 1\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         *\n"
+  Sql += "    FROM (SELECT sql_id,\n"
+  Sql += "                 execs,\n"
+  Sql += "                 before_avg_etime,\n"
+  Sql += "                 after_avg_etime,\n"
+  Sql += "                 norm_stddev,\n"
+  Sql += "                 CASE\n"
+  Sql += "                    WHEN TO_NUMBER (before_avg_etime) < TO_NUMBER (after_avg_etime)\n"
+  Sql += "                    THEN 'Slower'\n"
+  Sql += "                    ELSE 'Faster'\n"
+  Sql += "                 END\n"
+  Sql += "                    result\n"
+  Sql += "            FROM (  SELECT sql_id,\n"
+  Sql += "                           SUM (execs) execs,\n"
+  Sql += "                           SUM (before_execs) before_execs,\n"
+  Sql += "                           SUM (after_execs) after_execs,\n"
+  Sql += "                           SUM (before_avg_etime) before_avg_etime,\n"
+  Sql += "                           SUM (after_avg_etime) after_avg_etime,\n"
+  Sql += "                           MIN (avg_etime) min_etime,\n"
+  Sql += "                           MAX (avg_etime) max_etime,\n"
+  Sql += "                           stddev_etime / MIN (avg_etime) norm_stddev,\n"
+  Sql += "                           CASE\n"
+  Sql += "                              WHEN SUM (before_avg_etime) > SUM (after_avg_etime)\n"
+  Sql += "                              THEN 'Slower'\n"
+  Sql += "                              ELSE 'Faster'\n"
+  Sql += "                           END\n"
+  Sql += "                              better_or_worse\n"
+  Sql += "                      FROM (SELECT sql_id,\n"
+  Sql += "                                   period_flag,\n"
+  Sql += "                                   execs,\n"
+  Sql += "                                   avg_etime,\n"
+  Sql += "                                   stddev_etime,\n"
+  Sql += "                                   CASE\n"
+  Sql += "                                      WHEN period_flag = 'Before'\n"
+  Sql += "                                      THEN execs\n"
+  Sql += "                                      ELSE 0\n"
+  Sql += "                                   END\n"
+  Sql += "                                      before_execs,\n"
+  Sql += "                                   CASE\n"
+  Sql += "                                      WHEN period_flag = 'Before'\n"
+  Sql += "                                      THEN avg_etime\n"
+  Sql += "                                      ELSE 0\n"
+  Sql += "                                   END\n"
+  Sql += "                                      before_avg_etime,\n"
+  Sql += "                                   CASE\n"
+  Sql += "                                      WHEN period_flag = 'After'\n"
+  Sql += "                                      THEN execs\n"
+  Sql += "                                      ELSE 0\n"
+  Sql += "                                   END\n"
+  Sql += "                                      after_execs,\n"
+  Sql += "                                   CASE\n"
+  Sql += "                                      WHEN period_flag = 'After'\n"
+  Sql += "                                      THEN avg_etime\n"
+  Sql += "                                      ELSE 0\n"
+  Sql += "                                   END\n"
+  Sql += "                                      after_avg_etime\n"
+  Sql += "                              FROM (SELECT sql_id,\n"
+  Sql += "                                           period_flag,\n"
+  Sql += "                                           execs,\n"
+  Sql += "                                           avg_etime,\n"
+  Sql += "                                           STDDEV (avg_etime) OVER (PARTITION BY sql_id)\n"
+  Sql += "                                           stddev_etime\n"
+  Sql += "                                      FROM (  SELECT sql_id,\n"
+  Sql += "                                                     period_flag,\n"
+  Sql += "                                                     SUM (execs) execs,\n"
+  Sql += "                                                     SUM (etime) / SUM (DECODE (execs,0,1,execs)) avg_etime\n"
+  Sql += "                                                FROM (SELECT sql_id,\n"
+  Sql += "                                                             'Before' period_flag,\n"
+  Sql += "                                                             NVL (executions_delta,0) execs,\n"
+  Sql += "                                                             (elapsed_time_delta) / 1000000 etime\n"
+  Sql += "                                                        FROM DBA_HIST_SQLSTAT S,\n"
+  Sql += "                                                             DBA_HIST_SNAPSHOT SS\n"
+  Sql += "                                                       WHERE ss.snap_id = S.snap_id\n"
+  Sql += "                                                         AND parsing_schema_name = 'SYSADM'\n"
+  Sql += "                                                         AND ss.instance_number = S.instance_number\n"
+  Sql += "                                                         AND executions_delta > 0\n"
+  Sql += "                                                         AND elapsed_time_delta > 0\n"
+  if (DaysAgo != ''):
+    Sql += "                                                         AND ss.begin_interval_time <= SYSDATE - " + DaysAgo + "\n"
+  Sql += "                                                         AND ss.begin_interval_time >= TO_DATE ('" + BeginTime + "', '" + DateTimeFormat + "')\n"
+  Sql += "                                                      UNION\n"
+  Sql += "                                                      SELECT sql_id,\n"
+  Sql += "                                                             'After' period_flag,\n"
+  Sql += "                                                             NVL (executions_delta,0) execs,\n"
+  Sql += "                                                               (elapsed_time_delta) / 1000000 etime\n"
+  Sql += "                                                        FROM DBA_HIST_SQLSTAT S,\n"
+  Sql += "                                                             DBA_HIST_SNAPSHOT SS\n"
+  Sql += "                                                       WHERE ss.snap_id = S.snap_id\n"
+  Sql += "                                                         AND parsing_schema_name = 'SYSADM'\n"
+  Sql += "                                                         AND ss.instance_number = S.instance_number\n"
+  Sql += "                                                         AND executions_delta > 0\n"
+  Sql += "                                                         AND elapsed_time_delta > 0\n"
+  if (DaysAgo != ''):
+    Sql += "                                                         AND ss.begin_interval_time > SYSDATE - " + DaysAgo + "\n"
+  Sql += "                                                         AND ss.begin_interval_time >= TO_DATE ('" + BeginTime + "', '" + DateTimeFormat + "')\n"
+  Sql += "                                                     )\n"
+  Sql += "                                            GROUP BY sql_id, period_flag\n"
+  Sql += "                                           )\n"
+  Sql += "                                   )\n"
+  Sql += "                           )\n"
+  Sql += "                  GROUP BY sql_id, stddev_etime\n"
+  Sql += "                 )\n"
+  Sql += "           WHERE norm_stddev > " + StdDev + "\n"
+  Sql += "             AND max_etime > TO_NUMBER('" + Etime + "')\n"
+  Sql += "             AND execs >= TO_NUMBER('" + Execs + "')\n"
+  if (SqlId):
+    Sql += "             AND sql_id IN (SELECT sql_id from enkitec.which_sql)\n"
+  Sql += "         )\n"
+  if (Faster):
+    Sql += "   WHERE result = 'Faster'\n"
+  else:
+    Sql += "   WHERE result = 'Slower'\n"
+  Sql += "ORDER BY norm_stddev;"
+
+  Sql = Sql.strip()
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

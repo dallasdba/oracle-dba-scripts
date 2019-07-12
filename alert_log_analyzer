@@ -1,0 +1,225 @@
+#!/bin/sh
+#
+# $DBA/alertlog
+#
+# Analyzes the alert.log file for Redo Log statistics and errors.
+# Creates a report (alertlog.lis) describing the statistics and errors.
+# Creates a script (alertlog.sql) for use in loading Redo Log statistics into
+# DBCare.
+#
+# Restrictions:
+#  1) ORACLE_SID and ORACLE_HOME must be set before running this script.
+#  2) An OPS$username account must exist.
+#
+# <<<<<<<<<< MODIFICATION HISTORY >>>>>>>>>>
+# 05/27/97  Brian Lomasky  Original
+#
+cat /dev/null > alertlog.sql
+if [ "$ORACLE_HOME" = "" ]
+then
+   echo "ORACLE_HOME is not set - Aborting..."
+   exit 1
+fi
+if [ "$ORACLE_SID" = "" ]
+then
+   echo "ORACLE_SID is not set - Aborting..."
+   exit 1
+fi
+#
+# See if nawk should be used instead of awk
+#
+(nawk '{ print ; exit }' /etc/passwd) > /dev/null 2>&1
+if [ ${?} -eq 0 ]
+then
+   cmd=nawk
+else
+   cmd=awk
+fi
+#
+# get background_dump_dest and db_name using SQL*Plus into a file
+#
+alert_temp_file=alertlog$ORACLE_SID.tmp; export alert_temp_file
+echo "Calculating background dump file destination and database name..."
+sqlplus -s /nolog >/dev/null<<EOD
+connect / as sysdba
+set echo on
+set embedded off
+set feedback on
+set heading off
+set pagesize 0
+set recsep off
+set termout off
+set time off
+set timing off
+set verify off
+col value format a68
+spool $alert_temp_file
+select 'USRDMPDEST', value
+  from sys.v_\$parameter
+ where name = 'background_dump_dest';
+
+select 'DBNAME', value
+  from sys.v_\$parameter
+ where name = 'db_name';
+spool off
+exit
+EOD
+
+if [ ! -s $alert_temp_file ]; then
+   cat $alert_temp_file
+   if [ -r $alert_temp_file ]; then
+      rm -f $alert_temp_file
+   fi
+   echo "Unexpected SQL*Plus error - Aborting..."
+   exit 1
+fi
+
+set `grep "USRDMPDEST " $alert_temp_file`
+bdump_dest=$2; export bdump_dest
+
+set `grep "DBNAME " $alert_temp_file`
+sid=$2; export sid
+
+rm -f $alert_temp_file
+
+file_spec="${bdump_dest}/alert_${sid}.log"
+
+echo "Analyzing $file_spec for database $sid..."
+
+if [ ! -f $file_spec ]; then
+   echo "Can not locate alert log file - Aborting..."
+   exit 1
+fi
+
+thiscpu=`uname -n`
+echo "x" | $cmd '{ print substr("                             ",1, \
+   (64-length(file_spec)-length(cpu))/2) "Analysis of " \
+   file_spec " on " cpu > lis
+   }' file_spec="$file_spec" cpu="$thiscpu" lis="alertlog.lis"
+
+echo " " >> alertlog.lis
+echo " " >> alertlog.lis
+echo "                               Checkpoint            Pct Wait" >> alertlog.lis
+echo "                    Number of     Not      Wait Time   per"    >> alertlog.lis
+echo "  Hourly Bucket   Log Switches  Complete   (seconds)  Bucket"  >> alertlog.lis
+echo "----------------- ------------ ---------- ---------- --------" >> alertlog.lis
+cat $file_spec | $cmd 'BEGIN {
+   first_date = 1
+} function store_totals() {
+   if (log_switch_ctr + check_not_comp_ctr != 0) {
+      if (log_switch_ctr != 0) {
+         log_sw_ctr = sprintf("%12d", log_switch_ctr)
+      } else {
+         log_sw_ctr = "            "
+      }
+      if (check_not_comp_ctr != 0) {
+         comp_ctr = sprintf("%10d", check_not_comp_ctr)
+      } else {
+         comp_ctr = "          "
+      }
+      if (wait_time != 0) {
+         wait = sprintf("%10d", wait_time)
+         pct_wait = sprintf("     %3d%s", \
+            (wait_time + 18) / 36, "%")
+      } else {
+         wait = "          "
+         pct_wait = "         "
+      }
+      mm = index("JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC", \
+         substr(prev_date,4,3))
+      print_date = sprintf("%2.2d/%2.2d/%-11s", \
+         (mm + 2) / 3, substr(prev_date,1,2), \
+         substr(prev_date,10,11))
+      printf("%-17s%13s%11s%11s%s\n", print_date, \
+         log_sw_ctr, comp_ctr, wait, pct_wait) >> lis
+      print "insert into SYS.DBCARE (" \
+         "time_stamp,group_desc,key_fld,value1," \
+         "value2,value3)" >> alertsql
+      if (substr(prev_date,1,1) == " ") {
+         the_dat = "0" substr(prev_date,2,10)
+      } else {
+         the_dat = substr(prev_date,1,11)
+      }
+      printf "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n%s%s%s%s", \
+         "select to_char(to_date(", q, the_dat, q, \
+         ",", q, "DD-MON-YYYY", q, \
+         "),", q, "DD-MON-YY", q, "),", q, "alertlog", q, \
+         ",", q, substr(prev_date, 13, 2), q, "," >> alertsql
+      print log_switch_ctr "," check_not_comp_ctr "," wait_time \
+         " from dual;" >> alertsql
+      return 0
+   }
+} function to_secs(d) {
+   dd = substr(d,1,2) * 86400
+   if (substr(d,4,3) == "JAN") { mm = 0 }
+   if (substr(d,4,3) == "FEB") { mm = 31 }
+   if (substr(d,4,3) == "MAR") { mm = 59 }
+   if (substr(d,4,3) == "APR") { mm = 90 }
+   if (substr(d,4,3) == "MAY") { mm = 120 }
+   if (substr(d,4,3) == "JUN") { mm = 151 }
+   if (substr(d,4,3) == "JUL") { mm = 181 }
+   if (substr(d,4,3) == "AUG") { mm = 212 }
+   if (substr(d,4,3) == "SEP") { mm = 243 }
+   if (substr(d,4,3) == "OCT") { mm = 274 }
+   if (substr(d,4,3) == "NOV") { mm = 304 }
+   if (substr(d,4,3) == "DEC") { mm = 334 }
+   yy = substr(d,10,2) * 1314000
+   if (yy / 4 == int(yy / 4) && mm > 31) { mm = mm + 1 }
+   hh = substr(d,13,2) * 3600
+   mi = substr(d,16,2) * 60
+   ss = substr(d,19,2)
+   n = dd + (mm * 86400) + yy + hh + mi + ss
+   return n
+} {
+   # See if we found a date
+   if (substr($0,14,1) == ":" && substr($0,17,1) == ":") {
+      # Calculate hourly-bucketed date as DD-MON-YYYY HH24:00:00
+      the_date = substr($0,9,2) "-" toupper(substr($0,5,3)) "-" \
+         substr($0,21,4) " " substr($0,12,2) ":00:00"
+      # Calculate date as DD-MON-YYYY HH24:MI:SS
+      full_date = substr($0,9,2) "-" toupper(substr($0,5,3)) "-" \
+         substr($0,21,4) " " substr($0,12,8)
+      if (first_date == 1) {
+         first_date = 0
+         prev_date = the_date
+         log_switch_ctr = 0
+         wait_time = 0
+         check_not_comp_ctr = 0
+         check_not_comp_flag = 0
+      } else {
+         if (check_not_comp_flag == 1) {
+            curr_secs = to_secs(full_date)
+            if (curr_secs >= prev_secs) {
+               wait_time = wait_time + \
+                  curr_secs - prev_secs
+            } else {
+               wait_time = wait_time + \
+                  curr_secs - prev_secs + 86400
+            }
+            check_not_comp_flag = 0
+         }
+         if (the_date != prev_date) {
+            dummy = store_totals()
+            prev_date = the_date
+            log_switch_ctr = 0
+            wait_time = 0
+            check_not_comp_ctr = 0
+            check_not_comp_flag = 0
+         }
+      }
+   }
+   if (index($0, "advanced to log") != 0) {
+      log_switch_ctr = log_switch_ctr + 1
+      if (check_not_comp_flag == 1) { check_not_comp_flag = 0 }
+   }
+   if (index($0, "Checkpoint not complete") != 0) {
+      check_not_comp_ctr = check_not_comp_ctr + 1
+      prev_secs = to_secs(full_date)
+      check_not_comp_flag = 1
+   }
+} END {
+   if (first_date == 0) { dummy = store_totals() }
+}' alertsql="alertlog.sql" lis="alertlog.lis" q="'"
+
+echo "Created alertlog.lis report for your viewing pleasure..."
+

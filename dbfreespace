@@ -1,0 +1,208 @@
+#!/bin/env python
+
+##################################################################################################
+#  Name:        dbfreespace                                                                      #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Report unused space at table, partition, subpartition level.                     #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 08/02/2015 1.00 Randy Johnson    Initial write.                                                #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+from Oracle       import PrintError
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Report Free Tab/Part/Subpart Space'
+  Version        = '1.00'
+  VersionDate    = 'Wed Aug 2 12:16:45 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  InStr          = ''
+  ConnStr        = ''
+  InstList       = []
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nReport where database time is spent, (from v$sys_time_model -- by event).'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('-o',  dest='Owner',                         default='',    type=str, help="where owner = '...'")
+  ArgParser.add_option('-p',  dest='Parts',    action='store_true', default=False,           help="Report Partitions")
+  ArgParser.add_option('-s',  dest='Subparts', action='store_true', default=False,           help="Report Subpartitions")
+  ArgParser.add_option('-t',  dest='Tables',   action='store_true', default=False,           help="Report Tables")
+  ArgParser.add_option('--s', dest='Show',     action='store_true', default=False,           help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer',  action='store_true', default=False,           help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  Owner     = Options.Owner
+  Tables    = Options.Tables
+  Parts     = Options.Parts
+  Subparts  = Options.Subparts
+  Show      = Options.Show
+  ShowVer   = Options.ShowVer
+
+  if (ShowVer == True):
+    print('\n%s' % Banner)
+    exit()
+
+  if (Tables == False and Parts == False and Subparts == False):
+    Tables = True
+
+  # Tables
+  # ------------------
+  if (Tables) :
+    Sql += "prompt -- Table Report ---\n"
+    Sql += "\n"
+    Sql += "column owner            format a30                         heading 'Owner'\n"
+    Sql += "column table            format a30                         heading 'Table'\n"
+    Sql += "column partition_name   format a30                         heading 'Partition'\n"
+    Sql += "column subartition_name format a30                         heading 'Subartition'\n"
+    ###~ Sql += "column total_blocks format 999,999,999,999,999.99  heading 'Total Blocks'\n"
+    ###~ Sql += "column used_blocks  format 999,999,999,999,999.99  heading 'Used Blocks'\n"
+    ###~ Sql += "column free_blocks  format 999,999,999,999,999.99  heading 'Free Blocks'\n"
+    Sql += "column free_gbytes      format 999,999,999,999,999.999999  heading 'Free Space (Gig)'\n"
+    Sql += "\n"
+    Sql += "SELECT " + SqlHeader + "\n"
+    Sql += "       tab.owner\n"
+    Sql += "      ,tab.table_name\n"
+    ###~ Sql += "      ,tab.blocks used_blocks\n"
+    ###~ Sql += "      ,seg.blocks total_blocks\n"
+    ###~ Sql += "      ,seg.blocks - tab.blocks free_blocks\n"
+    Sql += "      ,((seg.blocks - tab.blocks) * tbs.block_size) / 1024/1024/1024 free_gbytes\n"
+    Sql += "  FROM dba_tables tab\n"
+    Sql += "      ,dba_segments seg\n"
+    Sql += "      ,dba_tablespaces tbs\n"
+    Sql += " WHERE tab.table_name = seg.segment_name\n"
+    Sql += "   AND tab.owner = seg.owner\n"
+    Sql += "   AND seg.segment_type = 'TABLE'\n"
+    Sql += "   AND tab.blocks is NOT NULL\n"
+    Sql += "   AND seg.tablespace_name = tbs.tablespace_name\n"
+    if (Owner != '') :
+      Sql += "  AND tab.owner = '" + Owner.upper() + "'\n"
+    Sql += "ORDER BY tab.owner\n"
+    Sql += "     ,seg.blocks-tab.blocks;"
+    
+  # Partitions
+  # ------------------
+  if (Parts) :
+    Sql += "prompt -- Partition Report ---\n"
+    Sql += "\n"
+    Sql += "column owner            format a30                         heading 'Owner'\n"
+    Sql += "column table_name       format a30                         heading 'Table'\n"
+    Sql += "column partition_name   format a30                         heading 'Partition'\n"
+    Sql += "column free_gbytes      format 999,999,999,999,999.999999  heading 'Free Space (Gig)'\n"
+    Sql += "\n"
+    Sql += "SELECT " + SqlHeader + "\n"
+    Sql += "       tab.table_owner owner\n"
+    Sql += "      ,tab.table_name\n"
+    Sql += "      ,tab.partition_name\n"
+    Sql += "      ,((seg.blocks - tab.blocks) * tbs.block_size) / 1024/1024/1024 free_gbytes\n"
+    Sql += "  FROM dba_tab_partitions tab\n"
+    Sql += "      ,dba_segments seg\n"
+    Sql += "      ,dba_tablespaces tbs\n"
+    Sql += " WHERE tab.table_name = seg.segment_name\n"
+    Sql += "   AND tab.table_owner = seg.owner\n"
+    Sql += "   AND seg.segment_type = 'TABLE'\n"
+    Sql += "   AND tab.blocks is NOT NULL\n"
+    Sql += "   AND seg.tablespace_name = tbs.tablespace_name\n"
+    if (Owner != '') :
+      Sql += "  AND tab.table_owner = '" + Owner.upper() + "'\n"
+    Sql += "ORDER BY tab.table_owner\n"
+    Sql += "     ,seg.blocks-tab.blocks;"
+    
+  # Subpartitions
+  # ------------------
+  if (Subparts) :
+    Sql += "prompt -- Subpartition Report ---\n"
+    Sql += "\n"
+    Sql += "column owner            format a30                         heading 'Owner'\n"
+    Sql += "column table            format a30                         heading 'Table'\n"
+    Sql += "column partition_name   format a30                         heading 'Partition'\n"
+    Sql += "column subartition_name format a30                         heading 'Subartition'\n"
+    Sql += "column free_gbytes      format 999,999,999,999,999.999999  heading 'Free Space (Gig)'\n"
+    Sql += "\n"
+    Sql += "SELECT " + SqlHeader + "\n"
+    Sql += "       tab.table_owner owner\n"
+    Sql += "      ,tab.table_name\n"
+    Sql += "      ,tab.partition_name\n"
+    Sql += "      ,tab.subpartition_name\n"
+    Sql += "      ,((seg.blocks - tab.blocks) * tbs.block_size) / 1024/1024/1024 free_gbytes\n"
+    Sql += "  FROM dba_tab_subpartitions tab\n"
+    Sql += "      ,dba_segments seg\n"
+    Sql += "      ,dba_tablespaces tbs\n"
+    Sql += " WHERE tab.table_name = seg.segment_name\n"
+    Sql += "   AND tab.table_owner = seg.owner\n"
+    Sql += "   AND seg.segment_type = 'TABLE'\n"
+    Sql += "   AND tab.blocks is NOT NULL\n"
+    Sql += "   AND seg.tablespace_name = tbs.tablespace_name\n"
+    if (Owner != '') :
+      Sql += "  AND tab.table_owner = '" + Owner.upper() + "'\n"
+    Sql += "ORDER BY tab.table_owner\n"
+    Sql += "     ,seg.blocks-tab.blocks;\n"
+
+  Sql = Sql.strip()
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the Report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

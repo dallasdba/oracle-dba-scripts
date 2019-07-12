@@ -1,0 +1,367 @@
+#!/bin/env python
+
+##################################################################################################
+# Name:        sqldiag                                                                           #
+# Author:      Randy Johnson                                                                     #
+# Description: Produces various reports useful for diagnosing SQL tuning issues.                 #
+#                                                                                                #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 07/12/2017 1.00 Randy Johnson    Initial write.                                                #
+# 07/13/2017 1.10 Randy Johnson    Enhanced Top 10 Wait Events report for -g option.             #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from datetime     import datetime
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from signal       import SIG_DFL
+from signal       import SIGPIPE
+from signal       import signal
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from Oracle       import ParseConnectString
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'SQL Diagnostics'
+  Version        = '1.10'
+  VersionDate    = 'Wed Jul 13 08:56:12 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  InStr          = ''
+  TnsName        = ''
+  Username       = ''
+  Password       = ''
+  ConnStr        = ''
+  UserList       = []
+  Now            = datetime.now()
+  EndTime        = (Now.strftime('%Y-%m-%d %H:%M:%S'))
+  Colsep         = ','
+  InstList       = []
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nProduces various reports useful for diagnosing SQL tuning issues.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('-g',  dest='Global',     action='store_true', default=False,                           help="report all instances (RAC).")
+  ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,                           help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer',    action='store_true', default=False,                           help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  Global    = Options.Global
+  Show      = Options.Show
+  ShowVer   = Options.ShowVer
+
+  if (ShowVer == True):
+    print('\n%s' % Banner)
+    exit()
+
+  if (Show == False) :
+    # Check/setup the Oracle environment
+    if (not('ORACLE_SID' in list(environ.keys()))):
+      print('ORACLE_SID is required.')
+      exit(1)
+    else:
+      # Set the ORACLE_HOME just in case it isn't set already.
+      if (not('ORACLE_HOME' in list(environ.keys()))):
+        (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+  
+     # Parse the connect string if any, prompt for username, password if needed.
+    if (len(args) > 0 and Show == False):
+      InStr = args[0]
+      ConnStr = ParseConnectString(InStr)
+
+    # Get a list of the instance id's    
+    if (Global == True) :
+      Sql  = "set heading off\n"
+      Sql += "set echo off\n"
+      Sql += "set feedback off\n"
+      Sql += "select 'INST:' || instance_number from gv$instance;\n"
+      
+      if (ConnStr != ''):
+        (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+      else:
+        (Stdout) = RunSqlplus(Sql, ErrChk)
+
+      # Build a list of instance id's from GV$INSTANCE.INSTANCE_NUMBER
+      if (Stdout != ''):
+        for line in (Stdout.strip().split('\n')):
+          try:
+            InstList.append(line.strip().split(':')[1])
+          except:
+            continue
+      else:
+        print("No output from 'SELECT instance_number FROM gv$instance'.")
+        exit(1)
+
+  # Average active sessions per node for SYSTEM/SYS/DBSNMP
+  # -------------------------------------------------------
+  Sql  = "PROMPT\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "PROMPT Active Sessions Per Node for SYSTEM/SYS/DBSNMP Users\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "\n"
+  Sql += "column inst_id   format 9999         heading 'Inst'\n"
+  Sql += "column sessions  format 999,999,999  heading 'Sessions'\n"
+  Sql += '\n'
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global == True) :
+    Sql += "         inst_id,\n"
+  Sql += "         count(*) sessions\n"
+  Sql += "    FROM gv$session\n"
+  Sql += "   WHERE username IN ('SYS','SYSTEM','DBSNMP')\n"
+  Sql += "     AND status = 'ACTIVE'\n"
+  Sql += "     AND audsid != (SELECT SYS_CONTEXT('userenv','sessionid') FROM DUAL)\n"
+  if (Global != True) :    
+    Sql += "   AND inst_id = (SELECT instance_number FROM v$instance)"
+  else :
+    Sql += "GROUP BY inst_id"
+  Sql += ";\n\n"
+
+  # Average active sessions per node for application and SAS users
+  # ---------------------------------------------------------------
+  Sql += "PROMPT\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "PROMPT Active Sessions Per Node for Application And SAS Users\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "\n"
+  Sql += "column inst_id   format 9999         heading 'Inst'\n"
+  Sql += "column sessions  format 999,999,999  heading 'Sessions'\n"
+  Sql += '\n'
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global == True) :
+    Sql += "         inst_id,\n"
+  Sql += "         count(*) sessions\n"
+  Sql += "    FROM gv$session\n"
+  Sql += "   WHERE username NOT IN ('SYS','SYSTEM','DBSNMP')\n"
+  Sql += "     AND username IS NOT NULL\n"
+  Sql += "     AND status = 'ACTIVE'\n"
+  Sql += "     AND audsid != (SELECT SYS_CONTEXT('userenv','sessionid') FROM DUAL)\n"
+  if (Global != True) :    
+    Sql += "     AND inst_id = (SELECT instance_number FROM v$instance)"
+  else :
+    Sql += "GROUP BY inst_id"
+  Sql += ";\n\n"
+
+  # Blocking sessions
+  # ---------------------------------------------------------------
+  Sql += "PROMPT\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "PROMPT Blocking Sessions\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "\n"
+  Sql += "column holding_session  format 999999999999999999  heading 'Holding Session'\n"
+  Sql += '\n'
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         holding_session\n"
+  Sql += "    FROM dba_blockers"
+  Sql += ";\n\n"
+
+  # Distributed locks
+  # ---------------------------------------------------------------
+  Sql += "PROMPT\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "PROMPT Distributed locks (DBA_2PC_PENDING)\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "\n"
+  Sql += "column local_tran_id   format a22    heading 'Local Tran ID'\n"
+  Sql += "column global_tran_id  format a50    heading 'Global Tran ID'\n"
+  Sql += "column state           format a16    heading 'State'\n"
+  Sql += "column mixed           format a5     heading 'Mixed'\n"
+  Sql += "column advice          format a6     heading 'Advice'\n"
+  Sql += "column tran_comment    format a50    heading 'Tran Comment'\n"
+  Sql += "column fail_time       format a19    heading 'Fail Time'\n"
+  Sql += "column force_time      format a19    heading 'Force Time'\n"
+  Sql += "column retry_time      format a19    heading 'Retry Time'\n"
+  Sql += "column os_user         format a20    heading 'OS User'\n"
+  Sql += "column os_terminal     format a50    heading 'OS Term'\n"
+  Sql += "column host            format a50    heading 'Host'\n"
+  Sql += "column db_user         format a30    heading 'DB User'\n"
+  Sql += "column commit#         format a16    heading 'Commit #'\n"
+  Sql += '\n'
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         local_tran_id\n"
+  Sql += "       , global_tran_id\n"
+  Sql += "       , state\n"
+  Sql += "       , mixed\n"
+  Sql += "       , advice\n"
+  Sql += "       , tran_comment\n"
+  Sql += "       , TO_CHAR(fail_time, 'yyyy-mm-dd hh24:mi:ss') fail_time\n"
+  Sql += "       , TO_CHAR(force_time, 'yyyy-mm-dd hh24:mi:ss') force_time\n"
+  Sql += "       , TO_CHAR(retry_time, 'yyyy-mm-dd hh24:mi:ss') retry_time\n"
+  Sql += "       , os_user\n"
+  Sql += "       , os_terminal\n"
+  Sql += "       , host\n"
+  Sql += "       , db_user\n"
+  Sql += "       , commit#\n"
+  Sql += "    FROM dba_2pc_pending"
+  Sql += ";\n\n"
+
+  Sql += "PROMPT\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "PROMPT Distributed Locks (DBA_2PC_NEIGHBORS)\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "\n"
+  Sql += "column local_tran_id   format a30    heading 'Local Tran ID'\n"
+  Sql += "column in_out          format a30    heading 'In/Out'\n"
+  Sql += "column database        format a30    heading 'Database'\n"
+  Sql += "column dbuser_owner    format a30    heading 'DB User Owner'\n"
+  Sql += "column interface       format a30    heading 'Interface'\n"
+  Sql += "column dbid            format a30    heading 'DB ID'\n"
+  Sql += "column sess#           format 99999  heading 'Session #'\n"
+  Sql += "column branch          format a30    heading 'Branch'\n"
+  Sql += '\n'
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         local_tran_id\n"
+  Sql += "       , in_out\n"
+  Sql += "       , database\n"
+  Sql += "       , dbuser_owner\n"
+  Sql += "       , interface\n"
+  Sql += "       , dbid\n"
+  Sql += "       , sess#\n"
+  Sql += "       , branch\n"
+  Sql += "    FROM dba_2pc_neighbors"
+  Sql += ";\n\n"
+
+  # Top 10 wait events
+  # ---------------------------------------------------------------
+  Sql += "PROMPT\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "PROMPT Top 10 Wait Events\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "\n"
+  Sql += "column inst_id         format 9999                    heading 'Inst'\n"
+  Sql += "column event           format a60                     heading 'Event' wrap\n"
+  Sql += "column total_waits     format 999,999,999,999,999,999 heading 'Total Waits'\n"
+  Sql += "column total_timeouts  format 999,999,999,999,999,999 heading 'Total Timeouts'\n"
+  Sql += "column time_waited     format 999,999,999,999,999,999 heading 'Time Waited (sec)'\n"
+  if (Global == True) :
+    Count = 0
+    Sql += "\n"
+    Sql += "BREAK ON INST_ID\n"
+    Sql += "\n"
+    for Inst in InstList :
+      Count += 1
+      Sql += "   SELECT " + SqlHeader + "\n"
+      Sql += "          *\n"
+      Sql += "     FROM (  SELECT " + SqlHeader + "\n"
+      Sql += "                    inst_id\n"    
+      Sql += "                  , event\n"
+      Sql += "                  , total_waits\n"
+      Sql += "                  , total_timeouts\n"
+      Sql += "                  , time_waited\n"
+      Sql += "               FROM gv$system_event\n"
+      Sql += "              WHERE inst_id = '%s'\n" % Inst
+      Sql += "                AND event NOT LIKE 'SQL*Net%'\n"
+      Sql += "                AND event NOT IN ('pmon timer','rdbms ipc message','dispatcher timer','smon timer')\n"
+      Sql += "           ORDER BY inst_id\n"    
+      Sql += "                  , time_waited desc\n"
+      Sql += "          )\n"
+      Sql += "    WHERE rownum <= 10"
+      if (Count < len(InstList)) :
+        Sql += "\nUNION ALL\n"
+    Sql += ";\n\n"
+    Sql += "BREAK ON REPORT\n\n"
+  else :
+    Sql += "\n"
+    Sql += "   SELECT " + SqlHeader + "\n"
+    Sql += "          *\n"
+    Sql += "     FROM (  SELECT " + SqlHeader + "\n"
+    Sql += "                    event\n"
+    Sql += "                  , total_waits\n"
+    Sql += "                  , total_timeouts\n"
+    Sql += "                  , time_waited\n"
+    Sql += "               FROM gv$system_event\n"
+    Sql += "              WHERE event NOT LIKE 'SQL*Net%'\n"
+    Sql += "                AND event NOT IN ('pmon timer','rdbms ipc message','dispatcher timer','smon timer')\n"
+    Sql += "           ORDER BY inst_id\n"    
+    Sql += "                  , time_waited desc\n"
+    Sql += "          )\n"
+    Sql += "    WHERE rownum <= 10"
+    Sql += ";\n\n"
+
+  Sql += "PROMPT\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "PROMPT Sessions Running Parallel Query:\n"
+  Sql += "PROMPT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+  Sql += "\n"
+  Sql += "set long 4000\n"
+  Sql += "column sid             format 999999     heading 'Sid'\n"
+  Sql += "column serial#         format 999999     heading 'Serial#'\n"
+  Sql += "column inst_id         format 9999       heading 'Inst'\n"
+  Sql += "column username        format a30        heading 'Username'\n"
+  Sql += "column degree          format 99999      heading 'Degree'\n"
+  Sql += "column sql_id          format a14        heading 'SQL ID'\n"
+  Sql += "column event           format a60        heading 'Event' wrap\n"
+  Sql += "column sql_text        format a64        heading 'SQL Text' wrap\n"
+  Sql += "column sql_exec_start  format a19        heading 'Exec Start Time'\n"
+  Sql += '\n'
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         sid\n"
+  Sql += "       , serial#\n"
+  Sql += "       , a.inst_id\n"
+  Sql += "       , username\n"
+  Sql += "       , degree\n"
+  Sql += "       , a.sql_id\n"
+  Sql += "       , TO_CHAR(sql_exec_start, 'yyyy-mm-dd hh24:mi:ss') sql_exec_start\n"
+  Sql += "       , sql_text\n"
+  Sql += "       , event\n"
+  Sql += "    FROM gv$session a\n"
+  Sql += "       , (   SELECT qcsid, QCINST_ID, count(*) degree\n"
+  Sql += "               FROM gv$px_session\n"
+  Sql += "           GROUP BY qcsid, QCINST_ID\n"
+  Sql += "         ) b\n"
+  Sql += "       , gv$sql c\n"
+  Sql += "   WHERE a.sid     = b.qcsid\n"
+  Sql += "     AND a.inst_id = b.qcinst_id\n"
+  Sql += "     AND a.inst_id = c.inst_id\n"
+  Sql += "     AND a.sql_id  = c.sql_id\n"
+  Sql += "     AND a.audsid != (SELECT SYS_CONTEXT('userenv','sessionid') FROM DUAL)\n"
+  Sql += "ORDER BY DECODE(username,'CDCI_LOADER', username, 'other')\n"
+  Sql += "       , sql_exec_start"
+  Sql += ";\n\n"
+
+  if(Show):
+    print('\n-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql.rstrip())
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+ # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout == ''):
+    print("No output from SQL Plus. Queries may be executed manually to verify results using --s option.")
+  else:
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

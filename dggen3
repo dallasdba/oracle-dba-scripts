@@ -1,0 +1,1351 @@
+#!/bin/env python
+
+##################################################################################################
+# Name:        dggen3                                                                            #
+# Author:      Randy Johnson                                                                     #
+# Description: Generates Step-Byt-Step Commands for Configuring 2 Data Guard Standby Databases.  #
+#                                                                                                #
+#              This includes the following:                                                      #
+#                1) RMAN Duplicate from Backup                                                   #
+#                2) Configuration of listener.ora and tnsnames.ora files                         #
+#                3) Instance parameters for DG                                                   #
+#                4) Data Guard Broker Commands for creating the configuration                    #
+#                5) Switchover commands and other useful commands for testing the configuration  #
+#                -) Generate a shell script for starting/stopping the DG Observer                #
+#                                                                                                #
+# Wish List:                                                                                     #
+#  - Add configurable Listener Name                                                              #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 11/19/2017 1.00 Randy Johnson    Spinoff from dggen2.                                          #
+# 12/03/2017 1.20 Randy Johnson    Added local_listener to support non-default port, added       #
+#                                  StaticConnectIdentifier to DG Config -- maybe temporary.      #
+# 12/04/2017 1.30 Randy Johnson    Added PrimaryListenerName, Standby{1/2}ListenerName.          #
+#                                  Replaced NodeName with ListenerHost.                          #
+#                                  Added LISTENER = ... to listener.ora when listener host !=    #
+#                                  hostname or port != 1521. Added local_listener to instance    #
+#                                  parameters when listener host != hostname or port != 1521.    #
+#                                  Added set property StaticConnectIdentifier when listener host #
+#                                  !=  hostname or port != 1521. Added listener entry in         #
+#                                  tnsnames.ora file when listener host !=  hostname or port !=  #
+#                                  1521.                                                         #
+# 12/28/2017 1.31 Randy Johnson    Removed redundant creation of standby logfile groups for      #
+#                                  Standby2.                                                     #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os           import W_OK as WriteOk
+from os           import R_OK as ReadOk
+from os           import X_OK as ExecOk
+from os           import access
+from os.path      import basename
+from os.path      import isfile
+from os.path      import join as pathjoin
+from os.path      import split as pathsplit
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from datetime     import datetime
+
+
+if (version_info[0] >= 3):
+  from configparser import SafeConfigParser
+else:
+  from ConfigParser import SafeConfigParser
+
+# ---------------------------------------------------------------------------
+# Def : IsReadable()
+# Desc: Verifies that a file is readable.
+# Args: Filepath = Fully qualified filename.
+# Retn: 1 file is readable by the current user.
+#       0 file failed isfile or read check.
+# ---------------------------------------------------------------------------
+def IsReadable(Filepath):
+  if (isfile(Filepath) and access(Filepath, ReadOk)):
+    return True
+  else:
+    return False
+# ---------------------------------------------------------------------------
+# End IsReadable()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : LoadConfig()
+# Desc: Loads dictionary structure with key/value pairs from a config
+#       file.
+# Args: ConfigFile = the name of the configuration file.
+# Retn: ConfigDict = Dictionary containing configuration properties.
+# ---------------------------------------------------------------------------
+def LoadConfig(ConfigFile):
+  Parms      = SafeConfigParser()
+  ConfigDict = {}
+
+  # Load the parameter file.
+  # -----------------------------
+  #try:
+  Parms.read(ConfigFile)
+  #except:
+  #  print('\nParsing error in parameter file: %s' % ConfigFile)
+  #  print('Default values will be used for all parameters.')
+  #  print('\n%s' % traceback.format_exc())
+
+  # Load configuration parameters into ConfigDict dictionary...
+  for Section in sorted(Parms.sections()):
+    Key = Section.upper()
+    for Option in sorted(Parms.options(Section)):
+      Option = Option.upper()
+      Value = Parms.get(Section, Option)
+
+      if(Key not in ConfigDict):
+        ConfigDict[Key] = {}
+
+      if ('{dbn}' in Value.strip()):
+        if (DbName == ''):
+          print('\n-d (db_name) option must be used when referencing {dbn} in configuration file.')
+          exit(1)
+        else:
+          Value = (DbName).join(Value.split('{dbn}'))
+
+      if ('{pun}' in Value.strip()):
+        if (PrimaryDbUniqueName == ''):
+          print('\n-u (primary_db_unique_name) option must be used when referencing {pun} in configuration file.')
+          exit(1)
+        else:
+          Value = (PrimaryDbUniqueName).join(Value.split('{pun}'))
+
+      ConfigDict[Key][Option.upper()] = Value
+
+  return(ConfigDict)
+# ---------------------------------------------------------------------------
+# End LoadConfig()
+# ---------------------------------------------------------------------------
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd                   = basename(argv[0]).split('.')[0]
+  CmdDesc               = 'Generate Dataguard Configuration'
+  Version               = '1.31'
+  VersionDate           = 'Mon Dec 28 11:45:00 CST 2017'
+  DevState              = 'Production'
+  Banner                = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  ArgParser             = OptionParser()
+  #DbaEtc                = '/home/oracle/dba/etc'
+  DbaEtc                = pathsplit(argv[0])[0]
+  Now                   = datetime.now().strftime('%m/%d/%Y %H:%M:%S')
+  ConfigDict            = {}
+
+  # Global Defaults
+  # ------------------------------------------------------
+  DbName                    = 'MYDB'
+  #DbVersion                 = 11
+  Oratab                    = '/etc/oratab'
+  SysPassword               = 'welcome1'
+  Channels                  = 4
+  SrlSize                   = '4G'
+  SrlCount                  = 5
+  SrlGroupStart             = 70
+  DbfLocation               = '/u01/app/oracle/MYDB'
+  SrlPrefix                 = 'srl'
+  SrlPostfix                = '.dbf'
+  DgBrokerFile1             = '/oradata/oracle/MYDB/dgMYDB1.dat'
+  DgBrokerFile2             = '/oradata/oracle/MYDB/dgMYDB2.dat'
+  BackupLocation            = '/backup/MYDB/backup'
+
+  # Primary Defaults
+  # ------------------------------------------------------
+  PrimaryDomain             = 'chaloub.com'
+  PrimaryHostname           = 'dbhost-1'
+  PrimaryListenerHost       = 'dbhost-1-pri'
+  PrimaryListenerName       = 'DATAGUARD'
+  PrimaryPort               = '1527'
+  PrimaryServiceName        = 'MYDB'
+  PrimaryRedoSize           = '4G'
+  PrimaryDbUniqueName       = 'MYDB'
+  PrimaryLogArchiveMaxProc  = '5'
+  PrimaryOracleBase         = '/u01/app/oracle'
+  PrimaryAuditFileDest      = '/u01/app/oracle/admin/MYDB/adump'
+  PrimaryOracleHome         = '/u01/app/oracle/product/11.2.0.4/dbhome_1'
+
+  # Standby1 Defaults
+  # ------------------------------------------------------
+  Standby1Domain            = 'chaloub.com'
+  Standby1Hostname          = 'dbhost-2'
+  Standby1ListenerHost      = 'dbhost-2-sby1'
+  Standby1ListenerName      = 'DATAGUARD'
+  Standby1Port              = '1527'
+  Standby1ServiceName       = 'MYDB_SBY1'
+  Standby1DbUniqueName      = 'MYDB_SBY1'
+  Standby1SyncOptions       = 'SYNC AFFIRM'
+  Standby1LogArchiveMaxProc = '5'
+  Standby1OracleBase        = '/u01/app/oracle'
+  Standby1AuditFileDest     = '/u01/app/oracle/admin/MYDB/adump'
+  Standby1OracleHome        = '/u01/app/oracle/product/11.2.0.4/dbhome_1'
+
+  # Standby2 Defaults
+  # ------------------------------------------------------
+  Standby2Domain            = 'chaloub.com'
+  Standby2Hostname          = 'dbhost-3'
+  Standby2ListenerHost      = 'dbhost-3-sby2'
+  Standby2ListenerName      = 'DATAGUARD'
+  Standby2Port              = '1527'
+  Standby2ServiceName       = 'MYDB_SBY2'
+  Standby2DbUniqueName      = 'MYDB_SBY2'
+  Standby2SyncOptions       = 'ASYNC NOAFFIRM'
+  Standby2LogArchiveMaxProc = '5'
+  Standby2OracleBase        = '/u01/app/oracle'
+  Standby2AuditFileDest     = '/u01/app/oracle/admin/MYDB/adump'
+  Standby2OracleHome        = '/u01/app/oracle/product/11.2.0.4/dbhome_1'
+
+  ArgParser.add_option('-c',  dest='CreateConfig', action='store_true', default=False,           help="Create a sample configuration file.")
+  ArgParser.add_option('-f',  dest="ConfigFile",                        default='',    type=str, help="Configuration File")
+  ArgParser.add_option('-v',  dest='Version',      action='store_true', default=False,           help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  # Initalize Command Line Options
+  # ------------------------------------
+  CreateConfig  = Options.CreateConfig
+  ConfigFile    = Options.ConfigFile
+  ShowVer       = Options.Version
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  # Set default config file name...
+  # ----------------------------------
+  if (ConfigFile == ''):
+    ConfigFile = pathjoin(DbaEtc, Cmd + '.cfg')
+
+  if (CreateConfig == True):
+    Response = 'Y'
+    if (isfile(ConfigFile)):
+      if(version_info[0] >= 3):
+        Response = input('\nOverwrite existing file? (y/N) : ')
+      else:
+        Response = raw_input('\nOverwrite existing file? (y/N) : ')
+    if (Response.upper() != 'Y'):
+      exit(0)
+    else:
+      try:
+        cf = open(ConfigFile, 'w')
+        print('\nNew configuration file crated: %s' % ConfigFile)
+      except:
+        print('\nCannot open configuration file for write: %s' % ConfigFile)
+        exit(1)
+
+      # Global Settings
+      cf.write('[GLOBAL]\n')
+      cf.write('database_name         = %s\n' % DbName)
+      cf.write('oratab_file           = %s\n' % Oratab)
+      cf.write('sys_password          = %s\n' % SysPassword)
+      cf.write('rman_channels         = %s\n' % str(Channels))
+      cf.write('srl_size              = %s\n' % SrlSize)
+      cf.write('srl_count             = %s\n' % str(SrlCount))
+      cf.write('srl_start             = %s\n' % str(SrlGroupStart))
+      cf.write('dbf_location          = %s\n' % DbfLocation)
+      cf.write('srl_prefix            = %s\n' % SrlPrefix)
+      cf.write('srl_postfix           = %s\n' % SrlPostfix)
+      cf.write('backup_location       = %s\n' % BackupLocation)
+
+      # Primary:
+      # ------------------------------------------------------
+      cf.write('\n[PRIMARY]\n')
+      cf.write('hostname              = %s\n' % PrimaryHostname)
+      cf.write('domain                = %s\n' % PrimaryDomain)
+      cf.write('listener_host         = %s\n' % PrimaryListenerHost)
+      cf.write('listener_name         = %s\n' % PrimaryListenerName)
+      cf.write('port                  = %s\n' % PrimaryPort)
+      cf.write('service_name          = %s\n' % PrimaryServiceName)
+      cf.write('db_unique_name        = %s\n' % PrimaryDbUniqueName)
+      cf.write('log_archive_max_proc  = %s\n' % PrimaryLogArchiveMaxProc)
+      cf.write('oracle_base           = %s\n' % PrimaryOracleBase)
+      cf.write('audit_file_dest       = %s\n' % PrimaryAuditFileDest)
+      cf.write('oracle_home           = %s\n' % PrimaryOracleHome)
+
+      # Standby1:
+      # ------------------------------------------------------
+      cf.write('\n[STANDBY1]\n')
+      cf.write('hostname              = %s\n' % Standby1Hostname)
+      cf.write('domain                = %s\n' % Standby1Domain)
+      cf.write('listener_host         = %s\n' % Standby1ListenerHost)
+      cf.write('listener_name         = %s\n' % Standby1ListenerName)
+      cf.write('port                  = %s\n' % Standby1Port)
+      cf.write('service_name          = %s\n' % Standby1ServiceName)
+      cf.write('db_unique_name        = %s\n' % Standby1DbUniqueName)
+      cf.write('sync_options          = %s\n' % Standby1SyncOptions)
+      cf.write('log_archive_max_proc  = %s\n' % Standby1LogArchiveMaxProc)
+      cf.write('oracle_base           = %s\n' % Standby1OracleBase)
+      cf.write('audit_file_dest       = %s\n' % Standby1AuditFileDest)
+      cf.write('oracle_home           = %s\n' % Standby1OracleHome)
+
+      # Standby2:
+      # ------------------------------------------------------
+      cf.write('\n[STANDBY2]\n')
+      cf.write('hostname              = %s\n' % Standby2Hostname)
+      cf.write('domain                = %s\n' % Standby2Domain)
+      cf.write('listener_host         = %s\n' % Standby2ListenerHost)
+      cf.write('listener_name         = %s\n' % Standby2ListenerName)
+      cf.write('port                  = %s\n' % Standby2Port)
+      cf.write('service_name          = %s\n' % Standby2ServiceName)
+      cf.write('db_unique_name        = %s\n' % Standby2DbUniqueName)
+      cf.write('sync_options          = %s\n' % Standby2SyncOptions)
+      cf.write('log_archive_max_proc  = %s\n' % Standby2LogArchiveMaxProc)
+      cf.write('oracle_base           = %s\n' % Standby2OracleBase)
+      cf.write('audit_file_dest       = %s\n' % Standby2AuditFileDest)
+      cf.write('oracle_home           = %s\n' % Standby2OracleHome)
+
+      cf.close()
+      print('\nConfiguration file created with sample values: %s' % ConfigFile)
+      exit(0)
+
+  # Load the configuration file
+  if (not IsReadable(ConfigFile)):
+      print('\nCannot open parameter file for read: %s' % ConfigFile)
+  else:
+    # Load up the config file
+    ConfigDict = LoadConfig(ConfigFile)
+    Settings = ''
+
+    # Global Settings
+    # ----------------------------------------------------------------
+    try:
+      DbName = ConfigDict['GLOBAL']['DATABASE_NAME']
+    except:
+      pass
+    #try:
+    #  DbVersion = int(ConfigDict['GLOBAL']['DATABASE_VERSION'])
+    #except:
+    #  pass
+    try:
+      Oratab = ConfigDict['GLOBAL']['ORATAB_FILE']
+    except:
+      pass
+    try:
+      SysPassword = ConfigDict['GLOBAL']['SYS_PASSWORD']
+    except:
+      pass
+    try:
+      Channels = int(ConfigDict['GLOBAL']['RMAN_CHANNELS'])
+    except:
+      pass
+    try:
+      SrlSize = ConfigDict['GLOBAL']['SRL_SIZE']
+    except:
+      pass
+    try:
+      SrlPrefix = ConfigDict['GLOBAL']['SRL_PREFIX']
+    except:
+      pass
+    try:
+      SrlPostfix = ConfigDict['GLOBAL']['SRL_POSTFIX']
+    except:
+      pass
+    try:
+      DbfLocation = ConfigDict['GLOBAL']['DBF_LOCATION']
+    except:
+      pass
+    try:
+      DgBrokerFile1 = ConfigDict['GLOBAL']['DG_BROKER_FILE1']
+    except:
+      pass
+    try:
+      DgBrokerFile2 = ConfigDict['GLOBAL']['DG_BROKER_FILE2']
+    except:
+      pass
+    try:
+      SrlCount = int(ConfigDict['GLOBAL']['SRL_COUNT'])
+    except:
+      pass
+    try:
+      SrlGroupStart = int(ConfigDict['GLOBAL']['SRL_START'])
+    except:
+      pass
+    try:
+      BackupLocation = ConfigDict['GLOBAL']['BACKUP_LOCATION']
+    except:
+      pass
+
+    # Primary:
+    # ------------------------------------------------------
+    try:
+      PrimaryHostname = ConfigDict['PRIMARY']['HOSTNAME']
+    except:
+      pass
+    try:
+      PrimaryListenerHost = ConfigDict['PRIMARY']['LISTENER_HOST']
+    except:
+      pass
+    try:
+      PrimaryListenerName = ConfigDict['PRIMARY']['LISTENER_NAME']
+    except:
+      pass
+    try:
+      PrimaryDomain = ConfigDict['PRIMARY']['DOMAIN']
+    except:
+      pass
+    try:
+      PrimaryPort = ConfigDict['PRIMARY']['PORT']
+    except:
+      pass
+    try:
+      PrimaryServiceName = ConfigDict['PRIMARY']['SERVICE_NAME']
+    except:
+      pass
+    try:
+      PrimaryDbUniqueName = ConfigDict['PRIMARY']['DB_UNIQUE_NAME']
+    except:
+      pass
+    try:
+      PrimaryLogArchiveMaxProc = ConfigDict['PRIMARY']['LOG_ARCHIVE_MAX_PROC']
+    except:
+      pass
+    try:
+      PrimaryOracleBase = ConfigDict['PRIMARY']['ORACLE_BASE']
+    except:
+      pass
+    try:
+      PrimaryOracleHome = ConfigDict['PRIMARY']['ORACLE_HOME']
+    except:
+      pass
+    try:
+      PrimaryAuditFileDest = ConfigDict['PRIMARY']['AUDIT_FILE_DEST']
+    except:
+      pass
+
+    # Standby1:
+    # ------------------------------------------------------
+    try:
+      Standby1Hostname = ConfigDict['STANDBY1']['HOSTNAME']
+    except:
+      pass
+    try:
+      Standby1ListenerHost = ConfigDict['STANDBY1']['LISTENER_HOST']
+    except:
+      pass
+    try:
+      Standby1ListenerName = ConfigDict['STANDBY1']['LISTENER_NAME']
+    except:
+      pass
+    try:
+      Standby1Domain = ConfigDict['STANDBY1']['DOMAIN']
+    except:
+      pass
+    try:
+      Standby1Port = ConfigDict['STANDBY1']['PORT']
+    except:
+      pass
+    try:
+      Standby1ServiceName = ConfigDict['STANDBY1']['SERVICE_NAME']
+    except:
+      pass
+    try:
+      Standby1DbUniqueName = ConfigDict['STANDBY1']['DB_UNIQUE_NAME']
+    except:
+      pass
+    try:
+      Standby1SyncOptions = ConfigDict['STANDBY1']['SYNC_OPTIONS']
+    except:
+      pass
+    try:
+      Standby1LogArchiveMaxProc = ConfigDict['STANDBY1']['LOG_ARCHIVE_MAX_PROC']
+    except:
+      pass
+    try:
+      Standby1OracleBase = ConfigDict['STANDBY1']['ORACLE_BASE']
+    except:
+      pass
+    try:
+      Standby1OracleHome = ConfigDict['STANDBY1']['ORACLE_HOME']
+    except:
+      pass
+    try:
+      Standby1AuditFileDest = ConfigDict['STANDBY1']['AUDIT_FILE_DEST']
+    except:
+      pass
+
+    # Standby2:
+    # ------------------------------------------------------
+    try:
+      Standby2Hostname = ConfigDict['STANDBY2']['HOSTNAME']
+    except:
+      pass
+    try:
+      Standby2ListenerHost = ConfigDict['STANDBY2']['LISTENER_HOST']
+    except:
+      pass
+    try:
+      Standby2ListenerName = ConfigDict['STANDBY2']['LISTENER_NAME']
+    except:
+      pass
+    try:
+      Standby2Domain = ConfigDict['STANDBY2']['DOMAIN']
+    except:
+      pass
+    try:
+      Standby2Port = ConfigDict['STANDBY2']['PORT']
+    except:
+      pass
+    try:
+      Standby2ServiceName = ConfigDict['STANDBY2']['SERVICE_NAME']
+    except:
+      pass
+    try:
+      Standby2DbUniqueName = ConfigDict['STANDBY2']['DB_UNIQUE_NAME']
+    except:
+      pass
+    try:
+      Standby2SyncOptions = ConfigDict['STANDBY2']['SYNC_OPTIONS']
+    except:
+      pass
+    try:
+      Standby2LogArchiveMaxProc = ConfigDict['STANDBY2']['LOG_ARCHIVE_MAX_PROC']
+    except:
+      pass
+    try:
+      Standby2OracleBase = ConfigDict['STANDBY2']['ORACLE_BASE']
+    except:
+      pass
+    try:
+      Standby2OracleHome = ConfigDict['STANDBY2']['ORACLE_HOME']
+    except:
+      pass
+    try:
+      Standby2AuditFileDest = ConfigDict['STANDBY2']['AUDIT_FILE_DEST']
+    except:
+      pass
+
+  TempPfile   = "/tmp/init" + DbName + ".sby"
+  BackupPfile = "/tmp/init" + DbName + ".bak"
+
+  PrimaryListenerName = PrimaryListenerName.upper()
+  Standby1ListenerName = Standby1ListenerName.upper()
+  Standby2ListenerName = Standby2ListenerName.upper()
+
+  prtPrimaryHostname      = PrimaryHostname
+  prtStandby1Hostname     = Standby1Hostname
+  prtStandby2Hostname     = Standby2Hostname
+
+  if (PrimaryDomain != ''):
+    PrimaryHostname     = PrimaryHostname       + '.' + PrimaryDomain
+    PrimaryListenerHost = PrimaryListenerHost   + '.' + PrimaryDomain
+
+  if (Standby1Domain != ''):
+    Standby1Hostname    = Standby1Hostname      + '.' + Standby1Domain
+    Standby1ListenerHost= Standby1ListenerHost  + '.' + Standby1Domain
+
+  if (Standby2Domain != ''):
+    Standby2Hostname    = Standby2Hostname      + '.' + Standby2Domain
+    Standby2ListenerHost= Standby2ListenerHost  + '.' + Standby2Domain
+
+  if (Standby1AuditFileDest != PrimaryAuditFileDest):
+    print("ERROR: The Standby1 audit_file_dest must be the same as the Primary's audit_file_dest")
+    print("       Check the audit_file_dest of the primary database and set audit_file_dest to match.")
+    print("\nPrimary Audit Dest: %s" % PrimaryAuditFileDest)
+    print("Standby1 Audit Dest: %s" % Standby1AuditFileDest)
+    print("\nConfig file: %s" % ConfigFile)
+    exit(1)
+
+  if (Standby2AuditFileDest != PrimaryAuditFileDest):
+    print("ERROR: The Standby1 audit_file_dest must be the same as the Primary's audit_file_dest")
+    print("       Check the audit_file_dest of the primary database and set audit_file_dest to match.")
+    print("\nPrimary Audit Dest: %s" % PrimaryAuditFileDest)
+    print("Standby2 Audit Dest: %s" % Standby2AuditFileDest)
+    print("\nConfig file: %s" % ConfigFile)
+    exit(1)
+
+
+  print('\n============================================================================================================================')
+  print('%s: Release %s %28s%49s' % (CmdDesc, Version, VersionDate, Now))
+  print('============================================================================================================================')
+  print(' Global Settings')
+  if (ConfigDict == {}):
+    print('   Configuration File                       : %s' % 'None')
+  else:
+    print('   Configuration File                       : %s' % ConfigFile)
+  print('   Database Name                            : %s' % DbName)
+  print('   Oratab File                              : %s' % Oratab)
+  print('   Sys Password                             : %s' % SysPassword)
+  print('   Data Guard Broker File1                  : %s' % DgBrokerFile1)
+  print('   Data Guard Broker File2                  : %s' % DgBrokerFile2)
+  print('   RMAN Channels                            : %s' % Channels)
+  print('   RMAN Db Backup Location                  : %s' % BackupLocation)
+  print('   Database File Location                   : %s' % DbfLocation)
+  print('   Standby Online Redolog Prefix            : %s' % SrlPrefix)
+  print('   Standby Online Redolog Postfix           : %s' % SrlPostfix)
+  print('   Standby Online Redolog Size              : %-10s  <- %s' % (SrlSize, 'Must be precisely the same size as online redo logs.'))
+  print('   Standby Online Redolog Count             : %-10s  <- %s' % (SrlCount, 'Must be the number of online redo log groups + 1'))
+  print('   Standby Online Redolog Starting Sequence : %-10s  <- %s' % (SrlGroupStart, 'Must not conflict with any existing online redo log group ID\'s'))
+
+  print("")
+  print(' Primary Settings')
+  print('   Hostname/IP                              : %s' % PrimaryHostname)
+  print('   Listener Name                            : %s' % PrimaryListenerName)
+  print('   Listener Host Name/IP                    : %s' % PrimaryListenerHost)
+  print('   Listener Port                            : %s' % PrimaryPort)
+  print('   Service Name                             : %s' % PrimaryServiceName)
+  print('   Database Unique Name                     : %s' % PrimaryDbUniqueName)
+  print('   Log Archive Max Processes                : %s' % PrimaryLogArchiveMaxProc)
+  print('   Audit File Dest                          : %s' % PrimaryAuditFileDest)
+  print('   Oracle Base                              : %s' % PrimaryOracleBase)
+  print('   Oracle Home                              : %s' % PrimaryOracleHome)
+
+  print("")
+  print(' Standby1 Settings')
+  print('   Hostname/IP                              : %s' % Standby1Hostname)
+  print('   Listener Name                            : %s' % Standby1ListenerName)
+  print('   Listener Host Name/IP                    : %s' % Standby1ListenerHost)
+  print('   Listener Port                            : %s' % Standby1Port)
+  print('   Service Name                             : %s' % Standby1ServiceName)
+  print('   Database Unique Name                     : %s' % Standby1DbUniqueName)
+  print('   Sync Options                             : %s' % Standby1SyncOptions)
+  print('   Log Archive Max Processes                : %s' % Standby1LogArchiveMaxProc)
+  print('   Audit File Dest                          : %s' % Standby1AuditFileDest)
+  print('   Oracle Base                              : %s' % Standby1OracleBase)
+  print('   Oracle Home                              : %s' % Standby1OracleHome)
+
+  print("")
+  print(' Standby2 Settings')
+  print('   Hostname/IP                              : %s' % Standby2Hostname)
+  print('   Listener Name                            : %s' % Standby2ListenerName)
+  print('   Listener Host Name/IP                    : %s' % Standby2ListenerHost)
+  print('   Listener Port                            : %s' % Standby2Port)
+  print('   Service Name                             : %s' % Standby2ServiceName)
+  print('   Database Unique Name                     : %s' % Standby2DbUniqueName)
+  print('   Sync Options                             : %s' % Standby2SyncOptions)
+  print('   Log Archive Max Processes                : %s' % Standby2LogArchiveMaxProc)
+  print('   Audit File Dest                          : %s' % Standby2AuditFileDest)
+  print('   Oracle Base                              : %s' % Standby2OracleBase)
+  print('   Oracle Home                              : %s' % Standby2OracleHome)
+
+  print("\n\n=========================================================================================================================")
+  print("Oratab - Update the " + Oratab + " file on Primary and Standbys")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print('echo "' + DbName + ':' + PrimaryOracleHome + ':N"' + ' >> ' + Oratab)
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print('echo "' + DbName + ':' + Standby1OracleHome + ':N"' + ' >> ' + Oratab)
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print('echo "' + DbName + ':' + Standby2OracleHome + ':N"' + ' >> ' + Oratab)
+
+  print("\n\n=========================================================================================================================")
+  print("Network - Static Listener Settings")
+  print("=========================================================================================================================")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname + " " + PrimaryOracleHome + "/network/admin/listener.ora")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("")
+  if (PrimaryHostname != PrimaryListenerHost or PrimaryPort != '1521'):
+    print(PrimaryListenerName + " =")
+    print("  (DESCRIPTION=")
+    print("    (ADDRESS_LIST=")
+    print("      (ADDRESS=(PROTOCOL=tcp)(HOST=" + PrimaryListenerHost + ")(PORT=" + PrimaryPort + ")(IP=FIRST))")
+    print("      (ADDRESS=(PROTOCOL=ipc)(KEY=" + PrimaryDbUniqueName + "))")
+    print("    )")
+    print("  )")
+  print("")
+  print("SID_LIST_" + PrimaryListenerName + " =")
+  print("  (SID_LIST =")
+  print("    (SID_DESC =")
+  print("      (GLOBAL_DBNAME = " + PrimaryDbUniqueName + "_DGMGRL)")
+  print("      (SID_NAME      = " + DbName + ")")
+  print("      (ORACLE_HOME   = " + PrimaryOracleHome + ")")
+  print("    )")
+  print("  )")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname + " " + Standby1OracleHome + "/network/admin/listener.ora")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("")
+  if (Standby1Hostname != Standby1ListenerHost or Standby1Port != '1521'):
+    print(Standby1ListenerName + " =")
+    print("  (DESCRIPTION=")
+    print("    (ADDRESS_LIST=")
+    print("      (ADDRESS=(PROTOCOL=tcp)(HOST=" + Standby1ListenerHost + ")(PORT=" + Standby1Port + ")(IP=FIRST))")
+    print("      (ADDRESS=(PROTOCOL=ipc)(KEY=KEY=" + Standby1DbUniqueName + "))")
+    print("    )")
+    print("  )")
+  print("")
+  print("SID_LIST_" + Standby1ListenerName + " =")
+  print("  (SID_LIST =")
+  print("    (SID_DESC =")
+  print("      (GLOBAL_DBNAME = " + Standby1DbUniqueName + "_DGMGRL)")
+  print("      (SID_NAME      = " + DbName + ")")
+  print("      (ORACLE_HOME   = " + Standby1OracleHome + ")")
+  print("    )")
+  print("  )")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname + " " + Standby2OracleHome + "/network/admin/listener.ora")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("")
+  if (Standby2Hostname != Standby2ListenerHost or Standby2Port != '1521'):
+    print(Standby2ListenerName + " =")
+    print("  (DESCRIPTION=")
+    print("    (ADDRESS_LIST=")
+    print("      (ADDRESS=(PROTOCOL=tcp)(HOST=" + Standby2ListenerHost + ")(PORT=" + Standby2Port + ")(IP=FIRST))")
+    print("      (ADDRESS=(PROTOCOL=ipc)(KEY=KEY=" + Standby2DbUniqueName + "))")
+    print("    )")
+    print("  )")
+  print("")
+  print("SID_LIST_" + Standby2ListenerName + " =")
+  print("  (SID_LIST =")
+  print("    (SID_DESC =")
+  print("      (GLOBAL_DBNAME = " + Standby2DbUniqueName + "_DGMGRL)")
+  print("      (SID_NAME      = " + DbName + ")")
+  print("      (ORACLE_HOME   = " + Standby2OracleHome + ")")
+  print("    )")
+  print("  )")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname + " stop/start/status the listener.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(PrimaryOracleHome + "/bin/lsnrctl stop  " + PrimaryListenerName)
+  print(PrimaryOracleHome + "/bin/lsnrctl start " + PrimaryListenerName)
+  print(PrimaryOracleHome + "/bin/lsnrctl stat  " + PrimaryListenerName + " | grep " + PrimaryDbUniqueName + '_DGMGRL')
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname + " stop/start/status the listener.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby1OracleHome + "/bin/lsnrctl stop  " + Standby1ListenerName)
+  print(Standby1OracleHome + "/bin/lsnrctl start " + Standby1ListenerName)
+  print(Standby1OracleHome + "/bin/lsnrctl stat  " + Standby1ListenerName + " | grep " + Standby1DbUniqueName + '_DGMGRL')
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname + " stop/start/status the listener.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby2OracleHome + "/bin/lsnrctl stop  " + Standby2ListenerName)
+  print(Standby2OracleHome + "/bin/lsnrctl start " + Standby2ListenerName)
+  print(Standby2OracleHome + "/bin/lsnrctl stat  " + Standby2ListenerName + " | grep " + Standby2DbUniqueName + '_DGMGRL')
+
+  print("\n\n=========================================================================================================================")
+  print("Network - tnsnames.ora Settings")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print(PrimaryDbUniqueName + " =")
+  print("  (DESCRIPTION =")
+  print("    (ADDRESS = (PROTOCOL = TCP)(HOST = " + PrimaryListenerHost + ")(PORT = " + PrimaryPort + "))")
+  print("    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + DbName + "))")
+  print("  )")
+
+  print("")
+  print(Standby1DbUniqueName + " =")
+  print("  (DESCRIPTION =")
+  print("    (ADDRESS = (PROTOCOL = TCP)(HOST = " + Standby1ListenerHost + ")(PORT = " + Standby1Port + "))")
+  print("    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + DbName + "))")
+  print("  )")
+
+  print("")
+  print(Standby2DbUniqueName + " =")
+  print("  (DESCRIPTION =")
+  print("    (ADDRESS = (PROTOCOL = TCP)(HOST = " + Standby2ListenerHost + ")(PORT = " + Standby2Port + "))")
+  print("    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + DbName + "))")
+  print("  )")
+  print("")
+
+  if (PrimaryHostname != PrimaryListenerHost or PrimaryPort != '1521'):
+    print(PrimaryListenerName +"_LISTENER =")
+    print("  (DESCRIPTION =")
+    print("    (ADDRESS_LIST =")
+    print("      (ADDRESS=(PROTOCOL=TCP)(HOST=" + PrimaryHostname + ")(PORT=1521))")
+    print("      (ADDRESS=(PROTOCOL=TCP)(HOST=" + PrimaryListenerHost + ")(PORT= " + PrimaryPort + "))")
+    print("    )")
+    print("  )")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print(PrimaryDbUniqueName + " =")
+  print("  (DESCRIPTION =")
+  print("    (ADDRESS = (PROTOCOL = TCP)(HOST = " + PrimaryListenerHost + ")(PORT = " + PrimaryPort + "))")
+  print("    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + DbName + "))")
+  print("  )")
+
+  print("")
+  print(Standby1DbUniqueName + " =")
+  print("  (DESCRIPTION =")
+  print("    (ADDRESS = (PROTOCOL = TCP)(HOST = " + Standby1ListenerHost + ")(PORT = " + Standby1Port + "))")
+  print("    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + DbName + "))")
+  print("  )")
+
+  print("")
+  print(Standby2DbUniqueName + " =")
+  print("  (DESCRIPTION =")
+  print("    (ADDRESS = (PROTOCOL = TCP)(HOST = " + Standby2ListenerHost + ")(PORT = " + Standby2Port + "))")
+  print("    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + DbName + "))")
+  print("  )")
+  print("")
+
+  if (Standby1Hostname != Standby1ListenerHost or Standby1Port != '1521'):
+    print(Standby1ListenerName +"_LISTENER =")
+    print("  (DESCRIPTION =")
+    print("    (ADDRESS_LIST =")
+    print("      (ADDRESS=(PROTOCOL=TCP)(HOST=" + Standby1Hostname + ")(PORT=1521))")
+    print("      (ADDRESS=(PROTOCOL=TCP)(HOST=" + Standby1ListenerHost + ")(PORT= " + Standby1Port + "))")
+    print("    )")
+    print("  )")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print(PrimaryDbUniqueName + " =")
+  print("  (DESCRIPTION =")
+  print("    (ADDRESS = (PROTOCOL = TCP)(HOST = " + PrimaryListenerHost + ")(PORT = " + PrimaryPort + "))")
+  print("    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + DbName + "))")
+  print("  )")
+
+  print("")
+  print(Standby1DbUniqueName + " =")
+  print("  (DESCRIPTION =")
+  print("    (ADDRESS = (PROTOCOL = TCP)(HOST = " + Standby1ListenerHost + ")(PORT = " + Standby1Port + "))")
+  print("    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + DbName + "))")
+  print("  )")
+
+  print("")
+  print(Standby2DbUniqueName + " =")
+  print("  (DESCRIPTION =")
+  print("    (ADDRESS = (PROTOCOL = TCP)(HOST = " + Standby2ListenerHost + ")(PORT = " + Standby2Port + "))")
+  print("    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + DbName + "))")
+  print("  )")
+  print("")
+
+  if (Standby2Hostname != Standby2ListenerHost or Standby2Port != '1521'):
+    print(Standby2ListenerName +"_LISTENER =")
+    print("  (DESCRIPTION =")
+    print("    (ADDRESS_LIST =")
+    print("      (ADDRESS=(PROTOCOL=TCP)(HOST=" + Standby2Hostname + ")(PORT=1521))")
+    print("      (ADDRESS=(PROTOCOL=TCP)(HOST=" + Standby2ListenerHost + ")(PORT= " + Standby2Port + "))")
+    print("    )")
+    print("  )")
+
+  print("\n\n=========================================================================================================================")
+  print("Create Audit File Dest On All Standby Nodes")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("mkdir -p " + Standby1AuditFileDest)
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("mkdir -p " + Standby2AuditFileDest)
+
+  print("\n\n=========================================================================================================================")
+  print("Copy Oracle Password File to both Standbys")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname + " -- Create the oracle password file on the primary if one doesn't exist.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("orapwd file=" + PrimaryOracleHome + "/dbs/orapw" + DbName + " password=" + SysPassword)
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("scp " + PrimaryOracleHome + "/dbs/orapw" + DbName + " " + Standby1Hostname + ":" + Standby1OracleHome + "/dbs")
+  print("scp " + PrimaryOracleHome + "/dbs/orapw" + DbName + " " + Standby2Hostname + ":" + Standby2OracleHome + "/dbs")
+
+  print("\n\n=========================================================================================================================")
+  print("Create Temporary init.ora File on both Standbys")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print('echo "*.db_name=%s > %s' % ("'" + DbName + "'\"", TempPfile))
+  ###! print('echo "*.db_unique_name=%s > %s' % ("'" + Standby1DbUniqueName + "'\"", TempPfile))
+  print('echo "*.shared_pool_size=2800m" >> ' + TempPfile)
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print('echo "*.db_name=%s > %s' % ("'" + DbName + "'\"", TempPfile))
+  print('echo "*.shared_pool_size=2800m" >> ' + TempPfile)
+
+  print("\n\n=========================================================================================================================")
+  print("Startup the Standby Instances Nomount")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby1OracleHome + "/bin/sqlplus / as sysdba")
+  print("")
+  print("startup nomount pfile=" + TempPfile)
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby2OracleHome + "/bin/sqlplus / as sysdba")
+  print("")
+  print("startup nomount pfile=" + TempPfile)
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname + " - Enable Force Logging in the Database")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(PrimaryOracleHome + "/bin/sqlplus / as sysdba")
+  print("")
+  print("alter database force logging;")
+
+  print("\n\n=========================================================================================================================")
+  print("Create Backup of the Primary")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(PrimaryOracleHome + "/bin/rman")
+  print("")
+  print("connect target /")
+  print("")
+  print("run {")
+  for Chan in range(1, Channels + 1):
+    print("   ALLOCATE CHANNEL D" + str(Chan) + " DEVICE TYPE DISK FORMAT '" + pathjoin(BackupLocation, "%d_%U.bak';"))
+  print("\n   BACKUP INCREMENTAL LEVEL 0 AS COMPRESSED BACKUPSET")
+  print("    DATABASE")
+  print("    INCLUDE CURRENT CONTROLFILE")
+  print("    PLUS ARCHIVELOG")
+  print("    TAG = 'DB_BS_LEV-0_DB';")
+  print("}")
+  #print("\nBACKUP CURRENT CONTROLFILE FOR STANDBY FORMAT '" + pathjoin(BackupLocation,'standby_controlfile.bak') + "' tag for_standby;")
+
+  print("\n\n=========================================================================================================================")
+  print("Copy the RMAN Level 0 Backup of the Primary to Both Standbys")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("scp -rp " + BackupLocation + "/* " + Standby1Hostname + ":" + BackupLocation + '/')
+  print("scp -rp " + BackupLocation + "/* " + Standby2Hostname + ":" + BackupLocation + '/')
+
+  print("\n\n=========================================================================================================================")
+  print("Create the Standby1 Database Using RMAN 'Duplicate From Backup'")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby1OracleHome + "/bin/rman")
+  print("")
+  print("connect auxiliary /")
+  print("")
+  print("run {")
+  for Chan in range(1, Channels + 1):
+    print("   ALLOCATE AUXILIARY CHANNEL d" + str(Chan) + " DEVICE TYPE DISK;")
+  print("   DUPLICATE DATABASE")
+  print("     FOR STANDBY")
+  print("     SPFILE")
+  print("       SET \"db_unique_name\"=\"" + Standby1DbUniqueName + "\"")
+  print("     BACKUP LOCATION '" + BackupLocation + "'")
+  print("     DORECOVER")
+  print("     NOFILENAMECHECK;")
+  print("}")
+
+  print("\n\n=========================================================================================================================")
+  print("Create the Standby2 Database Using RMAN 'Duplicate From Backup'")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby2OracleHome + "/bin/rman")
+  print("")
+  print("connect auxiliary /")
+  print("")
+  print("run {")
+  for Chan in range(1, Channels + 1):
+    print("   ALLOCATE AUXILIARY CHANNEL d" + str(Chan) + " DEVICE TYPE DISK;")
+  print("   DUPLICATE DATABASE")
+  print("     FOR STANDBY")
+  print("     SPFILE")
+  print("       SET \"db_unique_name\"=\"" + Standby2DbUniqueName + "\"")
+  print("     BACKUP LOCATION '" + BackupLocation + "'")
+  print("     DORECOVER")
+  print("     NOFILENAMECHECK;")
+  print("}")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname + " - Clear old instance parameters.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("alter system reset dg_broker_config_file1 scope=spfile;")
+  print("alter system reset dg_broker_config_file2 scope=spfile;")
+  print("alter system reset dg_broker_start scope=spfile;")
+  print("alter system reset fal_client scope=spfile;")
+  print("alter system reset fal_server scope=spfile;")
+  print("alter system reset log_archive_config scope=spfile;")
+  print("alter system reset log_archive_dest_2 scope=spfile;")
+  print("alter system reset log_archive_dest_state_2 scope=spfile;")
+  print("alter system reset log_archive_dest_3 scope=spfile;")
+  print("alter system reset log_archive_dest_state_3 scope=spfile;")
+  if (Standby1Hostname != Standby1ListenerHost or Standby1Port != '1521'):
+    print("alter system reset local_listener scope=spfile;")
+  print("alter system reset remote_login_passwordfile scope=spfile;")
+  print("alter system reset standby_file_management scope=spfile;")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname + " - Set new instance parameters.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("alter system set dg_broker_config_file1='" + DgBrokerFile1 + "' scope=spfile;")
+  print("alter system set dg_broker_config_file2='" + DgBrokerFile2 + "' scope=spfile;")
+  print("alter system set dg_broker_start=TRUE scope=spfile;")
+  print("alter system set fal_client='" + Standby1DbUniqueName + "' scope=spfile;")
+  print("alter system set fal_server='" + PrimaryDbUniqueName + "' scope=spfile;")
+  print("alter system set log_archive_config='dg_config=(" + PrimaryDbUniqueName + "," + Standby1DbUniqueName + ")' scope=spfile;")
+  print("alter system set log_archive_dest_state_2='enable' scope=spfile;")
+  if (Standby1Hostname != Standby1ListenerHost or Standby1Port != '1521'):
+    print("alter system set local_listener='" +  Standby1ListenerName + "_LISTENER' scope=spfile;")
+  print("alter system set remote_login_passwordfile='exclusive' scope=spfile;")
+  print("alter system set standby_file_management='AUTO' scope=spfile;")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname + " - Restart standby1.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby1OracleHome + "/bin/sqlplus / as sysdba")
+  print("")
+  print("startup force mount;")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname + " - Clear old instance parameters.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("alter system reset dg_broker_config_file1 scope=spfile;")
+  print("alter system reset dg_broker_config_file2 scope=spfile;")
+  print("alter system reset dg_broker_start scope=spfile;")
+  print("alter system reset fal_client scope=spfile;")
+  print("alter system reset fal_server scope=spfile;")
+  print("alter system reset log_archive_config scope=spfile;")
+  print("alter system reset log_archive_dest_2 scope=spfile;")
+  print("alter system reset log_archive_dest_state_2 scope=spfile;")
+  print("alter system reset log_archive_dest_3 scope=spfile;")
+  print("alter system reset log_archive_dest_state_3 scope=spfile;")
+  if (Standby2Hostname != Standby2ListenerHost or Standby2Port != '1521'):
+    print("alter system reset local_listener scope=spfile;")
+  print("alter system reset remote_login_passwordfile scope=spfile;")
+  print("alter system reset standby_file_management scope=spfile;")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname + " - Set new instance parameters.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("alter system set dg_broker_config_file1='" + DgBrokerFile1 + "' scope=spfile;")
+  print("alter system set dg_broker_config_file2='" + DgBrokerFile2 + "' scope=spfile;")
+  print("alter system set dg_broker_start=TRUE scope=spfile;")
+  print("alter system set fal_client='" + Standby2DbUniqueName + "' scope=spfile;")
+  print("alter system set fal_server='" + PrimaryDbUniqueName + "' scope=spfile;")
+  print("alter system set log_archive_config='dg_config=(" + PrimaryDbUniqueName + "," + Standby2DbUniqueName + ")' scope=spfile;")
+  print("alter system set log_archive_dest_state_2='enable' scope=spfile;")
+  if (Standby2Hostname != Standby2ListenerHost or Standby2Port != '1521'):
+    print("alter system set local_listener='" +  Standby2ListenerName + "_LISTENER' scope=spfile;")
+  print("alter system set remote_login_passwordfile='exclusive' scope=spfile;")
+  print("alter system set standby_file_management='AUTO' scope=spfile;")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname + " - Restart standby2.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby1OracleHome + "/bin/sqlplus / as sysdba")
+  print("")
+  print("startup force mount;")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname + " - Make a backup of the spfile on Primary")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby1OracleHome + "/bin/sqlplus / as sysdba")
+  print("")
+  print("create pfile='" + BackupPfile + "' from spfile;")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname + " - Clear old instance parameters.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("alter system reset dg_broker_config_file1 scope=spfile;")
+  print("alter system reset dg_broker_config_file2 scope=spfile;")
+  print("alter system reset dg_broker_start scope=spfile;")
+  print("alter system reset fal_client scope=spfile;")
+  print("alter system reset fal_server scope=spfile;")
+  print("alter system reset log_archive_config scope=spfile;")
+  print("alter system reset log_archive_dest scope=spfile;")
+  print("alter system reset log_archive_dest_2 scope=spfile;")
+  print("alter system reset log_archive_dest_state_2 scope=spfile;")
+  print("alter system reset log_archive_dest_3 scope=spfile;")
+  print("alter system reset log_archive_dest_state_3 scope=spfile;")
+  if (PrimaryHostname != PrimaryListenerHost or PrimaryPort != '1521'):
+    print("alter system reset local_listener scope=spfile;")
+  print("alter system reset remote_login_passwordfile scope=spfile;")
+  print("alter system reset standby_file_management scope=spfile;")
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname + " - Set new instance parameters.")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("alter system set dg_broker_config_file1='" + DgBrokerFile1 + "' scope=both;")
+  print("alter system set dg_broker_config_file2='" + DgBrokerFile2 + "' scope=both;")
+  print("alter system set dg_broker_start=TRUE scope=both;")
+  print("alter system set fal_client='" + PrimaryDbUniqueName + "' scope=both;")
+  print("alter system set fal_server='" + Standby1DbUniqueName + "' scope=both;")
+  print("alter system set log_archive_config='dg_config=(" + Standby1DbUniqueName + "," + Standby2DbUniqueName + "," + PrimaryDbUniqueName + ")' scope=both;")
+  print("alter system set log_archive_dest_1='location=" + DbfLocation + "' scope=both;")
+  print("alter system set log_archive_dest_2='service=\"" + Standby1DbUniqueName + "\"', '" + Standby1SyncOptions + " delay=0 optional compression=disable max_failure=0 max_connections=1 reopen=300 db_unique_name=\"" + Standby1DbUniqueName + "\" net_timeout=30','valid_for=(online_logfile,all_roles)'" + " scope=both;")
+  print("alter system set log_archive_dest_3='service=\"" + Standby2DbUniqueName + "\"', '" + Standby2SyncOptions + " delay=0 optional compression=disable max_failure=0 max_connections=1 reopen=300 db_unique_name=\"" + Standby2DbUniqueName + "\" net_timeout=30','valid_for=(online_logfile,all_roles)'" + " scope=both;")
+  if (PrimaryHostname != PrimaryListenerHost or PrimaryPort != '1521'):
+    print("alter system set local_listener='" +  PrimaryListenerName + "_LISTENER' scope=spfile;")
+  print("alter system set remote_login_passwordfile='exclusive' scope=spfile;")
+  print("alter system set standby_file_management='AUTO' scope=both;")
+
+  print("\nNote: if remote_login_passwordfile was reset it will be necessary to restart the database before proceeding.")
+
+  print("\n\n=========================================================================================================================")
+  print("Create Standby Logfile Groups on Primary and Standbys")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY]")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(pathjoin(Standby1OracleHome, 'bin', 'sqlplus / as sysdba'))
+  print("")
+  GroupId = SrlGroupStart
+  for MemberId in range(1, SrlCount + 1):
+    print("alter database add standby logfile group " + str(GroupId) + " '" + pathjoin(DbfLocation, SrlPrefix) + str(GroupId) + SrlPostfix + "' size " + SrlSize + ";")
+    GroupId += 1
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1]")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby1OracleHome + "/bin/sqlplus / as sysdba")
+  print("")
+  for MemberId in range(1, SrlCount + 1):
+    print("alter database add standby logfile group " + str(GroupId) + " '" + pathjoin(DbfLocation, SrlPrefix) + str(GroupId) + SrlPostfix + "' size " + SrlSize + ";")
+    GroupId += 1
+
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2]")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby1OracleHome + "/bin/sqlplus / as sysdba")
+  print("")
+  for MemberId in range(1, SrlCount + 1):
+    print("alter database add standby logfile group " + str(GroupId) + " '" + pathjoin(DbfLocation, SrlPrefix) + str(GroupId) + SrlPostfix + "' size " + SrlSize + ";")
+    GroupId += 1
+
+  print("\n\n=========================================================================================================================")
+  print("Start Applying Redo on Standby1")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY1] " + prtStandby1Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby1OracleHome + "/bin/sqlplus / as sysdba")
+  print("")
+  print("alter database recover managed standby database using current logfile disconnect;")
+
+  print("\n\n=========================================================================================================================")
+  print("Start Applying Redo on Standby2")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY2] " + prtStandby2Hostname)
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(Standby2OracleHome + "/bin/sqlplus / as sysdba")
+  print("")
+  print("alter database recover managed standby database using current logfile disconnect;")
+
+  print("\n\n=========================================================================================================================")
+  print("Configure Data Guard")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY] " + prtPrimaryHostname + " Create the Data Guard Configuration")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + DbName)
+  print(". oraenv >/dev/null")
+  print("")
+  print(PrimaryOracleHome + "/bin/dgmgrl sys/" + SysPassword)
+  print("")
+  print("CREATE CONFIGURATION '" + DbName + "' AS PRIMARY DATABASE IS '" + PrimaryDbUniqueName + "' CONNECT IDENTIFIER IS '" + PrimaryDbUniqueName + "';")
+  print("ADD DATABASE '" + Standby1DbUniqueName + "' AS CONNECT IDENTIFIER IS '" + Standby1DbUniqueName + "' MAINTAINED AS PHYSICAL;")
+  print("ADD DATABASE '" + Standby2DbUniqueName + "' AS CONNECT IDENTIFIER IS '" + Standby2DbUniqueName + "' MAINTAINED AS PHYSICAL;")
+  print("")
+
+  ###~ print("\nAlternative Config Commands Overriding StaticConnectIdentifier...")
+  ###~ print("CREATE CONFIGURATION '" + DbName + "' AS PRIMARY DATABASE IS '" + PrimaryDbUniqueName + "' CONNECT IDENTIFIER IS '(DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=" + PrimaryListenerHost + ")(PORT=" + PrimaryPort + "))(CONNECT_DATA=(SERVICE_NAME=" + PrimaryDbUniqueName + "_DGMGRL)(INSTANCE_NAME=" + DbName + ")(SERVER=DEDICATED)))';")
+  ###~ print("ADD DATABASE '" + Standby1DbUniqueName + "' AS CONNECT IDENTIFIER IS '(DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=" + Standby1ListenerHost + ")(PORT=" + Standby1Port + "))(CONNECT_DATA=(SERVICE_NAME=" + Standby1DbUniqueName + "_DGMGRL)(INSTANCE_NAME=" + DbName + ")(SERVER=DEDICATED)))';")
+  ###~ print("ADD DATABASE '" + Standby2DbUniqueName + "' AS CONNECT IDENTIFIER IS '(DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=" + Standby2ListenerHost + ")(PORT=" + Standby2Port + "))(CONNECT_DATA=(SERVICE_NAME=" + Standby2DbUniqueName + "_DGMGRL)(INSTANCE_NAME=" + DbName + ")(SERVER=DEDICATED)))';")
+  ###~ print("")
+
+  if (PrimaryHostname != PrimaryListenerHost or PrimaryPort != '1521'):
+    print("EDIT DATABASE '" + PrimaryDbUniqueName  + "' SET PROPERTY StaticConnectIdentifier='(DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=" + PrimaryListenerHost  + ")(PORT=" + PrimaryPort  + "))(CONNECT_DATA=(SERVICE_NAME=" + PrimaryDbUniqueName  + "_DGMGRL)(INSTANCE_NAME=" + DbName + ")(SERVER=DEDICATED)))';")
+
+  if (Standby1Hostname != Standby1ListenerHost or Standby1Port != '1521'):
+    print("EDIT DATABASE '" + Standby1DbUniqueName + "' SET PROPERTY StaticConnectIdentifier='(DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=" + Standby1ListenerHost + ")(PORT=" + Standby1Port + "))(CONNECT_DATA=(SERVICE_NAME=" + Standby1DbUniqueName + "_DGMGRL)(INSTANCE_NAME=" + DbName + ")(SERVER=DEDICATED)))';")
+
+  if (Standby2Hostname != Standby2ListenerHost or Standby2Port != '1521'):
+    print("EDIT DATABASE '" + Standby2DbUniqueName + "' SET PROPERTY StaticConnectIdentifier='(DESCRIPTION=(ADDRESS=(PROTOCOL=tcp)(HOST=" + Standby2ListenerHost + ")(PORT=" + Standby2Port + "))(CONNECT_DATA=(SERVICE_NAME=" + Standby2DbUniqueName + "_DGMGRL)(INSTANCE_NAME=" + DbName + ")(SERVER=DEDICATED)))';")
+
+  print("\nENABLE CONFIGURATION;")
+  print("")
+  print("show configuration verbose;")
+  print("")
+  print("show database verbose '" + PrimaryDbUniqueName + "';")
+  print("show instance verbose '" + DbName + "' on database '" + PrimaryDbUniqueName + "';")
+  print("")
+  print("show database verbose '" + Standby1DbUniqueName + "';")
+  print("show instance verbose '" + DbName + "' on database '" + Standby1DbUniqueName + "';")
+  print("")
+  print("show database verbose '" + Standby2DbUniqueName + "';")
+  print("show instance verbose '" + DbName + "' on database '" + Standby2DbUniqueName + "';")
+  print("")
+  print("switchover to '" + Standby1DbUniqueName + "';")
+  print("switchover to '" + PrimaryDbUniqueName + "';")
+  print("")
+  print("switchover to '" + Standby2DbUniqueName + "';")
+  print("switchover to '" + PrimaryDbUniqueName + "';")
+
+  print("\n\n=========================================================================================================================")
+  print("Post Configuration Items")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print('[PRIMARY & STANDBY] Other Settings from Oracle MAA "Role Transition Best Practices"')
+  print("---------------------------------------------------------------------------------------------------------------")
+  #if (DbVersion < 12):
+  print("For 11.2.0.2 and 11.2.0.3 databases consider setting the following:")
+  print("")
+  print('In Oracle Database version s 11.2.0.2 through 11.2.0.3 set "_defer_eor_orl_arch_for_so"=TRUE. This becomes the default behavior')
+  print("in version 11.2.0.4. This parameter defers the archiving of the final End-Of_Redo (EOR) redo log files at the old primary.")
+  print("Performing this archival when the old primary is mounted as a standby saves time during switchover.")
+  print("---------------------------------------------------------------------------------------------------------------------------------")
+  print("alter system set \"_defer_eor_orl_arch_for_so\"=TRUE scope=both;")
+
+  print("\n\n=========================================================================================================================")
+  print("Helpful Queries, aliases, etc.")
+  print("=========================================================================================================================")
+  print("--------------------------------------------------------------------------------------------------------")
+  print("Aliases")
+  print("--------------------------------------------------------------------------------------------------------")
+  # Tail the Data Guard Broker Logfile
+  # ------------------------------------
+  print("alias tdglog='tail -f " + pathjoin(PrimaryOracleBase, 'diag', 'rdbms', PrimaryDbUniqueName.lower(), DbName, 'trace', "drc" + DbName + ".log'"))
+  print("")
+  print("alias tdglog='tail -f " + pathjoin(Standby1OracleBase, 'diag', 'rdbms', Standby1DbUniqueName.lower(), DbName, 'trace', "drc" + DbName + ".log'"))
+  print("")
+  print("alias tdglog='tail -f " + pathjoin(Standby2OracleBase, 'diag', 'rdbms', Standby2DbUniqueName.lower(), DbName, 'trace', "drc" + DbName + ".log'"))
+  print("")
+
+  # View the Data Guard Broker Logfile
+  # ------------------------------------
+  print("alias dglog='less " + pathjoin(PrimaryOracleBase, 'diag', 'rdbms', PrimaryDbUniqueName.lower(), DbName, 'trace', "drc" + DbName + ".log'"))
+  print("")
+  print("alias dglog='less " + pathjoin(Standby1OracleBase, 'diag', 'rdbms', Standby1DbUniqueName.lower(), DbName, 'trace', "drc" + DbName + ".log'"))
+  print("")
+  print("alias dglog='less " + pathjoin(Standby2OracleBase, 'diag', 'rdbms', Standby2DbUniqueName.lower(), DbName, 'trace', "drc" + DbName + ".log'"))
+
+
+  print("\n--------------------------------------------------------------------")
+  print("SQL Queries")
+  print("--------------------------------------------------------------------")
+  print("select * from v$archive_gap;")
+  print("")
+  print(" -- On the primary")
+  print("  SELECT thread#")
+  print("        ,group#")
+  print("        ,bytes/1024/1024 mbytes")
+  print("        ,status")
+  print("        ,TO_CHAR(first_time, 'yyyy-mm-dd hh24:mi:ss') first_time")
+  print("        ,TO_CHAR(next_time, 'yyyy-mm-dd hh24:mi:ss') next_time")
+  print("    FROM v$log")
+  print("ORDER BY 1,2;")
+  print("")
+  print(" -- On the standby")
+  print("  SELECT thread#")
+  print("        ,group#")
+  print("        ,bytes/1024/1024 mbytes")
+  print("        ,status")
+  print("        ,TO_CHAR(first_time, 'YYYY-MM-DD hh24:mi:ss') first_time")
+  print("        ,TO_CHAR(next_time, 'yyyy-mm-dd hh24:mi:ss') next_time")
+  print("    FROM v$standby_log")
+  print("ORDER BY 1,2;")
+  print("")
+
+print('============================================================================================================================')
+print('Process complete')
+print('============================================================================================================================')
+exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+

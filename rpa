@@ -1,0 +1,185 @@
+#!/bin/env python
+
+##################################################################################################
+#  Name:        rpa                                                                              #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Recovery Point Advisor - prints the latest valid point of recovery in a RAC      #
+#               database. This script is based on MOS notes:                                     #
+#                 - RAC Backup, Restore and Recovery using RMAN (Doc ID 243760.1)                #
+#                 - Open Database failed - DATAFILE NEEDS MORE RECOVERY TO BE CONSISTENT         #
+#                   ORA-1194 ORA-1547 ORA-1110 (Doc ID 1528788.1)                                #
+#                 - How to quickly check that Database is consistent after incomplete recovery   #
+#                   (Point in Time Recovery) before OPEN RESETLOGS (Doc ID 1354256.1)            #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 07/08/2014 1.00 Randy Johnson    Initial write.                                                #
+# 02-02-2017 2.00 Randy Johnson    Switched queries to use NEXT_CHANGE# instead of SEQUENCE#.    #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse   import OptionParser
+from os         import environ
+from os.path    import basename
+from sys        import argv
+from sys        import exit
+from Oracle     import RunSqlplus
+from Oracle     import PrintError
+from Oracle     import SetOracleEnv
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0])
+  CmdPrefix      = Cmd.split('.')[0]
+  CmdDesc        = 'Recovery Point Advisor (' + Cmd + ')'
+  VersionDate    = 'Thu Feb  2 11:54:57 CST 2017'
+  Version        = '2.00'
+  Sql            = ''
+  Colsep         = '~'
+  ErrChk         = True
+  ErrorList      = []
+  ArgParser      = OptionParser()
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nDetermines the highest valid recovery point (SCN) for a RAC database'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("-c",  dest="ChgNum",  default='',                         type=str, help="value for change_number (scn)",            metavar='CHG_NUM')
+  ArgParser.add_option("-t",  dest="ChgTim",  default='',                         type=str, help="value for change time (YYYYMMDDHH24MISS)", metavar='CHG_TIM')
+  ArgParser.add_option("--s", dest="Show",    default=False, action="store_true",           help="print SQL query.")
+  ArgParser.add_option("--v", dest="Version", default=False, action="store_true",           help="print version info.")
+
+  Options, args = ArgParser.parse_args()
+  argc = len(args)
+
+  if (Options.Version):
+    Banner = CmdDesc + ', Release ' + Version + ' Production, ' + VersionDate
+    print('\n', Banner)
+    exit()
+
+  ChgNum  = Options.ChgNum
+  ChgTim  = Options.ChgTim
+  Show    = Options.Show
+
+  if (ChgNum != '' and ChgTim != ''):
+    print('Only one of -c or -t allowed.')
+    exit(1)
+
+  # Check/set the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('Set your ORACLE_SID to the database you want to search.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  Sql  = "SET PAGES 0\n"
+  Sql += "SET LINES 200\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         thread#                                     ||'" + Colsep + "'||\n"
+  Sql += "         TO_CHAR(sequence#+1)                        ||'" + Colsep + "'||\n"
+  Sql += "         next_change#                                ||'" + Colsep + "'||\n"
+  Sql += "         TO_CHAR(next_time, 'yyyy-mm-dd hh24:mi:ss')\n"
+  Sql += "    FROM v$archived_log al\n"
+  Sql += "       , v$database db\n"
+  Sql += "   WHERE al.resetlogs_change# = db.resetlogs_change#\n"
+  Sql += "     AND (thread#,sequence#) in (   SELECT thread#, max(sequence#)\n"
+  Sql += "                                      FROM v$archived_log al\n"
+  Sql += "                                         , v$database db\n"
+  Sql += "                                     WHERE al.resetlogs_change# = db.resetlogs_change#\n"
+  if (ChgNum != ''):
+    Sql += "                                       AND next_change# <= " + ChgNum + "\n"
+  if (ChgTim != ''):
+    Sql += "                                       AND next_time <= TO_DATE('" + ChgTim + "','YYYYMMDDHH24MISS')\n"
+  Sql += "                                  GROUP BY thread#\n"
+  Sql += "                                )\n"
+  Sql += "     AND rownum < 2\n"
+  Sql += "ORDER BY next_change#;"
+
+  if (Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit(0)
+    
+  # Execute the report
+  (rc,Stdout,ErrList) = RunSqlplus(Sql, ErrChk)
+  
+  ThreadNum   = ''
+  SequenceNum = ''
+  ChangeNum   = ''
+  ChangeTime  = ''
+  if (rc == 0):
+    Stdout = Stdout.strip()
+    if (Stdout != '' and Stdout.count(Colsep) == 3):
+      (ThreadNum,SequenceNum,ChangeNum,ChangeTime) = Stdout.split(Colsep)
+    else:
+      if ((ChgNum == '') and (ChgTim == '')):
+        print('No recovery information found.')
+  
+      if (ChgNum != ''):
+        print('No recovery point found near scn:', ChgNum)
+  
+      if (ChgTim != ''):
+         print('No recovery point found near change time:', ChgTim)
+      print(Stdout)
+      exit(1)
+  else:
+    print(Stdout)
+    exit(1)
+
+  print("\nHighest Recovery Point:")
+  print(" Thread, Sequence : %s,%s" % (ThreadNum, SequenceNum))
+  print(" Change Number    : %s" % ChangeNum)
+  print(" Change Time      : %s" % ChangeTime)
+
+  print("\nNote: It is very important to disable block change tracking before running the restore/recover database. See commands below.")
+  print("      alter database disable block change tracking;")
+  print("      alter database enable block change tracking;")
+
+  print("\nRestore commands: " + "restore database until scn " + ChangeNum + ";")
+  print("                : " + "restore database until sequence " + SequenceNum + " thread " + ThreadNum + ";")
+  print("                : " + "restore database until time \"TO_DATE('" + ChangeTime + "','YYYY-MM-DD HH24:MI:SS')\";")
+
+  print("\nRecover commands: " + "recover database until scn " + ChangeNum + ";")
+  print("                : " + "recover database until sequence " + SequenceNum + " thread " + ThreadNum + ";")
+  print("                : " + "recover database until time \"TO_DATE('" + ChangeTime + "','YYYY-MM-DD HH24:MI:SS')\";")
+
+  # ---------------------
+  # Sample Output
+  #
+  # > rpa                                                                                                         
+  #                                                                                                               
+  # Highest Recovery Point:                                                                                       
+  #  Thread, Sequence : 1,11                                                                                      
+  #  Change Number    : 247669                                                                                    
+  #  Change Time      : 2017-09-06 17:08:23                                                                       
+  #                                                                                                               
+  # Note: It is very important to disable block change tracking before running the restore/recover commands below.
+  #       alter database disable block change tracking;                                                           
+  #       alter database enable block change tracking;                                                            
+  #                                                                                                               
+  # Restore commands: restore database until scn 247669;                                                          
+  #                 : restore database until sequence 11 thread 1;                                                
+  #                 : restore database until time "TO_DATE('2017-09-06 17:08:23','YYYY-MM-DD HH24:MI:SS')";       
+  #                                                                                                               
+  # Recover commands: recover database until scn 247669;                                                          
+  #                 : recover database until sequence 11 thread 1;                                                
+  #                 : recover database until time "TO_DATE('2017-09-06 17:08:23','YYYY-MM-DD HH24:MI:SS')";       
+  # ---------------------
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+

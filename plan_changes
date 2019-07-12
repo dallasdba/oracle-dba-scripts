@@ -1,0 +1,172 @@
+#!/bin/env python
+
+##################################################################################################
+# Name:        plan_changes                                                                      #
+# Author:      Randy Johnson                                                                     #
+# Description: Reports SQL Plan Changes                                                          #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 09/21/2017 1.00 Randy Johnson    Initial write.                                                #
+# 10/16/2017 1.10 Randy Johnson    Bug fixes around Time parameter.                              #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from signal       import SIG_DFL
+from signal       import SIGPIPE
+from signal       import signal
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from Oracle       import ParseConnectString
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ValidateDate
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Plan Changes'
+  Version        = '1.10'
+  VersionDate    = 'Mon Oct 16 10:15:38 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  ArgParser      = OptionParser()
+  InStr          = ''
+  TnsName        = ''
+  Username       = ''
+  Password       = ''
+  ConnStr        = ''
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nReport significant SQL plan changes before/after a given time.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("-t",  dest="Time",                             default='',    type=str, help="Before/After Time ")
+  ArgParser.add_option('--s', dest='Show',        action='store_true', default=False,           help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer',     action='store_true', default=False,           help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  Time     = Options.Time
+  Show     = Options.Show
+  ShowVer  = Options.ShowVer
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  if (Time == ''):
+    print("\nTime is required. Acceptable formats follow:")
+    print("  YYYY-MM-DD")
+    print("  YYYY-MM-DD HH24")
+    print("  YYYY-MM-DD HH24:MI")
+    print("  YYYY-MM-DD HH24:MI:SS")
+    exit(1)
+
+  (ValidDate, DateTimeFormat) = ValidateDate(Time)
+  if (not ValidDate):
+    print("\nInvalid format for Time. Acceptable formats follow:")
+    print("  YYYY-MM-DD")
+    print("  YYYY-MM-DD HH24")
+    print("  YYYY-MM-DD HH24:MI")
+    print("  YYYY-MM-DD HH24:MI:SS")
+    exit(1)
+
+  Sql += "column sql_first_seen    format a28   heading 'SQL First Seen'\n"
+  Sql += "column phv_first_seen    format a28   heading 'PHV First Seen'\n"
+  Sql += "column num_plans         format 9999  heading '# of Plans'\n"
+  Sql += "column profile           format a8    heading 'Profile'\n"
+  Sql += "\n"
+  Sql += "SELECT " + SqlHeader + "\n"
+  Sql += "       (SELECT MIN (sql_id)\n"
+  Sql += "          FROM DBA_HIST_SQLSTAT\n"
+  Sql += "         WHERE force_matching_signature = sql_first.force_matching_signature\n"
+  Sql += "       ) sql_id\n"
+  Sql += "     , plan_hash_value\n"
+  Sql += "     , TO_CHAR(sql_first_seen, 'YYYY-MM-DD HH:MI:SS AM') sql_first_seen\n"
+  Sql += "     , TO_CHAR(phv_first_seen, 'YYYY-MM-DD HH:MI:SS AM') phv_first_seen\n"
+  Sql += "     , number_of_plans num_plans\n"
+  Sql += "     , CASE WHEN sp.signature IS NULL\n"
+  Sql += "            THEN NULL\n"
+  Sql += "            ELSE 'Y'\n"
+  Sql += "            END  profile\n"
+  Sql += "  FROM (  SELECT force_matching_signature\n"
+  Sql += "               , plan_hash_value\n"
+  Sql += "               , MIN (begin_interval_time) phv_first_seen\n"
+  Sql += "            FROM DBA_HIST_SQLSTAT S, DBA_HIST_SNAPSHOT SS\n"
+  Sql += "           WHERE ss.snap_id = S.snap_id\n"
+  Sql += "             AND ss.instance_number = S.instance_number\n"
+  Sql += "             AND plan_hash_value > 0\n"
+  Sql += "        GROUP BY force_matching_signature\n"
+  Sql += "               , plan_hash_value\n"
+  Sql += "       ) phv_first\n"
+  Sql += "     , (  SELECT force_matching_signature\n"
+  Sql += "               , MIN (begin_interval_time) sql_first_seen\n"
+  Sql += "               , COUNT (DISTINCT plan_hash_value) number_of_plans\n"
+  Sql += "            FROM DBA_HIST_SQLSTAT S, DBA_HIST_SNAPSHOT SS\n"
+  Sql += "           WHERE ss.snap_id = S.snap_id\n"
+  Sql += "             AND ss.instance_number = S.instance_number\n"
+  Sql += "             AND plan_hash_value > 0\n"
+  Sql += "        GROUP BY force_matching_signature\n"
+  Sql += "       ) sql_first\n"
+  Sql += "     , dba_sql_profiles sp\n"
+  Sql += " WHERE sql_first.force_matching_signature = phv_first.force_matching_signature(+)\n"
+  Sql += "   AND phv_first_seen > TO_DATE ('" + Time + "', '" + DateTimeFormat + "')\n"
+  Sql += "   AND sql_first_seen < TO_DATE ('" + Time + "', '" + DateTimeFormat + "')\n"
+  Sql += "   AND sql_first.force_matching_signature = sp.signature(+)\n"
+  Sql += "   AND sql_first.force_matching_signature > 0;"
+
+  Sql = Sql.strip()
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

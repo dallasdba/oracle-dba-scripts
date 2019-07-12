@@ -1,0 +1,152 @@
+#!/bin/env python
+
+##################################################################################################
+#  Name:        fuzzyfiles                                                                       #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Checks the fuzzy state of the database datafiles.                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 09/07/2017 1.00 Randy Johnson    Initial write.                                                #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse   import OptionParser
+from os         import environ
+from os.path    import basename
+from sys        import argv
+from sys        import exit
+from Oracle     import RunSqlplus
+from Oracle     import PrintError
+from Oracle     import SetOracleEnv
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0])
+  CmdPrefix      = Cmd.split('.')[0]
+  CmdDesc        = 'Fuzzy Files (' + Cmd + ')'
+  VersionDate    = 'Thu Sep 7 11:54:57 CST 2018'
+  Version        = '1.00'
+  Sql            = ''
+  ErrChk         = False
+  ArgParser      = OptionParser()
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ConnStr        = ''
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nChecks the fuzzy state of datafiles for recovery purposes.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("--s", dest="Show",    default=False, action="store_true",           help="print SQL query.")
+  ArgParser.add_option("--v", dest="Version", default=False, action="store_true",           help="print version info.")
+
+  Options, args = ArgParser.parse_args()
+  argc = len(args)
+
+  if (Options.Version):
+    Banner = CmdDesc + ', Release ' + Version + ' Production, ' + VersionDate
+    print('\n', Banner)
+    exit()
+
+  Show = Options.Show
+
+  # Check/set the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('Set your ORACLE_SID to the database you want to search.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  Sql += "column file#                    format 99999999        heading 'File #'\n"
+  Sql += "column name                     format a60             heading 'File Name'\n"
+  Sql += "column tablespace_name          format a30             heading 'Tablespace Name'\n"
+  Sql += "column fuzzy                    format a5              heading 'Fuzzy|File'\n"
+  Sql += "column status                   format a7              heading 'Status'\n"
+  Sql += "column error                    format a18             heading 'Error'\n"
+  Sql += "column recover                  format a19             heading 'Needs|Recovery'\n"
+  Sql += "column checkpoint_change#       format a19             heading 'Datafile|Checkpoint Change #'\n"
+  Sql += "column checkpoint_time          format a19             heading 'Datafile|Checkpoint Time'\n"
+  Sql += "column count                    format 999,999,999,999 heading 'Fuzzy Files'\n"
+  Sql += "column fhafs absolute_fuzzy_scn format 99999999        heading 'Absolute|Fuzzy SCN'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         INITCAP(fuzzy) fuzzy\n"
+  Sql += "       , INITCAP(status) status\n"
+  Sql += "       , error\n"
+  Sql += "       , recover\n"
+  Sql += "       , TO_CHAR(checkpoint_change#) checkpoint_change#\n"
+  Sql += "       , TO_CHAR(checkpoint_time, 'yyyy-mm-dd hh24:mi:ss') checkpoint_time\n"
+  Sql += "       , count(*) count\n"
+  Sql += "    FROM v$datafile_header\n"
+  Sql += "GROUP BY fuzzy\n"
+  Sql += "       , status\n"
+  Sql += "       , error\n"
+  Sql += "       , recover\n"
+  Sql += "       , checkpoint_change#\n"
+  Sql += "       , checkpoint_time;"
+  Sql += "\n\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         file#\n"
+  Sql += "       , name\n"
+  Sql += "       , tablespace_name\n"
+  Sql += "       , INITCAP(fuzzy) fuzzy\n"
+  Sql += "       , INITCAP(status) status\n"
+  Sql += "       , error\n"
+  Sql += "       , recover\n"
+  Sql += "       , TO_CHAR(checkpoint_change#) checkpoint_change#\n"
+  Sql += "       , TO_CHAR(checkpoint_time, 'yyyy-mm-dd hh24:mi:ss') checkpoint_time\n"
+  Sql += "    FROM v$datafile_header;"
+  Sql += "\n\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         hxfil file#\n"
+  Sql += "       , substr(hxfnm, 1, 50) name\n"
+  Sql += "       , fhscn checkpoint_change#\n"
+  Sql += "       , fhafs Absolute_Fuzzy_SCN\n"
+  Sql += "       , max(fhafs) over () Min_PIT_SCN\n"
+  Sql += "    FROM x$kcvfh\n"
+  Sql += "   WHERE fhafs!=0;"
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+

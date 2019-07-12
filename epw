@@ -1,0 +1,75 @@
+#!/bin/env python
+
+##################################################################################################################
+# Name:        epw (encode password)                                                                             #
+# Author:      Randy Johnson                                                                                     #
+# Description: Produces a UU encoded password from a plain-text string.                                          #
+#                                                                                                                #
+# History:                                                                                                       #
+#                                                                                                                #
+# Date       Ver. Who              Change Description                                                            #
+# ---------- ---- ---------------- ----------------------------------------------------------------------------- #
+# 07/06/2012 1.00 Randy Johnson    Initial release.                                                              #
+# 09/19/2012 2.00 Randy Johnson    Cleanup, minor cosmetic changes, removed OptionParser.                        #
+# 12/07/2012 2.10 Randy Johnson    Changed encode/decode to use built-in string functions.                       #
+# 07/17/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                                     #
+# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                                           #
+##################################################################################################################
+
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os.path      import basename
+from sys          import exit
+from sys          import argv
+from sys          import version_info
+
+# ------------------------------------------------
+# Imports that are conditional on Python Version.
+# ------------------------------------------------
+if (version_info[0] >= 3):
+  from base64 import b64encode
+# ------------------------------------------------  
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Encode Password'
+  Version        = '3.01'
+  VersionDate    = 'Tue Sep 15 21:02:11 CDT 2015'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nProduces a UU encoded password from a plain-text string.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('--v', dest='ShowVer', action='store_true', default=False, help="print version info.")
+  
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+  argc = len(argv)
+  
+  ShowVer = Options.ShowVer
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  if argc != 2:
+    print('\nYou must specify a string of characters to encode.')
+    exit(1)
+  else:
+    Password = argv[1]
+    if (version_info[0] >= 3):
+      print(b64encode(Password.encode('ascii')).decode("utf-8"))
+    else:
+      print(Password.encode('base64','strict'))
+
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

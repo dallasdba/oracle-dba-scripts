@@ -1,0 +1,227 @@
+#!/bin/env python
+
+##################################################################################################
+#  Name:        dbvn                                                                             #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Report database version and patch information from produt_component_version, and #
+#               dba_registry_history.                                                            #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 07/08/2014 1.00 Randy Johnson    Initial write.                                                #
+# 07/10/2014 1.10 Randy Johnson    Added xmltransform(dbms_qopatch.get_opatch_list(), -          #
+#                                   dbms_qopatch.GET_OPATCH_XSLT()) for 12c databases.           #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
+# 08/07/2015 2.10 Randy Johnson    Minor mods for consistency + added tns connect option.        #
+# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                           #
+# 01/08/2018 2.11 Randy Johnson    Added 12c Features.                                           #
+##################################################################################################
+
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from Oracle       import GetOracleVersion
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Db Version'
+  Version        = '2.12'
+  VersionDate    = 'Thu Jan 08 15:35:00 CDT 2018'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  InStr          = ''
+  ConnStr        = ''
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nReport database version and patch information from produt_component_version,'
+  Usage += '\nand dba_registry_history.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,                 help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer',    action='store_true', default=False,                 help="print version info.")
+
+  Options, args = ArgParser.parse_args()
+  argc = len(args)
+
+  if (Options.ShowVer):
+    Banner = CmdDesc + ', Release ' + Version + ' Production, ' + VersionDate
+    print('\n%s' % Banner)
+    exit()
+
+  Show      = Options.Show
+  ShowVer   = Options.ShowVer
+
+  if (ShowVer == True):
+    print('\n%s' % Banner)
+    exit()
+  
+  Sql += "column product        format a45            heading 'Product'\n"
+  Sql += "column version        format a15            heading 'Version'\n"
+  Sql += "column status         format a25            heading 'Status'\n"
+  Sql += "\n"
+  Sql += "PROMPT\n"
+  Sql += "PROMPT Product Information:\n"
+  Sql += "\n"
+  Sql += "SELECT " + SqlHeader + "\n"
+  Sql += "       product\n"
+  Sql += "     , version\n"
+  Sql += "     , status\n"
+  Sql += "  FROM product_component_version\n"
+  Sql += " ORDER BY product;\n"
+  Sql +="\n"
+  
+  Sql11g  = "col action            format a15           heading 'Action'\n"
+  Sql11g += "column action_time    format a18           heading 'Install Date'\n"
+  Sql11g += "column namespace      format a10           heading 'Namespace'\n"
+  Sql11g += "column version        format a20           heading 'Version'\n"
+  Sql11g += "column id             format 9999999999    heading 'ID'\n"
+  Sql11g += "column bundle_series  format a15           heading 'Bundle Series'\n"
+  Sql11g += "column comments       format a50 wrap      heading 'Comments'\n"
+  Sql11g += "\n"
+  Sql11g += "PROMPT\n"
+  Sql11g += "PROMPT Patch Information:\n"
+  Sql11g += "\n"
+  Sql11g += "SELECT " + SqlHeader + "\n"
+  Sql11g += "       INITCAP(namespace) namespace\n"
+  Sql11g += "     , id\n"
+  Sql11g += "     , bundle_series\n"
+  Sql11g += "     , version\n"
+  Sql11g += "     , INITCAP(action) action\n"
+  Sql11g += "     , TO_CHAR(action_time, 'YYYY-MM-DD HH24:MI') action_time\n"
+  Sql11g += "     , comments\n"
+  Sql11g += "  FROM dba_registry_history\n"
+  Sql11g += " ORDER BY action_time;\n"
+  Sql11g +="\n"
+  
+  Sql12c  = "col patch_id          format a12           heading 'Patch ID'\n"
+  Sql12c += "col patch_uid         format a12           heading 'Patch UID'\n"
+  Sql12c += "col version           format a13           heading 'Version'\n"
+  Sql12c += "col flags             format a10           heading 'Flags'\n"
+  Sql12c += "col action            format a15           heading 'Action'\n"
+  Sql12c += "col status            format a15           heading 'Status'\n"
+  Sql12c += "col action_time       format a18           heading 'Install Date'\n"
+  Sql12c += "col bundle_series     format a20           heading 'Bundle Series'\n"
+  Sql12c += "col bundle_id         format a10           heading 'Bundle ID'\n"
+  Sql12c += "\n"
+  Sql12c += "PROMPT\n"
+  Sql12c += "PROMPT Patch Information:\n"
+  Sql12c += "\n"
+  Sql12c += "SELECT TO_CHAR(patch_id) patch_id\n"
+  Sql12c += "     , TO_CHAR(patch_uid) patch_id\n"
+  Sql12c += "     , version\n"
+  Sql12c += "     , flags\n"
+  Sql12c += "     , INITCAP(action) action\n"
+  Sql12c += "     , INITCAP(status) status\n"
+  Sql12c += "     , TO_CHAR(action_time, 'YYYY-MM-DD HH24:MI') action_time\n"
+  Sql12c += "     , bundle_series\n"
+  Sql12c += "     , TO_CHAR(bundle_id) bundle_id\n"
+  Sql12c += "FROM   dba_registry_sqlpatch;\n"
+  Sql12c += "\n"
+  Sql12c += "PROMPT\n"
+  Sql12c += "PROMPT Patch Description:\n"
+  Sql12c += "\n"
+  Sql12c += "SELECT TO_CHAR(patch_id) patch_id\n"
+  Sql12c += "     , TO_CHAR(patch_uid) patch_id\n"
+  Sql12c += "     , description\n"
+  Sql12c += "FROM   dba_registry_sqlpatch;\n"
+  Sql12c += "\n"
+  Sql12c += "set lines 100\n"
+  Sql12c += "set long  200000\n"
+  Sql12c += "set pages 0\n"
+  #Sql12c += "\n"
+  #Sql12c += "exec dbms_qopatch.GET_SQLPATCH_STATUS\n"
+  #Sql12c += "\n"
+  #Sql12c += "select xmltransform(dbms_qopatch.get_opatch_lsinventory,  dbms_qopatch.get_opatch_xslt) from dual;\n"
+  #Sql12c += "\n"
+  #Sql12c += "select xmltransform(dbms_qopatch.get_opatch_bugs,         dbms_qopatch.get_opatch_xslt) from dual;\n"
+  #Sql12c += "\n"
+  Sql12c += "select xmltransform(dbms_qopatch.GET_OPATCH_LIST,         dbms_qopatch.get_opatch_xslt) from dual;\n"
+  Sql12c += "\n"
+  #Sql12c += "select xmltransform(dbms_qopatch.GET_OPATCH_INSTALL_INFO, dbms_qopatch.get_opatch_xslt) from dual;\n"
+
+  if (Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print(Sql11g)
+    print(Sql12c)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+  else:
+    # Check/setup the Oracle environment
+    if (not('ORACLE_SID' in list(environ.keys()))):
+      print('ORACLE_SID is required.')
+      exit(1)
+    else:
+      # Set the ORACLE_HOME just in case it isn't set already.
+      if (not('ORACLE_HOME' in list(environ.keys()))):
+        (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+  
+    # Parse the connect string if any, prompt for username, password if needed.
+    if (len(args) > 0 and Show == False):
+      InStr = args[0]
+      ConnStr = ParseConnectString(InStr)
+      
+    VSql  = "set pages 0\n"
+    VSql += "set lines 30\n"
+    VSql += "SELECT " + SqlHeader + "\n"
+    VSql += "       MAX(version)\n"
+    VSql += "  FROM product_component_version\n"
+    VSql += " WHERE UPPER(product) like 'ORACLE DATABASE%';\n"
+    VSql +="\n"
+    
+    # Get the version of the database...
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(VSql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(VSql, ErrChk)
+
+    try:
+      Version = int(Stdout.split('.')[0])
+    except:
+      print("WARNING: Error determining version from product_component_version. Assuming v11.x")
+      Version = 11
+      
+    # Execute the report
+    if (Version <= 11):
+      Sql += Sql11g
+    else:
+      Sql += Sql12c
+      
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+
+    # Print the report
+    if (Stdout != ''):
+      print('\n%s' % Stdout)
+  
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+

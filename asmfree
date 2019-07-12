@@ -1,0 +1,175 @@
+#!/bin/env python
+
+##################################################################################################
+#  Name:        asmfree                                                                          #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Report ASM Attributes                                                            #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 07/12/2017 1.00 Randy Johnson    Initial write.                                                #
+# 07/12/2017 1.01 Randy Johnson    Cosmetic changes.                                             #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from datetime     import datetime
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from signal       import SIG_DFL
+from signal       import SIGPIPE
+from signal       import signal
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from subprocess   import Popen
+from subprocess   import PIPE
+from subprocess   import STDOUT
+from Oracle       import ParseConnectString
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ValidateDate
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'ASM Free Space'
+  Version        = '1.01'
+  VersionDate    = 'Wed Jul 13 08:56:12 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  Now            = datetime.now()
+  EndTime        = (Now.strftime('%Y-%m-%d %H:%M:%S'))
+  ConnStr        = ''
+  Ps             = '/bin/ps'
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nReports ASM disk group space allocation and free space available.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('--s', dest='Show',    action='store_true', default=False,            help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer', action='store_true', default=False,            help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  Show        = Options.Show
+  ShowVer     = Options.ShowVer
+
+  if (ShowVer == True):
+    print('\n%s' % Banner)
+    exit()
+
+  Sql += "column state                   format a8          heading 'State'\n"
+  Sql += "column type                    format a8          heading 'Type'\n"
+  Sql += "column name                    format a15         heading 'Disk Group'\n"
+  Sql += "column sector                  format 999999      heading 'Sector|Size|Bytes'\n"
+  Sql += "column block                   format 999999      heading 'Block|Size|Bytes'\n"
+  Sql += "column au                      format 9999999     heading 'Allocation|Uinit|Bytes'\n"
+  Sql += "column label                   format a25         heading 'Label'\n"
+  Sql += "column path                    format a40         heading 'Path'\n"
+  Sql += "column offline_disks           format 99999       heading 'Offline|Disks'\n"
+  Sql += "column redundancy              format a25         heading 'Redundancy'\n"
+  Sql += "column pct_used                format 999         heading 'PCT|Used'\n"
+  Sql += "column pct_free                format 999         heading 'PCT|Free'\n"
+  Sql += "column voting                  format a6          heading 'Voting|Disk'\n"
+  Sql += "column raw_gb                  format 9999999999  heading 'Raw Total|GB'\n"
+  Sql += "column usable_total_gb         format 9999999999  heading 'Real Total|GB'\n"
+  Sql += "column usable_used_gb          format 9999999999  heading 'Real Used|GB'\n"
+  Sql += "column usable_free_gb          format 9999999999  heading 'Real Free|GB'\n"
+  Sql += "column required_mirror_free_gb format 9999999999  heading 'Required|Mirror Free|GB'\n"
+  Sql += "column usable_file_gb          format 9999999999  heading 'Usable File|GB'\n"
+  Sql += "\n"
+  Sql += "BREAK ON REPORT\n"
+  Sql += "COMPUTE SUM OF raw_gb                  ON REPORT\n"
+  Sql += "COMPUTE SUM OF usable_total_gb         ON REPORT\n"
+  Sql += "COMPUTE SUM OF usable_used_gb          ON REPORT\n"
+  Sql += "COMPUTE SUM OF usable_free_gb          ON REPORT\n"
+  Sql += "COMPUTE SUM OF required_mirror_free_gb ON REPORT\n"
+  Sql += "COMPUTE SUM OF usable_file_gb          ON REPORT\n"
+  Sql += "\n"
+  Sql += "    SELECT " + SqlHeader + "\n"
+  Sql += "           name\n"
+  Sql += "         , INITCAP(state) state\n"
+  Sql += "         , INITCAP(type) type\n"
+  Sql += "         , sector_size                                                                                                                             sector\n"
+  Sql += "         , block_size                                                                                                                              block\n"
+  Sql += "         , allocation_unit_size                                                                                                                    au\n"
+  Sql += "         , round(total_mb/1024,2)                                                                                                                  raw_gb\n"
+  Sql += "         , round((DECODE(TYPE, 'HIGH', 0.3333 * total_mb,                'NORMAL', .5 * total_mb, total_mb))/1024,2)                               usable_total_gb\n"
+  Sql += "         , round((DECODE(TYPE, 'HIGH', 0.3333 * (total_mb - free_mb),    'NORMAL', .5 * (total_mb - free_mb), (total_mb - free_mb)))/1024,2)       usable_used_gb\n"
+  Sql += "         , round((DECODE(TYPE, 'HIGH', 0.3333 * free_mb,                 'NORMAL', .5 * free_mb, free_mb))/1024,2)                                 usable_free_gb\n"
+  Sql += "         , round((DECODE(TYPE, 'HIGH', 0.3333 * required_mirror_free_mb, 'NORMAL', .5 * required_mirror_free_mb, required_mirror_free_mb))/1024,2) required_mirror_free_gb\n"
+  Sql += "         , round(usable_file_mb/1024,2)                                                                                                            usable_file_gb\n"
+  Sql += "         , round((total_mb - free_mb)/total_mb,2)*100                                                                                              pct_used\n"
+  Sql += "         , round(free_mb/total_mb,2)*100                                                                                                           pct_free\n"
+  Sql += "         , offline_disks\n"
+  Sql += "         , voting_files voting\n"
+  Sql += "    FROM v$asm_diskgroup\n"
+  Sql += "   WHERE total_mb != 0\n"
+  Sql += "ORDER BY state;"
+
+  Sql = Sql.strip()
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+  else:
+    # Discover all running database instances and add them to the list.
+    Proc = Popen([Ps, '-ef'], bufsize=1, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
+    
+    # Stderr is just a placeholder. We redirected stderr to stdout as follows 'stderr=STDOUT'.
+    (Stdout,Stderr) = Proc.communicate()
+    Stdout = Stdout.strip()
+                       
+    AsmSid = ''                   
+    for Line in Stdout.split('\n'):
+      (Splt) = Line.split()
+      Uid, Pid, Ppid, C, Stime, Tty, Time, Cmd = Splt[0], Splt[1], Splt[2], Splt[3], Splt[4], Splt[5], Splt[6] , Splt[7]
+      
+      if ((Cmd.find('asm_pmon_+ASM', 0, 13)) >= 0):
+        AsmSid = Cmd[9:]
+      else:
+        if ((Cmd.find('ora_pmon_+ASM', 0, 13)) >= 0):
+          AsmSid = Cmd[9:]
+        else:
+          continue
+    
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (AsmSid != ''):
+      (OracleSid, OracleHome) = SetOracleEnv(AsmSid)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

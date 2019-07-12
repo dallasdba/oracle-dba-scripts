@@ -1,0 +1,803 @@
+#!/bin/env python
+
+##################################################################################################
+#  Name:        checkdb                                                                          #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Verifies database compliance with CBRE policies & Oracle best practices.         #
+#                                                                                                #
+#  Usage: checkdb [Options]                                                                      #
+#                                                                                                #
+#  usage: checkdb [options]                                                                      #
+#                                                                                                #
+#  options:                                                                                      #
+#    -a,            run a checkdb using this list of application types, ex. exadata,app1,app2    #
+#    -s,            show application types defined in the checkdb.ini file.                      #
+#    -h, --help     show this help message and exit                                              #
+#    -v Verbose     Vervose output                                                               #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 08/21/2012 1.00 Randy Johnson    Initial release.                                              #
+# 11/12/2012 1.10 Randy Johnson    Fix for "SP2-0027: Input is too long (> 2499 characters)"     #
+#                                  caused by SQL line length exceeding the limit. Put each parm  #
+#                                  in the where clause on a separate line.                       #
+#                                                                                                #
+# Todo's                                                                                         #
+# Add config_backup checks.                                                                      #
+#                                                                                                #
+#                                                                                                #
+#                                                                                                #
+##################################################################################################
+
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+import signal
+import traceback
+
+from datetime     import datetime
+from sys          import exit, argv, stdout, exc_info, path, version_info
+from optparse     import OptionParser
+from subprocess   import Popen, PIPE, STDOUT, call
+from decimal      import *
+from os.path      import exists, basename, dirname
+from os           import environ
+from re           import search
+from re           import match
+from re           import sub
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from Oracle       import GetDbState
+from Oracle       import RunSqlplus
+from Oracle       import LoadOratab
+from Oracle       import SetOracleEnv
+from Oracle       import FormatNumber
+
+if (version_info[0] >= 3):
+  from configparser import SafeConfigParser
+else:
+  from ConfigParser import SafeConfigParser
+
+
+# For handling termination in stdout pipe; ex: when you run: oerrdump | head
+signal(SIGPIPE, SIG_DFL)
+
+# --------------------------------------
+# ---- Function Definitions ------------
+# --------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : PrintDbInfo()
+# Desc: Prints a dump of the DbInfo variable.
+# Args: DbInfo
+# Retn:
+#---------------------------------------------------------------------------
+def PrintDbInfo(DbInfo):
+  print('\n----------------------------------------------------------------------')
+  print('-- Active Database Parameters ----------------------------------------')
+  print('----------------------------------------------------------------------')
+  print('Database Parameter                      Value')
+  print('--------------------------------------  ------------------------------')
+  for Parm in sorted(DbInfo.keys()):
+    if (Parm != 'Status'):
+      print('%-40s %-40s' % (Parm, DbInfo[Parm]))
+  print('----------------------------------------------------------------------')
+  print('-- End of Report: Active Database Parameters -------------------------')
+  print('----------------------------------------------------------------------\n')
+  return
+# ---------------------------------------------------------------------------
+# End PrintDbInfo()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : GetDbInfo()
+# Desc: Calls sqlplus and runs queries to collect database information from
+#       the database.
+# Args: Oracle SID, ParmList
+# Retn: DbInfo
+#---------------------------------------------------------------------------
+def GetDbInfo(Sid, ParmList):
+  DbInfo     = {}
+  ParmString = ''
+  ParmQry    = ''
+  BackupQry  = ''
+  PreQry     = ''
+  PostQry    = ''
+
+  # Additional parameters...
+  ParmList.append('db_name')
+  ParmList.append('db_unique_name')
+  ParmList.append('service_names')
+  ParmList.append('db_domain')
+  ParmList.append('db_cache_size')
+  ParmList.append('cpu_count')
+  ParmList.append('compatible')
+  ParmList.append('resource_manager_plan')
+  ParmList.append('streams_pool_size')
+  ParmList.append('java_pool_size')
+  ParmList.append('large_pool_size')
+  ParmList.append('pga_aggregate_target')
+  ParmList.append('statistics_level')
+  ParmList.append('memory_target')
+  ParmList.append('memory_max_target')
+  ParmList.append('sga_max_size')
+  ParmList.append('sga_target')
+  ParmList.append('shared_pool_size')
+  ParmList.append('db_create_file_dest')
+  ParmList.append('db_recovery_file_dest')
+  ParmList.append('db_recovery_file_dest_size')
+
+  ###! ParmString = "'" + join(ParmList, '\',\'') + "'"
+  ParmString = "'" + '\',\n                     \''.join(ParmList) + "'"
+
+  PreQry  = "set lines 2000"                                                + '\n'
+  PreQry += "set pages 0"                                                   + '\n'
+  PreQry += "col name  format a50"                                          + '\n'
+  PreQry += "col value format a70"                                          + '\n'
+  PreQry += "col bytes format 9999999999999999999999999999"                 + '\n'
+  PreQry += "set feedback off"                                              + '\n'
+  PreQry += "set echo off"                                                  + '\n'
+  PreQry += "alter session set nls_date_format='yyyy-mm-dd hh24:mi:ss';"    + '\n'
+
+  ParmQry += "/* This query returns database instance parameters */"         + '\n'
+  ParmQry += "SELECT '" + Sid + "' ||'~'||"                                  + '\n'
+  ParmQry += "       i.ksppinm  ||'~'|| "                                    + '\n'
+  ParmQry += "       sv.ksppstvl"                                            + '\n'
+  ParmQry += "  FROM sys.x$ksppi  i,"                                        + '\n'
+  ParmQry += "       sys.x$ksppsv sv"                                        + '\n'
+  ParmQry += " WHERE  i.indx = sv.indx"                                      + '\n'
+  ParmQry += "   AND i.ksppinm in (" + ParmString + ");"                     + '\n'
+
+  # current_sga_size
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'current_sga_usage'||'~'||"
+  ParmQry +=        "sum(value)"
+  ParmQry += "  FROM sys.v$sga;" + '\n'
+
+  # Connected Instance
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'instance_name'||'~'||"
+  ParmQry +=        "instance_name"
+  ParmQry += "  FROM sys.v$instance;" + '\n'
+
+  # Database Version
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'db_version'||'~'||"
+  ParmQry +=        "banner" + '\n'
+  ParmQry += "  FROM sys.v$version" + '\n'
+  ParmQry += " WHERE  banner like 'Oracle Database %';" + '\n'
+
+  # Storage for data files
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'datafile_bytes'||'~'||"
+  ParmQry +=         "sum(bytes)"
+  ParmQry +=  " FROM dba_data_files;" + '\n'
+
+  # Storage for temp files
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'tempfile_bytes'||'~'||"
+  ParmQry +=         "sum(bytes)"
+  ParmQry +=  " FROM dba_temp_files;" + '\n'
+
+  # Storage for redo logs
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'redofile_bytes'||'~'||"
+  ParmQry +=         "sum(bytes)"
+  ParmQry +=  " FROM v$log;" + '\n'
+
+  # Storage for controlfiles
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'controlfile_bytes'||'~'|| "
+  ParmQry +=         "sum(block_size*file_size_blks)"
+  ParmQry +=  " FROM v$controlfile;" + '\n'
+
+  # Total storage (datafiles + tempfiles + redo logs + controlfiles)
+  ParmQry += "SELECT '" + Sid + "' ||'~total_storage~'|| "                   + '\n'
+  ParmQry += "        (dfiles.bytes + tfiles.bytes + "
+  ParmQry +=         "rfiles.bytes + cfiles.bytes)"                          + '\n'
+  ParmQry += "  FROM (select 'a' col1, sum(bytes) bytes"
+  ParmQry +=         " FROM dba_data_files)                     dfiles,"     + '\n'
+  ParmQry += "       (SELECT 'a' col1, sum(bytes) bytes"
+  ParmQry +=         " FROM dba_temp_files)                     tfiles,"     + '\n'
+  ParmQry += "       (SELECT 'a' col1, sum(bytes) bytes"
+  ParmQry +=         " FROM v$log)                              rfiles,"     + '\n'
+  ParmQry += "       (SELECT 'a' col1, "
+  ParmQry +=        "sum(block_size*file_size_blks) bytes"
+  ParmQry +=         " FROM v$controlfile)  cfiles"                          + '\n'
+  ParmQry += " WHERE dfiles.col1 = tfiles.col1"                              + '\n'
+  ParmQry += "   AND dfiles.col1 = rfiles.col1"                              + '\n'
+  ParmQry += "   AND dfiles.col1 = cfiles.col1;"                             + '\n'
+
+  # instance_status
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'instance_status'||'~'||status"                         + '\n'
+  ParmQry += "  FROM sys.v$instance;"                                        + '\n'
+
+  # dbid
+  ParmQry += "SELECT '" + Sid + "'||'~'||"
+  ParmQry +=        "'dbid'||'~'||dbid"                                      + '\n'
+  ParmQry += "  FROM sys.v$database;"                                        + '\n'
+
+  ###~ $UserCheckSQL         = "select count(*) from dba_users where username='CVBK'";
+  # backup_user_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_user_check'||'~'||count(*)"                   + '\n'
+  BackupQry += "  FROM sys.user$"                                            + '\n'
+  BackupQry += " WHERE name = 'CVBK';"                                       + '\n'
+
+  ###~ $PasswordCheckSQL     = "select count(*) from sys.user\$ where name='CVBK' and password='838DE34A7BC42C60'";
+  # backup_password_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_password_check'||'~'||count(*)"               + '\n'
+  BackupQry += "  FROM sys.user$"                                            + '\n'
+  BackupQry += " WHERE name = 'CVBK'"                                        + '\n'
+  BackupQry += "   AND password='838DE34A7BC42C60';"                         + '\n'
+
+  ###~ $SelectDatabaseSQL    = "select count(*) from dba_tab_privs where grantee='CVBK' and owner='SYS' and privilege='SELECT' and table_name='V_\$DATABASE'";
+  # backup_database_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_database_check'||'~'||count(*)"               + '\n'
+  BackupQry += "  FROM dba_tab_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND owner='SYS'"                                          + '\n'
+  BackupQry += "   AND privilege='SELECT'"                                   + '\n'
+  BackupQry += "   AND table_name='V_$DATABASE';"                            + '\n'
+
+  ###~ $SelectDatafileSQL    = "select count(*) from dba_tab_privs where grantee='CVBK' and owner='SYS' and privilege='SELECT' and table_name='V_\$DATAFILE'";
+  # backup_datafile_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_datafile_check'||'~'||count(*)"               + '\n'
+  BackupQry += "  FROM dba_tab_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND owner='SYS'"                                          + '\n'
+  BackupQry += "   AND privilege='SELECT'"                                   + '\n'
+  BackupQry += "   AND table_name='V_$DATAFILE';"                            + '\n'
+
+  ###~ $SelectTablespacesSQL = "select count(*) from dba_tab_privs where grantee='CVBK' and owner='SYS' and privilege='SELECT' and table_name='DBA_TABLESPACES'";
+  # backup_tablespace_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_tablespace_check'||'~'||count(*)"             + '\n'
+  BackupQry += "  FROM dba_tab_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND owner='SYS'"                                          + '\n'
+  BackupQry += "   AND privilege='SELECT'"                                   + '\n'
+  BackupQry += "   AND table_name='DBA_TABLESPACES';"                        + '\n'
+
+  ###~ $SelectArchiveDestSQL = "select count(*) from dba_tab_privs where grantee='CVBK' and owner='SYS' and privilege='SELECT' and table_name='V_\$ARCHIVE_DEST'";
+  # backup_archivedest_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_archivedest_check'||'~'||count(*)"            + '\n'
+  BackupQry += "  FROM dba_tab_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND owner='SYS'"                                          + '\n'
+  BackupQry += "   AND privilege='SELECT'"                                   + '\n'
+  BackupQry += "   AND table_name='V_$ARCHIVE_DEST';"                        + '\n'
+
+  ###~ $SelectAnyTableSQL    = "select count(*) from dba_sys_privs where grantee='CVBK' and privilege='SELECT ANY TABLE'";
+  # backup_select_any_table_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_select_any_table_check'||'~'||count(*)"       + '\n'
+  BackupQry += "  FROM dba_sys_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND privilege='SELECT ANY TABLE';"                        + '\n'
+
+  ###~ $AlterSystemSQL       = "select count(*) from dba_sys_privs where grantee='CVBK' and privilege='ALTER SYSTEM'";
+  # backup_alter_system_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_alter_system_check'||'~'||count(*)"           + '\n'
+  BackupQry += "  FROM dba_sys_privs"                                        + '\n'
+  BackupQry += " WHERE grantee='CVBK'"                                       + '\n'
+  BackupQry += "   AND privilege='ALTER SYSTEM';"                            + '\n'
+
+  ###~ $SysDBASQL            = "select COUNT(*) from v\$pwfile_users where username='CVBK' and SYSDBA='TRUE'";
+  # backup_pwfile_check
+  BackupQry += "SELECT '" + Sid + "'||'~'||"
+  BackupQry +=        "'backup_pwfile_check'||'~'||count(*)"                 + '\n'
+  BackupQry += "  FROM v$pwfile_users"                                       + '\n'
+  BackupQry += " WHERE username='CVBK'"                                      + '\n'
+  BackupQry += "   AND sysdba='TRUE';"                                       + '\n'
+
+  PostQry += "EXIT" + '\n'
+  Queries = PreQry + ParmQry + BackupQry + PostQry
+
+  # Fetch parameters from the database
+  (Stdout) = RunSqlplus(Queries, ErrChk)
+
+  # remove leading/trailing whitespace
+  Stdout = Stdout.strip()
+
+  DbInfo['Status'] = 'Success'
+  for line in Stdout.split('\n'):
+    if (line.count('~') == 2):
+      (Sid, Parm, Value) = line.split('~')
+      if (Sid == environ['ORACLE_SID']):
+        DbInfo[Parm] = Value
+
+  return(DbInfo)
+# ---------------------------------------------------------------------------
+# End GetDbInfo()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : CheckActualParms()
+# Desc: Calls sqlplus and runs queries to collect database parameter
+#       settings.
+# Args: ParmsDict
+# Retn: ActualParms
+#---------------------------------------------------------------------------
+def CheckActualParms(Sid, ParmsList):
+  ActualParms = {}
+  ParmString = "'" + join(ParmsList, '\',\'') + "'"
+
+  ParmQry  = "set lines 2000"                                                + '\n'
+  ParmQry += "set pages 0"                                                   + '\n'
+  ParmQry += "col name  format a50"                                          + '\n'
+  ParmQry += "col value format a70"                                          + '\n'
+  ParmQry += "col bytes format 9999999999999999999999999999"                 + '\n'
+  ParmQry += "set feedback off"                                              + '\n'
+  ParmQry += "set echo off"                                                  + '\n'
+  ParmQry += "alter session set nls_date_format='yyyy-mm-dd hh24:mi:ss';"    + '\n'
+  ParmQry += "/* This query returns database instance parameters */"         + '\n'
+  ParmQry += "SELECT '" + Sid + "' ||'~'||"                                  + '\n'
+  ParmQry += "       i.ksppinm  ||'~'|| "                                    + '\n'
+  ParmQry += "       sv.ksppstvl"                                            + '\n'
+  ParmQry += "  FROM sys.x$ksppi  i,"                                        + '\n'
+  ParmQry += "       sys.x$ksppsv sv"                                        + '\n'
+  ParmQry += " WHERE  i.indx = sv.indx"                                      + '\n'
+  ParmQry += "   AND i.ksppinm in (" + ParmString + ");"                     + '\n'
+  ParmQry += "EXIT"                                                          + '\n'
+
+  # Fetch parameters from the database
+  try:
+    proc = Popen([Sqlplus, '-s', '/', 'AS', 'SYSDBA'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False)
+    (Stdout, SqlErr) = proc.communicate(ParmQry)
+  except:
+    formatExceptionInfo()
+    print('Failed to connect to database: ' + Sid + ' (database may be shutdown)')
+    return(proc.returncode)
+
+  # Check for sqlplus errors
+  # Components are installed applications/components such as sqlplus, import, export, rdbms, network, ...
+  # ComponentList contains a list of all components for which the error code will be searched.
+  # For example a component of rdbms will result in ORA-nnnnn errors being included in the search.
+  # ALL_COMPONENTS is an override in the ErrorCheck function that results in *all* installed components
+  # being selected. Searching all component errors is pretty fast so for now we'll just search them all.
+  # -------------------------------------------------------------------------------------------------------
+  #ComponentList = ['sqlplus','rdbms','network']
+  ComponentList = ['ALL_COMPONENTS']
+  (rc, ErrorStack) = ErrorCheck(Stdout, ComponentList)
+  if (rc != 0):
+    #ActualParms['Status'] = 'Failure'
+    PrintError(ErrorStack)
+    print(' Error Retrieving info from ' + Sid + '.')
+  else:
+    #DbInfo['Status'] = 'Success'
+    for line in Stdout.split('\n'):
+      (Sid, Parm, Value) = line.split('~')
+      if (Sid == environ['ORACLE_SID']):
+        ActualParms[Parm] = Value
+  return(ActualParms)
+# ---------------------------------------------------------------------------
+# End CheckActualParms()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : ReportDbInfo()
+# Desc: Prints a detailed report of database configuration information.
+# Args: DbInfo
+# Retn: Report Text
+#---------------------------------------------------------------------------
+def ReportDbInfo(DbInfo):
+  Report = ''
+  FirstLoop = True
+  if (DbInfo['Status'] == 'Success'):
+    memory_max_target = int(DbInfo['memory_max_target'])
+    memory_target     = int(DbInfo['memory_target'])
+    sga_max_size      = int(DbInfo['sga_max_size'])
+    sga_target        = int(DbInfo['sga_target'])
+    shared_pool_size  = int(DbInfo['shared_pool_size'])
+    statistics_level  = DbInfo['statistics_level'].lower()
+
+    if (memory_max_target > 0 and memory_target > 0):
+      MemoryManagement = 'AMM'
+    elif (sga_target > 0 and (statistics_level == 'typical' or statistics_level == 'all')):
+      MemoryManagement = 'ASMM'
+    else:
+      MemoryManagement = 'None'
+
+    db_name                    = DbInfo['db_name']
+    db_unique_name             = DbInfo['db_unique_name']
+    db_domain                  = DbInfo['db_domain']
+    db_version                 = DbInfo['db_version']
+    resource_manager_plan      = DbInfo['resource_manager_plan']
+    cpu_count                  = DbInfo['cpu_count']
+    instance_name              = DbInfo['instance_name']
+    statistics_level           = DbInfo['statistics_level']
+    db_create_file_dest        = DbInfo['db_create_file_dest']
+    db_recovery_file_dest      = DbInfo['db_recovery_file_dest']
+    db_recovery_file_dest_size = FormatNumber(DbInfo['db_recovery_file_dest_size'] )
+    memory_max_target          = FormatNumber(DbInfo['memory_max_target']          )
+    memory_target              = FormatNumber(DbInfo['memory_target']              )
+    sga_max_size               = FormatNumber(DbInfo['sga_max_size']               )
+    sga_target                 = FormatNumber(DbInfo['sga_target']                 )
+    pga_aggregate_target       = FormatNumber(DbInfo['pga_aggregate_target']       )
+    db_cache_size              = FormatNumber(DbInfo['db_cache_size']              )
+    shared_pool_size           = FormatNumber(DbInfo['shared_pool_size']           )
+    streams_pool_size          = FormatNumber(DbInfo['streams_pool_size']          )
+    large_pool_size            = FormatNumber(DbInfo['large_pool_size']            )
+    java_pool_size             = FormatNumber(DbInfo['java_pool_size']             )
+    current_sga_usage          = FormatNumber(DbInfo['current_sga_usage']          )
+    tempfile_bytes             = FormatNumber(DbInfo['tempfile_bytes']             )
+    redofile_bytes             = FormatNumber(DbInfo['redofile_bytes']             )
+    controlfile_bytes          = FormatNumber(DbInfo['controlfile_bytes']          )
+    total_storage              = FormatNumber(DbInfo['total_storage']              )
+    datafile_bytes             = FormatNumber(DbInfo['datafile_bytes']             )
+    tempfile_bytes             = FormatNumber(DbInfo['tempfile_bytes']             )
+    controlfile_bytes          = FormatNumber(DbInfo['controlfile_bytes']          )
+    redofile_bytes             = FormatNumber(DbInfo['redofile_bytes']             )
+
+    # Extract the database version from: "Oracle Database 11g Enterprise Edition Release 11.2.0.3.0 - 64bit Production"
+    db_version = db_version[db_version.find('Release')+8:]
+    db_version = db_version.split(' ')[0]
+
+    Report += ' General Information:                                          Resource Management:'
+    Report += '\n ------------------------------------------------------------  ------------------------------------------------------------'
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('db_version',     db_version,    'cpu_count', cpu_count                         )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('db_name',        db_name,       'resource_manager_plan', resource_manager_plan )
+    Report += '\n %-28s = %29s              ' % ('db_unique_name', db_unique_name                                                )
+    Report += '\n %-28s = %29s              ' % ('instance_name',  instance_name                                                 )
+    Report += '\n %-28s = %29s              ' % ('db_domain',      db_domain                                                     )
+
+    Report += '\n\n Memory Configuration:                                         Memory Pool Sizes:'
+    Report += '\n ------------------------------------------------------------  ------------------------------------------------------------'
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('Memory Management',    MemoryManagement,     'db_cache_size',     db_cache_size     )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('statistics_level',     statistics_level,     'shared_pool_size',  shared_pool_size  )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('sga_target',           sga_target,           'streams_pool_size', streams_pool_size )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('sga_max_size',         sga_max_size,         'large_pool_size',   large_pool_size   )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('memory_target',        memory_target,        'java_pool_size',    java_pool_size    )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('memory_max_target',    memory_max_target,    'current_sga_usage', current_sga_usage )
+    Report += '\n %-28s = %29s              ' % ('pga_aggregate_target', pga_aggregate_target)
+
+    Report += '\n\n Storage Configuration:                                        Storage Utilization:'
+    Report += '\n ------------------------------------------------------------  ------------------------------------------------------------'
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('db_create_file_dest',        db_create_file_dest,        'Datafiles',       datafile_bytes   )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('db_recovery_file_dest',      db_recovery_file_dest,      'Tempfiles',       tempfile_bytes   )
+    Report += '\n %-28s = %29s  %-28s = %29s' % ('db_recovery_file_dest_size', db_recovery_file_dest_size, 'Redologs',        redofile_bytes   )
+    Report += '\n %-28s   %29s  %-28s = %29s' % ('',                           '',                         'Controlfiles',    controlfile_bytes)
+    Report += '\n %-28s   %29s  %-28s = %29s' % ('',                           '',                         'Total Storage',   total_storage    )
+  return(Report)
+# ---------------------------------------------------------------------------
+# End ReportDbInfo()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : PrintOptions()
+# Desc: Prints the command line options specified.
+# Args:
+# Retn:
+#---------------------------------------------------------------------------
+def PrintOptions():
+  print('\n-------------------------------------------------------------------')
+  print('-- Command Line Options -------------------------------------------')
+  print('-------------------------------------------------------------------')
+  print(' AppType     = ', Options.AppType.split(','))
+  print(' ShowTypes   = ', Options.ShowTypes)
+  print(' ORACLE_SID  = ', Sid)
+  print('-------------------------------------------------------------------')
+  print('-- End of Report: Command Line Options ----------------------------')
+  print('-------------------------------------------------------------------\n')
+# ---------------------------------------------------------------------------
+# End PrintOptions()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : ReportParms()
+# Desc: Prints a report showing the database parameters that do not conform
+#       to the provisioning plan.
+# Args: FailedParmsDD
+# Retn:
+#---------------------------------------------------------------------------
+def ReportParms(AppType, ActualParms, RecommendedParms):
+  Report    = ''
+  ParmsList = []
+
+  for Parm in sorted(RecommendedParms.keys()):
+    RecommendedParmVal = RecommendedParms[Parm]
+    RecommendedParmVal = RecommendedParmVal.strip().upper()
+    if (RecommendedParmVal.count('-') > 0):
+      RecommendedParmVal = sub(r'\s', '', RecommendedParmVal)
+      RecommendedParmVal = join(RecommendedParmVal.split('-'), '-')
+    elif (RecommendedParmVal.count(',') > 0):
+    	RecommendedParmVal = sub(r'\s', '', RecommendedParmVal)
+    	RecommendedParmVal = join(RecommendedParmVal.split(','), ',')
+
+    if(Parm in list(ActualParms.keys())):
+      ActualParmVal = ActualParms[Parm]
+      ActualParmVal = ActualParmVal.strip().upper()
+    else:
+      ActualParmVal = ''
+    ParmsList.append([Parm, RecommendedParmVal, ActualParmVal])
+
+  if (len(ParmsList) > 0):
+    Report += '\n All Parameters for: ' + AppType + '\n\n'
+    Report += ' Parameter                                                                  Actual                              Recommended\n'
+    Report += ' ----------------------------------------  ---------------------------------------  ---------------------------------------\n'
+    for (Parm, ActualParmVal, RecommendedParmVal) in ParmsList:
+      Report += ' %-40s  %39s  %39s\n' % (Parm, RecommendedParmVal, ActualParmVal)
+  return(Report)
+# ---------------------------------------------------------------------------
+# End ReportParms()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : ReportFailedParms()
+# Desc: Prints a report showing the database parameters that do not conform
+#       to the provisioning plan.
+# Args: FailedParmsDD
+# Retn:
+#---------------------------------------------------------------------------
+def ReportFailedParms(AppType, ActualParms, RecommendedParms):
+  Report      = ''
+  FailureList = []
+
+  for Parm in sorted(RecommendedParms.keys()):
+    #print RecommendedParm
+    RecommendedParmVal     = RecommendedParms[Parm]
+    RecommendedParmVal     = RecommendedParmVal.strip().upper()
+    RecommendedParmValMin  = ''
+    RecommendedParmValMax  = ''
+    RecommendedParmValList = []
+    Delimiter              = ''
+    DashDelimCount         = RecommendedParmVal.count('-')
+    CommaDelimCount        = RecommendedParmVal.count(',')
+
+    if (DashDelimCount > 0 and CommaDelimCount > 0):
+    	print('Invalid value for', Parm, '=', RecommendedParmVal)
+    else:
+      if (DashDelimCount == 1):
+        Delimiter = '-'
+      elif (CommaDelimCount >= 1):
+        Delimiter = ','
+
+    if (DashDelimCount):
+      RecommendedParmVal = sub(r'\s', '', RecommendedParmVal)
+      (RecommendedParmValMin,RecommendedParmValMax) = RecommendedParmVal.split(Delimiter)
+      RecommendedParmValMin = Decimal(RecommendedParmValMin.strip())
+      RecommendedParmValMax = Decimal(RecommendedParmValMax.strip())
+      RecommendedParmVal    = ''
+    elif (CommaDelimCount):
+      RecommendedParmVal = sub(r'\s', '', RecommendedParmVal)
+      RecommendedParmValList = RecommendedParmVal.split(Delimiter)
+      RecommendedParmVal     = ''
+    else:
+      try:
+        RecommendedParmVal = Decimal(RecommendedParmVal)
+      except:
+        pass
+
+    if (Parm in list(ActualParms.keys())):
+      ActualParmVal = ActualParms[Parm]
+      ActualParmVal = ActualParmVal.strip().upper()
+      try:
+        ActualParmVal = Decimal(ActualParmVal)
+      except:
+        pass
+    else:
+      ActualParmVal = ''
+
+    if (DashDelimCount): # if the recommended value is a low-high numeric range...
+      try:
+        ActualParmVal = Decimal(ActualParmVal)
+      except:
+        pass
+      if (not ((ActualParmVal >= RecommendedParmValMin) and (ActualParmVal <= RecommendedParmValMax))):
+        FailureList.append([Parm, RecommendedParmVal, ActualParmVal])
+
+    elif (CommaDelimCount): # if the recommended value is a list (a,b,c) of values...
+      if (not (ActualParmVal in RecommendedParmValList)):
+      	RecommendedParmVal =  ','.join(RecommendedParmValList)
+      	FailureList.append([Parm, RecommendedParmVal, ActualParmVal])
+
+    else: # if the recommended value requires an exact match...
+      if (RecommendedParmVal != ActualParmVal):
+        FailureList.append([Parm, RecommendedParmVal, ActualParmVal])
+
+  if (len(FailureList) > 0):
+    Report += ' Failed Parameters: ' + AppType
+    Report += '\n\n Parameter                                                                  Actual                              Recommended'
+    Report += '\n ----------------------------------------  ---------------------------------------  ---------------------------------------'
+    for (RecommendedParm, RecommendedParmVal, ActualParmVal) in FailureList:
+      Report += '\n %-40s  %39s  %39s' % (RecommendedParm, ActualParmVal, RecommendedParmVal)
+  return(Report)
+# ---------------------------------------------------------------------------
+# End ReportFailedParms()
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Def : MapToSection()
+# Desc: Converts section names received on the command line so the text
+#       case matches the case of the sections in the ini file. This
+#       effectively makes section lookup case in-sensitive.
+# Args: Section name received on the command line from the -f optoin.
+# Retn: newSection - text case corrected section name.
+#---------------------------------------------------------------------------
+def MapToSection(optSection):
+  SectionMap = []
+  Sections   = []
+
+  Sections = Config.sections()
+  for iniSection in Sections:
+    #print optSection, iniSection
+    if(optSection.upper() == iniSection.upper()):
+      return iniSection
+
+  return ''
+# ---------------------------------------------------------------------------
+# End MapToSection
+# ---------------------------------------------------------------------------
+
+# --------------------------------------
+# ---- End Function Definitions --------
+# --------------------------------------
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):      # if this is true, then this script is *not* being imported by another Python script.
+  Interactive   = stdout.isatty()
+  Cmd           = basename(argv[0])
+  CmdPrefix     = Cmd.split('.')[0]
+  CmdDesc       = 'Check Database'
+  ConfigDir     = '/home/oracle/dba/etc'
+  Version       = '2.00'
+  OratabFile    = '/etc/oratab'
+  Config        = SafeConfigParser()
+  Now           = datetime.now()
+  Report        = ''
+  ErrChk        = False
+  CheckDbIni    = ConfigDir + '/' + CmdPrefix + '.ini'
+
+  try:
+    # The next two lines check to see if there is a config file (and that it
+    # can be opened for read). If not then throw and exception and exit(1).
+    IniFile = open(CheckDbIni,'rb')
+    IniFile.close()
+    Config.read(CheckDbIni)
+  except:
+    formatExceptionInfo()
+    print('Cannot read configuration file: ' + CheckDbIni)
+    exit(1)
+
+  # Process command line options
+  # ----------------------------------
+  ArgParser = OptionParser()
+  ArgParser.add_option("-a",                       dest="AppType",   default='exadata,peoplesoft', type=str, help="Type of application check (PeopleSoft,Exadata,...)", metavar='AppType')
+  ArgParser.add_option("-s", action="store_true", dest="ShowTypes", default=False,                          help="Display application types available.")
+  ArgParser.add_option("-v", action="store_true", dest="Verbose",   default=False,                          help="Verbose mode.")
+  Options, args = ArgParser.parse_args()
+  argc = len(args)
+
+  print('\n============================================================================================================================')
+  print('%s: Release %s Production - Database Check utility for Oracle 11g %44s' % (CmdDesc, Version, Now.strftime("%Y-%m-%d %H:%M")))
+  print('============================================================================================================================')
+
+  # Show all Sections, Options, Values in the ini file.
+  if (Options.ShowTypes == True):
+    iniSections = sorted(Config.sections())
+    print(' Configured Application Types from: ' + basename(CheckDbIni) + '\n')
+    Sections = Config.sections()
+    for Section in iniSections:
+      print(' [' + Section + ']')
+      for Option in sorted(Config.options(Section)):
+        Value = Config.get(Section, Option)
+        print(' %-40s = %-40s' % (Option, Value))
+      print('')
+    exit(0)
+  
+  if (argc >= 1):
+    Sid = args[0]
+  else:
+    try:
+      Sid = environ['ORACLE_SID']
+    except:
+      print('ORACLE_SID not set.')
+      exit(1)
+
+  # Setup the Oracle environment and setup Oracle commands.
+  # --------------------------------------------------------
+  (OracleSid, OracleHome) = SetOracleEnv(Sid)
+  if (OracleHome):
+    Sqlplus  = OracleHome + '/bin/sqlplus'
+    Tnsping  = OracleHome + '/bin/tnsping'
+
+  # Configure the application type filter. AppTypes correspond to sections in the ini file.
+  AppTypes = []
+  for AppType in Options.AppType.split(','):
+    if (AppType != ''):
+      TypeLookup = MapToSection(AppType)
+      if (TypeLookup != ''):
+        AppTypes.append(TypeLookup)
+      else:
+        print('Application type [' + AppType + '] not found in ini file and will be skipped.')
+
+  print(' ORACLE_SID   = %s' % Sid)
+  print(' ORACLE_HOME  = %s' % OracleHome)
+
+  if (len(AppTypes) >= 1):
+  	print(' Applications = %s' % ', '.join(AppTypes))
+  else:
+  	print(' Applications = <none>\n')
+  print('')
+
+
+  # Collect parameters to check from the ini file
+  # ------------------------------------------------------------
+  AllParmsToCheck = []
+  for AppType in AppTypes:
+    if AppType != 'Thresholds' and AppType != 'BackupConfig':
+      for item in Config.items(AppType):
+        AllParmsToCheck.append(item[0])         # master list of all parms (for all apps) to check
+
+  DbState = GetDbState();
+  if (DbState != 'OPEN'):
+    print('Database must be open to continue.')
+    print('Current state:', DbState)
+    exit(1)
+
+  # Login to the database and run the queries to collect metrics.
+  # -------------------------------------------------------------
+  DbInfo = GetDbInfo(Sid, AllParmsToCheck)
+
+  # Generate Reports
+  # ------------------------------------------------------------
+  # Database Info Rerport
+  Report += ReportDbInfo(DbInfo)
+
+  if (len(AppTypes) >= 1):
+    # Report Good Parameters (set to recommended values)
+    # ------------------------------------------------------------
+    if (Options.Verbose):
+      Report += '\n\n --------------------------------------------------------------------------------------------------------------------------\n'
+      for AppType in AppTypes:
+        ParmsToCheck = {}
+        for Option in sorted(Config.options(AppType)):
+          Value = Config.get(AppType, Option)
+          ParmsToCheck[Option] = Value
+        Report += ReportParms(AppType, DbInfo, ParmsToCheck)
+
+    # Report Failed Parameters (not set to recommended values)
+    # ------------------------------------------------------------
+    Report += '\n\n --------------------------------------------------------------------------------------------------------------------------\n'
+    tmp = ''
+    for AppType in AppTypes:
+      ParmsToCheck = {}
+      for Option in sorted(Config.options(AppType)):
+        Value = Config.get(AppType, Option)
+        ParmsToCheck[Option] = Value
+      tmp = ReportFailedParms(AppType, DbInfo, ParmsToCheck)
+      if (tmp != ''):
+        Report += '\n' + tmp
+      Report += '\n'
+
+  print(Report)
+  print('============================================================================================================================')
+  print('End of Report                                                                   %44s' % (Now.strftime("%Y-%m-%d %H:%M")))
+  print('============================================================================================================================')
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+

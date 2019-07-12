@@ -1,0 +1,131 @@
+#!/usr/bin/ksh
+#
+# Author: Paul Elbow, Enkitec
+#
+# Sample 11gR2 CRS resource status query script
+#
+# Description:
+#   - Returns formatted version of crs_stat -t, in tabular
+#     format, with the complete rsc names and filtering keywords
+#   - The argument, $RSC_KEY, is optional and if passed to the script, will
+#     limit the output to HA resources whose names match $RSC_KEY.
+# Requirements:
+#   - $ORA_CRS_HOME should be set in your environment
+#-----------------------------------------------------------------------------
+
+export ORA_CRS_HOME=/u01/app/11.2.0.4/grid
+AWK=/usr/bin/awk
+
+RSC_KEY=$1
+
+format_crs_status_resource='
+BEGIN {
+  FS="=";
+  ittype=empty
+}
+{
+  if ( $1 == "NAME") {
+    tname=$2
+    tx=split( $2, tsplit, ".")
+    tabrev=tsplit[tx]
+    ttype="unknown"
+    if ( tabrev == "asm" )
+      ttype="ASM"
+    if ( tabrev == "lsnr" )
+      ttype="Listener"
+    if ( tabrev == "db" )
+      ttype="Database"
+    if ( tabrev == "inst" )
+      ttype="Instance"
+    if ( tabrev == "vip" )
+      ttype="Virtual IP"
+    if ( tabrev == "ons" )
+      ttype="Ora Notif Svc"
+    if ( tabrev == "cs" )
+      ttype="Service"
+    if ( tabrev == "srv" )
+      ttype="Service"
+  }
+  if ( $1 == "TYPE") {
+    ottype=$2
+    if (ottype == "application") {
+      ottype=ttype
+      ittype=empty
+    }
+    else {
+      tx=split( $2, tsplit, ".")
+      ittype=tsplit[2]
+      if ( ittype == "asm" )
+        ottype="ASM"
+      else if ( ittype == "gsd" )
+        ottype="Gbl Svc Daemon"
+      else if ( ittype == "listener" )
+        ottype="Listener"
+      else if ( ittype == "scan_listener" )
+        ottype="SCAN Listener"
+      else if ( ittype == "scan_vip" )
+        ottype="SCAN VIP"
+      else if ( ittype == "oc4j" )
+        ottype="OC4J"
+      else if ( ittype == "eons" )
+        ottype="eons"
+      else if ( ittype == "ons" )
+        ottype="Ora Notif Svc"
+      else if ( ittype == "network" )
+        ottype="Network (VIP)"
+      else if ( ittype == "cluster_vip_net1" )
+        ottype="Cluster VIP"
+      else ottype=ittype
+    }
+  }
+  if ( $1 == "TARGET") {
+    ttarget=$2
+    tx=split( $2, targetsplit, ",")
+  }
+  if ( $1 == "STATE") {
+    if ( ittype == "asm" || ittype == "ons" || ittype == "eons" || ittype == "network" || ittype == "listener" ) {
+      stx=split( $2, statesplit, ",")
+    }
+    else {
+      tx=split( $2, tsplit, " ")
+      tstate=tsplit[1]
+      tnode=tsplit[3]
+    }
+  }
+  if ( $1 == "STATE_DETAILS") {
+    tdetail=$2
+    if ( ittype == "asm" || ittype == "ons" || ittype == "eons" || ittype == "network" || ittype == "listener" ) {
+      for (i in statesplit) {
+        tx=split( statesplit[i], tsplit, " ")
+        tstate=tsplit[1]
+        tnode=tsplit[3]
+        ttarget=targetsplit[i]
+        gsub(/ */,"",ttarget)
+        gsub(/ */,"",tstate)
+        if ( ttarget == "ONLINE" && tstate != "ONLINE" )
+          printf( "%-40s %-14s %-12s %-12s %-15s %s\n", tname, ottype, ttarget, tstate, tnode, tdetail)
+        else
+          printf( "%-40s %-14s %-12s %-12s %-15s %s\n", tname, ottype, ttarget, tstate, tnode, tdetail)
+      }
+    }
+    else {
+      if ( ttarget == "ONLINE" && tstate != "ONLINE" )
+        printf( "%-40s %-14s %-12s %-12s %-15s %s\n", tname, ottype, ttarget, tstate, tnode, tdetail)
+      else
+        printf( "%-40s %-14s %-12s %-12s %-15s %s\n", tname, ottype, ttarget, tstate, tnode, tdetail)
+    }
+  }
+}'
+# End of variable: format_crs_status_resource
+
+printf "\n\n%-40s %-14s %-12s %-12s %-15s %s\n" "Resource Name" "Resource Type" "Target" "State" "Node" "State Details"
+printf "%-40s %-14s %-12s %-12s %-15s %s\n" "----------------------------------------" "--------------" "------------" "------------" "---------------" "---------------"
+
+if [[ -z $1 ]] ; then
+  ${ORA_CRS_HOME}/bin/crsctl status resource -v | awk "${format_crs_status_resource}"
+else
+  ${ORA_CRS_HOME}/bin/crsctl status resource -v | awk "${format_crs_status_resource}" | grep -i "$1"
+fi
+printf "\n"
+exit 0
+

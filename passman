@@ -1,0 +1,525 @@
+#!/bin/env python
+
+##################################################################################################################
+#  Name:        passman                                                                                          #
+#  Author:      Randy Johnson                                                                                    #
+#  Description: Manages the DBA password file.                                                                   #
+#                                                                                                                #
+# History:                                                                                                       #
+#                                                                                                                #
+# Date       Ver. Who              Change Description                                                            #
+# ---------- ---- ---------------- ----------------------------------------------------------------------------- #
+# 10/31/2012 1.00 Randy Johnson    Initial release.                                                              #
+# 11/05/2012 1.10 Randy Johnson    Added Force (-f) option which acts as an update if password entry exists.     #
+# 12/07/2012 1.20 Randy Johnson    Changed encode/decode to use built-in string functions.                       #
+# 12/07/2012 1.30 Randy Johnson    Renamed script to passman, added better parsing for the password file.        #
+# 05/22/2013 1.31 Randy Johnson    Fixed a logic bug that was causing the -r option to delete more than it       #
+#                                  should.                                                                       #
+# 06/11/2013 1.32 Randy Johnson    Added logic to create a new .passwd file if none exists.                      #
+# 08/25/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                                     #
+# 01/05/2016 2.01 Randy Johnson    Minor bug fixes related to Python 3.x support.                                #
+# 07/13/2017 2.02 Randy Johnson    Added program description to Usage.                                           #
+# 11/10/2018 2.03 Randy Johnson    Added from base64 import b64encode which was missing.                         #
+##################################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from os         import chmod
+from os         import unlink
+from optparse   import OptionParser
+from os.path    import basename
+from os.path    import isfile
+from re         import search
+from re         import match
+from sys        import stdout
+from sys        import exit
+from sys        import argv
+from sys        import version_info
+from subprocess import Popen
+from subprocess import PIPE
+from subprocess import STDOUT
+
+# ------------------------------------------------
+# Imports that are conditional on Python Version.
+# ------------------------------------------------
+if (version_info[0] >= 3):
+  from base64 import b64decode
+  from base64 import b64encode
+
+# --------------------------------------
+# -- Function/Class Definitions --------
+# --------------------------------------
+
+# ------------------------------------------------------------
+# Function: GetPassword()
+# Desc    : Retrieve database password from the password file.
+# Args    : db_unique_name, database username
+# Retn    : If success then returns passwprd. If not return
+#           blank.
+# ------------------------------------------------------------
+def GetPassword(Name, User):
+
+  try:
+    PasswdFile = open(PasswdFilename, 'r')
+    pwdContents = PasswdFile.read()
+
+  except:
+    print('\nCannot open password file for read: %s' % PasswdFilename)
+
+  for pwdLine in pwdContents.split('\n'):
+    if (not (match(r'^\s*$', pwdLine))):               # skip blank lines
+      if (not (match(r'^\s#\s*$', pwdLine))):          # skip commented lines
+        if (pwdLine.count(':') == 2):                  # ignore lines that do not contain 2 colon's (:).
+          (pwDbname, pwUser, pwPass) = pwdLine.split(':')
+          if ((pwDbname == Name) and ( pwUser.upper() == User.upper()) and (pwPass != '')):
+            return(pwPass)
+
+  return('')
+# ------------------------------------------------------------
+# End GetPassword()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: AddPassword()
+# Desc    : Checks for existence of password being added. If
+#           it isn't already in the file add the password.
+#           Before writing the changes to the file check for
+#           an old work copy if a work copy exists this script
+#           did not end properly last time a password was
+#           added/removed. User will be prompted to choose
+#           to continue or exit so that the integrity of the
+#           password file may be verified manually. Work file
+#           is .passwd.wrk.
+# Args    : db_unique_name or hostname, username, password
+# Retn    : return(0) if success exit(1) if error.
+# ------------------------------------------------------------
+def AddPassword(Name, User, Password):
+
+  TestPassword = GetPassword(Name, User)
+  if (not Force):
+    if (TestPassword != ''):
+      print('\nPassword record already exists in password file. Password not added.')
+      exit(1)
+
+  CopyFile(PasswdFilename, WorkFilename)
+  chmod(WorkFilename, UserRO)
+
+  CopyFile(PasswdFilename, BackupFilename)
+  chmod(BackupFilename, UserRO)
+
+  try:
+    PasswdFile = open(PasswdFilename, 'r')
+    pwdContents = PasswdFile.read()
+  except:
+    print('\nCannot open password file for read: %s' % PasswdFilename)
+    print('Aborting insert.')
+    exit(1)
+
+  try:
+    PasswdFile = open(PasswdFilename, 'w')
+  except:
+    print('\nCannot open password file for write: %s' % PasswdFilename)
+    print('Aborting insert.')
+    exit(1)
+
+  for line in pwdContents.split('\n'):
+    line = line.strip()
+    if (line != ''):
+      if (line[0] != '#'):
+        if (line.count(':') == 2):
+          pwdName = line.split(':')[0]
+          pwdUser = line.split(':')[1]
+          if (Force):
+            if (pwdName == Name and pwdUser == User):
+              continue
+      try:
+        PasswdFile.write(line + '\n')
+      except:
+        print('\nError writing to: %s' % PasswdFilename)
+        print('Aborting add password.')
+        exit(1)
+
+  PasswdFile.write(Name + ':' + User + ':' + Password + '\n')
+  PasswdFile.close()
+  chmod(PasswdFilename, UserRO)
+  unlink(WorkFilename)
+  print('\nPassword added.')
+
+  return(0)
+# ------------------------------------------------------------
+# End AddPassword()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: CopyFile()
+# Desc    : Creates a copy of the password file with
+#           permissions set to UserRO "-wr-------".
+#           Overwrites any file of the same name.
+# Args    : FileToCopy (.passwd), NewFile (.passwd.bak or
+#           .passwd.wrk)
+# Retn    : return(0) if success else exit(1).
+# ------------------------------------------------------------
+def CopyFile(SrcFilename, NewFilename):
+
+  try:
+    SrcFile     = open(SrcFilename, 'r')
+    SrcContents = SrcFile.read()
+  except:
+    print('\nCannot open source file for read: %s' % SrcFilename)
+    print('Aborting file copy.')
+    exit(1)
+
+  try:
+    NewFile = open(NewFilename, 'w')
+  except:
+    print('\nCannot open new file for write: %s' % NewFilename)
+    print('Aborting file copy.')
+    exit(1)
+
+  for line in SrcContents.split('\n'):
+    if (line != ''):
+      try:
+        NewFile.write(line + '\n')
+      except:
+        print('\nError writing to new file: %s' % NewFilename)
+        print('Aborting file copy.')
+        exit(1)
+
+  NewFile.close()
+  chmod(NewFilename, UserRO)
+
+  return(0)
+# ------------------------------------------------------------
+# End CopyFile()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: RemovePassword()
+# Desc    : Removes a password from the password file.
+# Args    : Name (db_unique_name or hostname), User (username)
+# Retn    : return(0) if success else exit(1).
+# ------------------------------------------------------------
+def RemovePassword(Name, User):
+  TestPassword = GetPassword(Name, User)
+
+  if (TestPassword == ''):
+    print('\nNo entry found in password file. No changes made.')
+    return(0)
+  else:
+    CopyFile(PasswdFilename, WorkFilename)
+    chmod(WorkFilename, UserRO)
+
+    CopyFile(PasswdFilename, BackupFilename)
+    chmod(BackupFilename, UserRO)
+
+    try:
+      PasswdFile = open(PasswdFilename, 'r')
+      pwdContents = PasswdFile.read()
+    except:
+      print('\nCannot open password file for read: %s' % PasswdFilename)
+      print('Aborting insert.')
+      exit(1)
+
+    try:
+      PasswdFile = open(PasswdFilename, 'w')
+    except:
+      print('\nCannot open password file for write: %s' % PasswdFilename)
+      print('Aborting insert.')
+      exit(1)
+
+    for line in pwdContents.split('\n'):
+      pwdUser = ''
+      pwdName = ''
+      if (line != ''):
+        if (line[0] != '#'):
+          if (line.count(':') == 2):
+            pwdName = line.split(':')[0]
+            pwdUser = line.split(':')[1]
+        if (pwdName == Name and pwdUser == User):
+          continue
+        else:
+          try:
+            PasswdFile.write(line + '\n')
+          except:
+            print('\nError writing to: %s' % PasswdFilename)
+            print('Aborting delete password.')
+            exit(1)
+
+    PasswdFile.close()
+    chmod(PasswdFilename, UserRO)
+    unlink(WorkFilename)
+    print('\nPassword removed.')
+
+  return(0)
+# ------------------------------------------------------------
+# End RemovePassword()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: TransferFile()
+# Desc    : Scp's the password file to other servers.
+# Args    : HostList list of servers to transfer file to.
+# Retn    : return(0) if success else exit(1).
+# ------------------------------------------------------------
+def TransferFile(pwdFilename, hostFilename, DestDir):
+  SrcFilename  = hostFilename
+  ProcList     = []
+  HostList     = []
+
+  try:
+    hostFile = open(hostFilename, 'r')
+  except:
+    print('\nCannot open host list file for read: %s' % hostFilename)
+    exit(1)
+
+  Contents = hostFile.read()
+  for Hostline in Contents.split('\n'):
+    if (not (search(r'^\s*$', Hostline))):               # skip blank lines
+      if (not (search(r'^#.*$', Hostline))):             # skip commented lines
+        if (Hostline.count(':') >= 2):                   # ignore lines that do not contain 2 colon's (:).
+          Hostname = Hostline.split(':')[0]
+          Username = Hostline.split(':')[1]
+          Homedir  = Hostline.split(':')[2]
+          Hostname = Hostname.strip()
+          Username = Username.strip()
+          Homedir  = Homedir.strip()
+          if (( Hostname != '') and (Username != '') and (Homedir != '')):
+            HostList.append((Hostname, Username, Homedir))
+
+  for cell in HostList:
+    (Host, User, Homedir) = cell
+    Dest = Homedir + '/' + DestDir
+    proc = Popen(['/usr/bin/scp', '-p', '-q', pwdFilename, User + '@' + Host + ':' + Dest], \
+      stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
+    ProcList.append((Host,proc))
+
+  print('\n')
+  for proc in ProcList:
+    (Host, proc) = proc
+    if (not Silent):
+
+      #### Need to fix this for Python 2.4, 2.7, 3.4 cross-compatibility.
+      ###~ if (Interactive):
+      ###~   print '\r                                                               ',
+      ###~   print '\r Waiting for transfer to complete for: %s' % Host,
+      ###~   stdout.flush()
+      ###~ else:
+      ###~   print(' Waiting for extract to complete for: %s' % Host)
+
+      print(' Waiting for extract to complete for: %s' % Host)
+      # Wait for all background processes to complete.
+      proc.wait()
+  print('\n')
+
+
+  for proc in ProcList:
+    (Host, proc) = proc
+    Stdout = proc.stdout.read()
+    Stdout = Stdout.strip()
+    if (Stdout != ''):
+      print('\nPossible transfer problem for: %s. Stdout follows: %s\n' % (Host, Stdout))
+    else:
+      if (not Silent):
+        print('File successfully transferred to: %s' % Host)
+
+  return(0)
+# ------------------------------------------------------------
+# End TransferFile()
+# ------------------------------------------------------------
+
+# --------------------------------------
+# ---- End Function Definitions --------
+# --------------------------------------
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0])
+  HostFilename   = '/home/oracle/dba/etc/hostlist.txt'
+  WorkFilename   = '/home/oracle/dba/etc/.passwd.tmp'
+  BackupFilename = '/home/oracle/dba/etc/.passwd.bak'
+  PasswdFilename = '/home/oracle/dba/etc/.passwd'
+  Version        = '2.03'
+  VersionDate    = 'Sat Nov 10 09:14:59 CST 2018'
+  DevState       = 'Production'
+  CmdDesc        = 'Password Manager'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate   
+  UserRO         = int('600', 8)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nRetrieves, inserts, updates password entries into the password file.'
+  Usage += '\n\n' + Cmd
+  Usage += ' [[-a] [-c] [-f] [-r] [-s] [-t] [-u] [-p]] [[[hostname|db_unique_name username] [plain_text_password]]'
+  Usage += '\n\nExamples:'
+  Usage += '\n  Lookup a password        | ' + Cmd + ' hcmprddal sysadm'
+  Usage += '\n  Transfer password file   | ' + Cmd + ' -t'
+  Usage += '\n  Undo last change         | ' + Cmd + ' -u'
+  Usage += '\n  Add password             | ' + Cmd + ' -a hcmprddal sysadm newpassword'
+  Usage += '\n  Add a non-encoded pass.  | ' + Cmd + ' -p -a rmltr01 rman plaintextpass'
+  Usage += '\n  Add & transfer           | ' + Cmd + ' -t -a td01db01 oracle newpassword'
+  Usage += '\n  Remove password          | ' + Cmd + ' -r biprddal obidwh'
+  Usage += '\n  Remove & transfer        | ' + Cmd + ' -t -r hyppr01 oracle'
+  ArgParser = OptionParser(usage=Usage)
+
+  ArgParser.add_option("-a",  action="store_true",  dest="Add",        default=False, help="add a new password in the password file")
+  ArgParser.add_option("-c",  action="store_true",  dest="Cleanup",    default=False, help="cleanup from previously failed execution")
+  ArgParser.add_option("-f",  action="store_true",  dest="Force",      default=False, help="Overwrite existing password if one exists")
+  ArgParser.add_option("-r",  action="store_true",  dest="Remove",     default=False, help="delete a password from the password file")
+  ArgParser.add_option("-s",  action="store_true",  dest="Silent",     default=False, help="silent mode")
+  ArgParser.add_option("-t",  action="store_true",  dest="Transfer",   default=False, help="transfer password changes to other servers")
+  ArgParser.add_option("-u",  action="store_true",  dest="Undo",       default=False, help="Undo last change to password file")
+  ArgParser.add_option("-p",  action="store_true",  dest="PlainText",  default=False, help="plain text password? (default False)")
+  ArgParser.add_option("--v", action="store_true",  dest="ShowVer",    default=False, help="print version info.")
+
+  Option, Args = ArgParser.parse_args()
+  Argc = len(Args)
+
+  Add       = Option.Add
+  Cleanup   = Option.Cleanup
+  Force     = Option.Force
+  Remove    = Option.Remove
+  Silent    = Option.Silent
+  Transfer  = Option.Transfer
+  Undo      = Option.Undo
+  PlainText = Option.PlainText
+  ShowVer   = Option.ShowVer
+
+  if (ShowVer):
+    print('\n' + Banner)
+    exit(0)
+
+  # If a password file is not found then offer to create a new one.
+  if (not isfile(PasswdFilename)):
+    if (version_info[0] >= 3):
+      Response = input('\nPassword file not found. Create a new one? (Y/n): ')
+    else:
+      Response = raw_input('\nPassword file not found. Create a new one? (Y/n): ')
+    if (Response == ''):
+      Response = 'Y'
+
+    if (Response.upper() != 'Y'):
+      exit()
+    else:
+      PasswdFile = open(PasswdFilename, 'w')
+      PasswdFile.close()
+      chmod(PasswdFilename, UserRO)
+
+  if (Cleanup):
+    if (isfile(WorkFilename)):
+      unlink(WorkFilename)
+
+  if (isfile(WorkFilename)):
+    if (Silent):
+      print('\nPrevious execution was interrupted. Validate integrity of the password file and use')
+      print('the -c option to cleanup.')
+      exit()
+    else:
+      print('\nPrevious execution was interrupted. You may need to review the password file for integrity.')
+      print('If you choose to continue the old *.wrk file will be removed and password and execution continues.')
+      if (version_info[0] >= 3):
+        Response = input('\nPrevious execution was interrupted. Continue? (y/n): ')
+      else:
+        Response = raw_input('\nPrevious execution was interrupted. Continue? (y/n): ')
+      if (Response.upper() == 'Y'):
+        unlink(WorkFilename)
+      else:
+        print('\nNo changes made.')
+        exit(0)
+
+  # Main if statement contains mutually exclusive options.
+  if (Add):
+    if(Remove or Undo):
+      print('\nOptions -a, -r, and -u cannot be used together.')
+      exit(1)
+
+    if(Argc != 3):
+      print('\nDb_Unique_Name/Hostname, Username, and Password required.')
+      exit(1)
+
+    Name     = Args[0]
+    User     = Args[1]
+    Password = Args[2]
+
+    if(not PlainText):
+      print(version_info[0])
+      if (version_info[0] >= 3):
+        Password = b64encode(Password.encode('ascii')).decode("utf-8")
+      else:
+        Password = Password.encode('base64','strict')
+
+    if (Silent):
+      AddPassword(Name, User, Password)
+    else:
+      print('\n')
+      print('Name     = %s' % Name)
+      print('User     = %s' % User)
+      print('Password = %s' % Password)
+      if (version_info[0] >= 3):
+        Response = input('\nIs this correct? (y/n): ')
+      else:
+        Response = raw_input('\nIs this correct? (y/n): ')
+      Response = Response.upper()
+      if (Response == 'Y'):
+        AddPassword(Name, User, Password)
+  elif (Remove):
+    if(Add or Undo):
+      print('\nOptions -a, -r, and -u cannot be used together.')
+      exit(1)
+
+    if(Argc < 2):
+      print('\nDb_Unique_Name/Hostname and Username required.')
+      exit(1)
+
+    Name = Args[0]
+    User = Args[1]
+
+    if (Silent):
+      RemovePassword(Name, User)
+    else:
+      print('\n')
+      print('Name     = %s' % Name)
+      print('User     = %s' % User)
+      if (version_info[0] >= 3):
+        Response = input('\nRemove this user? (y/n): ')
+      else:
+        Response = raw_input('\nRemove this user? (y/n): ')
+      Response = Response.upper()
+      if (Response == 'Y'):
+        RemovePassword(Name, User)
+  elif(Undo):
+    if(Add or Remove):
+      print('\nOptions -a, -r, and -u cannot be used together. Restoring password file from backup.')
+    CopyFile(BackupFilename, PasswdFilename)
+  else:
+    if(Argc >= 2):
+      Name     = Args[0]
+      User     = Args[1]
+      Password = GetPassword(Name, User)
+
+      if (PlainText):
+        print(Password)
+      else:
+        try:
+          if (version_info[0] >= 3):
+            print(b64decode(Password.encode('utf-8')).decode('utf-8'))
+          else:
+            #print(Password.decode('base64','ascii'))  
+            print(Password.decode('base64','strict'))  
+        except:
+          print("\nFailed to decode password. Is it possible the password is plain text? ")
+          print("Try again using the -p option.")
+          exit(1)
+
+  if (Transfer):
+    TransferFile(PasswdFilename, HostFilename, 'dba/etc')
+
+  exit()
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+

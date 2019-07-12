@@ -1,0 +1,221 @@
+#!/bin/env python
+
+##################################################################################################
+# Name:        genddl2                                                                           #
+# Author:      Randy Johnson                                                                     #
+# Description: Dumps schema DDL using DBMS_METADATA.GET_DDL                                      #
+# Usage: genddl2 [options]                                                                       #
+#                                                                                                #
+# Options:                                                                                       #
+#   -h, --help  show this help message and exit                                                  #
+#   -s SCHEMA   schema                                                                           #
+#   --v         print version info.                                                              #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 03/20/2017 1.00 Randy Johnson    Initial write.                                                #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Generate DDL'
+  Version        = '1.00'
+  VersionDate    = 'Mon Mar 20 10:00:56 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  ArgParser      = OptionParser()
+  InStr          = ''
+  ConnStr        = ''
+  RecSep         = '!!!EOL!!!'
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  ArgParser.add_option('-r',  dest='Report',  action='store_true', default=False,           help="report objects")
+  ArgParser.add_option('-s',  dest='Schema',                       default='',    type=str, help="schema")
+  ArgParser.add_option('--v', dest='ShowVer', action='store_true', default=False,           help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  Report      = Options.Report
+  Schema      = Options.Schema
+  ShowVer     = Options.ShowVer
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  if (Report == True):
+    Sql  = "column owner                 format a30             heading 'Owner'\n"
+    Sql += "column object_type           format a30             heading 'Object Type'\n"
+    Sql += "column object_name           format a30             heading 'Object Name'\n"
+    Sql += "column created               format a19             heading 'Created'\n"
+    Sql += "\n"
+    Sql += "SELECT " + SqlHeader + "\n"
+    Sql += "       OWNER\n"
+    Sql += "     , OBJECT_TYPE\n"
+    Sql += "     , OBJECT_NAME\n"
+    Sql += "     , TO_CHAR(CREATED, 'YYYY-MM-DD HH24:MI:SS') created\n"
+    Sql += "  FROM DBA_OBJECTS\n"
+    Sql += " WHERE 1=1\n"
+    Sql += "     AND UPPER(owner) = '" + Schema.upper() + "'\n"
+    Sql += "ORDER BY owner, object_type, object_name;"
+
+    # Execute the report
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+
+    # Print the report
+    if (Stdout != ''):
+      print("\n\n--------------------------")
+      print("-- Object Detail Report --")
+      print("--------------------------")
+      print('\n%s' % Stdout)
+
+    Sql  = "column owner                 format a30             heading 'Owner'\n"
+    Sql += "column object_type           format a30             heading 'Object Type'\n"
+    Sql += "column count                 format 999,999,999     heading 'Count'\n"
+    Sql += "\n"
+    Sql += "SELECT " + SqlHeader + "\n"
+    Sql += "       OWNER\n"
+    Sql += "     , OBJECT_TYPE\n"
+    Sql += "     , COUNT(*) count\n"
+    Sql += "  FROM DBA_OBJECTS\n"
+    Sql += " WHERE 1=1\n"
+    Sql += "     AND UPPER(owner) = '" + Schema.upper() + "'\n"
+    Sql += "GROUP BY owner, object_type\n"
+    Sql += "ORDER BY owner, object_type;"
+
+    # Execute the report
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+
+    # Print the report
+    if (Stdout != ''):
+      print("\n\n---------------------------")
+      print("-- Object Summary Report --")
+      print("---------------------------")
+      print('\n%s' % Stdout)
+
+  # If Schema was not passed on the command line...
+  if (Schema == ''):
+    if (version_info[0] >= 3):
+      Schema = input('\nEnter schema: ')
+    else:
+      Schema = raw_input('\nEnter schema: ')
+    if (Schema == ''):
+      print('Schema is required.')
+      exit(1)
+    Schema = Schema.strip().upper()
+
+  Sql  = "SET SERVEROUTPUT ON SIZE UNLIMITED\n\n"
+  Sql += "DECLARE\n"
+  Sql += "   h       NUMBER;\n"
+  Sql += "   th      NUMBER;\n"
+  Sql += "   doc     CLOB;\n"
+  Sql += "   str     VARCHAR2(32767);\n"
+  Sql += "   tmpstr  VARCHAR2(32767);\n"
+  Sql += "   len     INTEGER;\n"
+  Sql += "   idx     INTEGER           := 1;\n"
+  Sql += "   nlidx   INTEGER;\n"
+  Sql += "   newline CHARACTER         := chr(10);\n"
+  Sql += "\n"
+  Sql += "BEGIN\n"
+  Sql += "   h := DBMS_METADATA.OPEN('SCHEMA_EXPORT');\n"
+  Sql += "   DBMS_METADATA.SET_FILTER(h,'SCHEMA','" + Schema + "');\n"
+  Sql += "   th := DBMS_METADATA.ADD_TRANSFORM(h,'DDL');\n"
+
+  #Sql += "   DBMS_METADATA.SET_TRANSFORM_PARAM(th,'SEGMENT_ATTRIBUTES',true);\n"           -- Table level only
+  #Sql += "   DBMS_METADATA.SET_TRANSFORM_PARAM(th,'STORAGE',false);\n"                     -- Table level only
+  #Sql += "   DBMS_METADATA.SET_TRANSFORM_PARAM(th,'OID',true);\n"                          -- Table level only
+  #Sql += "   DBMS_METADATA.SET_TRANSFORM_PARAM(th,'PRETTY',true);\n"
+  #Sql += "   DBMS_METADATA.SET_TRANSFORM_PARAM(th,'SQLTERMINATOR',true);\n"
+  Sql += "\n"
+  Sql += "   LOOP\n"
+  Sql += "     doc := DBMS_METADATA.FETCH_CLOB(h);\n"
+  Sql += "     EXIT WHEN doc IS NULL;\n"
+  Sql += "     DBMS_OUTPUT.PUT_LINE(doc||'" + RecSep + "');\n"
+  Sql += "   END LOOP;\n"
+  Sql += "   DBMS_METADATA.CLOSE(h);\n"
+  Sql += "END;\n"
+  Sql += "/\n"
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout.strip() != '') :
+    Stdout = Stdout.strip(RecSep)
+    Stdout = Stdout.strip()
+
+    DDL = Stdout.split(RecSep)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    for line in DDL :
+      if (line.strip() != '') :
+        print('%s\n-----------cut-----------cut-----------cut-----------cut-----------cut-----------' % line.strip())
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

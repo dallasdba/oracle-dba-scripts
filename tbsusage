@@ -1,0 +1,139 @@
+#!/bin/env python
+
+##################################################################################################
+#  Name:        tbsusage                                                                         #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Report space usage at the tablespace level.                                      #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 09/29/2017 1.00 Randy Johnson    Initial write.                                                #
+##################################################################################################
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+from Oracle       import PrintError
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Report Tablespace Usage'
+  Version        = '1.00'
+  VersionDate    = 'Wed Aug 2 12:16:45 CDT 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  InStr          = ''
+  ConnStr        = ''
+  InstList       = []
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nReport tablespace usage.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('--s', dest='Show',     action='store_true', default=False,           help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer',  action='store_true', default=False,           help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  Show      = Options.Show
+  ShowVer   = Options.ShowVer
+
+  if (ShowVer == True):
+    print('\n%s' % Banner)
+    exit()
+
+  # Tables
+  # ------------------
+  Sql += "column tablespace_name  format a30                         heading 'Tablespace Name'\n"
+  Sql += "column pct_used         format 999.99                      heading 'Pct Used'\n"
+  Sql += "column mb_total         format 999,999,999,999,999.99      heading 'MB Total'\n"
+  Sql += "column mb_used          format 999,999,999,999,999.99      heading 'MB Used'\n"
+  Sql += "column mb_free          format 999,999,999,999,999.99      heading 'MB Free'\n"
+  Sql += "column file_count       format 9999                        heading 'File Count'\n"
+  Sql += "\n"
+  Sql += " SELECT " + SqlHeader + "\n"
+  Sql += "        a.tablespace_name\n"
+  Sql += "      , ROUND (((c.BYTES - NVL (b.BYTES, 0)) / c.BYTES) * 100,2) pct_used\n"
+  Sql += "      , c.BYTES/1024/1024                                        mb_total\n"
+  Sql += "      , ROUND (c.BYTES/1024/1024 - NVL (b.BYTES, 0)/1024/1024,2) mb_used\n"
+  Sql += "      , ROUND (NVL (b.BYTES, 0)/1024/1024, 2)                    mb_free\n"
+  Sql += "      , c.DATAFILES                                              file_count\n"
+  Sql += "   FROM dba_tablespaces a\n"
+  Sql += "      , (  SELECT tablespace_name \n"
+  Sql += "                , SUM (BYTES) BYTES\n"
+  Sql += "             FROM dba_free_space\n"
+  Sql += "         GROUP BY tablespace_name\n"
+  Sql += "        ) b\n"
+  Sql += "      , (  SELECT COUNT (1) DATAFILES\n"
+  Sql += "                , SUM (BYTES) BYTES\n"
+  Sql += "                , tablespace_name\n"
+  Sql += "             FROM dba_data_files\n"
+  Sql += "         GROUP BY tablespace_name\n"
+  Sql += "         ) c\n"
+  Sql += "   WHERE b.tablespace_name(+) = a.tablespace_name \n"
+  Sql += "     AND c.tablespace_name(+) = a.tablespace_name\n"
+  Sql += "ORDER BY NVL (((c.BYTES - NVL (b.BYTES, 0))/c.BYTES), 0) DESC;\n"
+
+
+  Sql = Sql.strip()
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the Report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+
