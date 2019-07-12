@@ -7,6 +7,7 @@
 #                                                                                                #
 #  Functions:   LoadOratab(Oratab='')                                                            #
 #               SetOracleEnv(Sid, Oratab='/etc/oratab')                                          #
+#               ChunkString(InStr, Len)                                                          #
 ##################################################################################################
 
 # --------------------------------------
@@ -175,6 +176,29 @@ def SetOracleEnv(Sid, Oratab='/etc/oratab'):
   return(OracleSid, OracleHome)
 # ---------------------------------------------------------------------------
 # End SetOracleEnv()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : ChunkString()
+# Desc: This function returns Cgen (a generator), using a generator
+#       comprehension. The generator returns the string sliced, from 0 + a
+#       multiple of the length of the chunks, to the length of the chunks + a
+#       multiple of the length of the chunks.
+#
+#       You can iterate over the generator like a list, tuple or string -
+#          for i in ChunkString(s,n): ,
+#       or convert it into a list (for instance) with list(generator).
+#       Generators are more memory efficient than lists because they generator
+#       their elements as they are needed, not all at once, however they lack
+#       certain features like indexing.
+# Args: 1=String value
+#     : 2=Length of chunks to return.
+# Retn:
+# ---------------------------------------------------------------------------
+def ChunkString(InStr, Len):
+  return((InStr[i:i+Len] for i in range(0, len(InStr), Len)))
+# ---------------------------------------------------------------------------
+# End ChunkString()
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
