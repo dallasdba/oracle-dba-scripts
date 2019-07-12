@@ -6,6 +6,7 @@
 #               of scripts.                                                                      #
 #                                                                                                #
 #  Functions:   LoadOratab(Oratab='')                                                            #
+#               SetOracleEnv(Sid, Oratab='/etc/oratab')                                          #
 ##################################################################################################
 
 # --------------------------------------
@@ -139,6 +140,43 @@ def LoadOratab(Oratab=''):
         OratabDict[OraSid] = OraHome
 
   return(OratabDict)
+
+# ---------------------------------------------------------------------------
+# Def : SetOracleEnv()
+# Desc: Setup your environemnt, eg. ORACLE_HOME, ORACLE_SID. (Parses oratab
+#       file).
+# Args: Sid = The ORACLE_SID of the home you want to configure for
+#       Oratab = FQN of the oratab file (optional)
+# Retn: OracleSid = $ORACLE_SID
+#       OracleHome = $ORACLE_HOME
+# ---------------------------------------------------------------------------
+def SetOracleEnv(Sid, Oratab='/etc/oratab'):
+  OracleSid = ''
+  OracleHome = ''
+
+  OratabDict = LoadOratab()
+  SidCount = len(OratabDict.keys())
+
+  if (SidCount > 0):
+    if (Sid in OratabDict.keys()):
+      OracleSid  = Sid
+      OracleHome = OratabDict[OracleSid]
+      environ['ORACLE_SID']  = OracleSid
+      environ['ORACLE_HOME'] = OracleHome
+
+      if ('LD_LIBRARY_PATH' in environ.keys()):
+        if (environ['LD_LIBRARY_PATH'] != ''):
+          environ['LD_LIBRARY_PATH'] = OracleHome + '/lib' + ':' + environ['LD_LIBRARY_PATH']       # prepend to LD_LIBRARY_PATH
+        else:
+          environ['LD_LIBRARY_PATH'] = OracleHome + '/lib'
+      else:
+        environ['LD_LIBRARY_PATH'] = OracleHome + '/lib'
+
+  return(OracleSid, OracleHome)
+# ---------------------------------------------------------------------------
+# End SetOracleEnv()
+# ---------------------------------------------------------------------------
+
 # ---------------------------------------------------------------------------
 # End LoadOratab()
 # ---------------------------------------------------------------------------
