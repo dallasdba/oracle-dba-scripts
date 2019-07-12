@@ -12,6 +12,7 @@
 #               ConvertSize(bytes)                                                               #
 #               DumpConfig(ConfigFile)                                                           #
 #               ErrorCheck(Stdout, ComponentList=['ALL_COMPONENTS'])                             #
+#               LookupError(Error)                                                               #
 ##################################################################################################
 
 # --------------------------------------
@@ -344,3 +345,88 @@ def ErrorCheck(Stdout, ComponentList=['ALL_COMPONENTS']):
 # End ErrorCheck()
 # ---------------------------------------------------------------------------
 
+
+# ---------------------------------------------------------------------------
+# Def : LookupError()
+# Desc: Parses the ficiliy file and returns a list of lists (2 dim array)
+#       containing:
+#         facility:component:rename:description
+# Args: Facility file name.
+# Retn: FacilitiesDD
+# ---------------------------------------------------------------------------
+def LookupError(Error):
+  MsgList     = []
+  HeaderFound = False
+
+  if ('ORACLE_HOME' in environ.keys()):
+    OracleHome = environ['ORACLE_HOME']
+    FacilitiesFile = OracleHome + '/lib/facility.lis'
+    FacilitiesDD = LoadFacilities(FacilitiesFile)
+  else:
+    print('ORACLE_HOME is not set')
+    return (1, [])
+
+  try:
+    (Facility,ErrCode) = Error.lower().split('-')
+  except:
+    print('\nInvalid error code.')
+    exit(1)
+
+  if (not Facility in FacilitiesDD.keys()):
+    print('\nInvalid facility:', Facility)
+    exit(1)
+  else:
+    MessagesFile = OracleHome + '/' + FacilitiesDD[Facility]['Component'] + '/' + 'mesg' + '/' + Facility + 'us.msg'
+
+  try:
+    msgfil = open(MessagesFile, 'r')
+  except:
+    print('\nCannot open Messages file: ' + MessagesFile + ' for read.')
+    exit(1)
+
+  MsgFileContents = msgfil.readlines()
+
+  for line in MsgFileContents:
+    # lines I'm looking for look like this "00003, 00000, "INTCTL: error while se..."
+    # So just looking for something that starts with a string of digits and contains
+    # the error code I'm looking for.
+    if (HeaderFound):
+        MatchObj = match(r'//,*', line)
+        if (MatchObj):
+          MsgList.append(line.strip())
+        else:
+          return(MsgList)
+    else:
+      MatchObj = match('[0]*' + ErrCode + ',', line)
+      if (MatchObj):
+          ErrCode = MatchObj.group()
+          ErrCode = ErrCode[0:ErrCode.find(',')]
+          MsgList.append(line.strip())
+          HeaderFound = True
+
+  if (len(MsgList) == 0):
+    # If error code could not be found let's trim off leading 0's and try again...
+    ErrCode = str(int(ErrCode))
+    for line in MsgFileContents:
+      if (HeaderFound):
+          MatchObj = match(r'//,*', line)
+          if (MatchObj):
+            MsgList.append(line.strip())
+          else:
+            return(MsgList)
+      else:
+        MatchObj = match('[0]*' + ErrCode + ',', line)
+        if (MatchObj):
+            ErrCode = MatchObj.group()
+            ErrCode = ErrCode[0:ErrCode.find(',')]
+            MsgList.append(line.strip())
+            HeaderFound = True
+
+  if (len(MsgList) == 0):
+    print('Error not found  : ' + ErrCode)
+    print('Msg file         : ' + MessagesFile)
+
+  return(MsgList)
+# ---------------------------------------------------------------------------
+# End LookupError()
+# ---------------------------------------------------------------------------
