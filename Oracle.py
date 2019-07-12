@@ -11,6 +11,7 @@
 #               CheckPythonVersion()                                                             #
 #               ConvertSize(bytes)                                                               #
 #               DumpConfig(ConfigFile)                                                           #
+#               ErrorCheck(Stdout, ComponentList=['ALL_COMPONENTS'])                             #
 ##################################################################################################
 
 # --------------------------------------
@@ -54,6 +55,10 @@ from signal       import signal
 from time         import strptime
 from time         import sleep
 
+# Set min/max compatible Python versions.
+# ----------------------------------------
+PyMaxVer = 3.4
+PyMinVer = 2.4
 
 # ------------------------------------------------
 # Imports that are conditional on Python Version.
@@ -66,15 +71,6 @@ else:
   import cPickle as pickle
   from ConfigParser import SafeConfigParser
 # ------------------------------------------------
-
-# For handling termination in stdout pipe; ex: when you run: oerrdump | head
-signal(SIGPIPE, SIG_DFL)
-
-
-# Set min/max compatible Python versions.
-# ----------------------------------------
-PyMaxVer = 3.4
-PyMinVer = 2.4
 
 # ------------------------------------------------
 # ---- Function and Class Definitions ------------
@@ -144,6 +140,9 @@ def LoadOratab(Oratab=''):
         OratabDict[OraSid] = OraHome
 
   return(OratabDict)
+# ---------------------------------------------------------------------------
+# End LoadOratab()
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Def : SetOracleEnv()
@@ -284,6 +283,64 @@ def DumpConfig(ConfigFile):
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# End LoadOratab()
+# Def : ErrorCheck()
+# Desc: Check tnsping, sqlplus, crsctl, srvctl output for errors.
+# Args: Output(output you want to scan for errors)
+# Retn: Returns 0=no errors or 1=error found, and error stack (in list form)
+#-------------------------------------------------------------------------
+def ErrorCheck(Stdout, ComponentList=['ALL_COMPONENTS']):
+  FacilityList = []
+  ErrorStack   = []
+  rc           = 0
+
+  if ('ORACLE_HOME' in environ.keys()):
+    OracleHome = environ['ORACLE_HOME']
+    FacilitiesFile = OracleHome + '/lib/facility.lis'
+    FacilitiesDD = LoadFacilities(FacilitiesFile)
+  else:
+    print('ORACLE_HOME is not set')
+    return (1, [])
+
+
+    # Determine what errors to check for....
+  for key in sorted(FacilitiesDD.keys()):
+    if (ComponentList[0].upper() == 'ALL_COMPONENTS'):
+      for Component in ComponentList:
+        FacilityList.append(key.upper())
+    else:
+      for Component in ComponentList:
+        if (Component == FacilitiesDD[key]['Component']):
+          FacilityList.append(key.upper())
+
+  # Component:
+  #  Facility class is major error type such as SP1, SP2, IMP, TNS, ...
+  #  Component class is the application such as sqlplus, rdbms, imp, network.
+  #  A component can have several error facilities. For example the sqlplus
+  #  has 5:
+  #    grep sqlplus  /u01/app/oracle/product/11.2.0.3/dbhome_1/lib/facility.lis
+  #    cpy:sqlplus:*:
+  #    sp1:sqlplus:*:
+  #    sp2:sqlplus:*:
+  #    sp3:sqlplus:*:
+  #    spw:sqlplus:*:
+  #
+  #  The error SP2-06063 breaks down as Component=sqlplus, Facility=sp2, Error=06063. See below:
+  #    SP2-06063 : 06063,0, "When SQL*Plus starts, and after CONNECT commands, the site profile\n"
+  #    SP2-06063 : // *Document: NO
+  #    SP2-06063 : // *Cause:  Usage message.
+  #    SP2-06063 : // *Action:
+
+  for line in Stdout.split('\n'):
+    for Facility in FacilityList:
+      # Check for warning and error messages
+      MatchObj = search(Facility + '-\d\d\d\d', line)
+      if (MatchObj):
+        ErrorString = MatchObj.group()
+        rc = 1
+        ErrorStack.append([ErrorString, line])
+
+  return(rc, ErrorStack)
+# ---------------------------------------------------------------------------
+# End ErrorCheck()
 # ---------------------------------------------------------------------------
 
