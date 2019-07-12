@@ -16,6 +16,7 @@
 #               ErrorCheck(Stdout, ComponentList=['ALL_COMPONENTS'])                             #
 #               LookupError(Error)                                                               #
 #               PrintError(Sql, Stdout, ErrorList=[])                                            #
+#               GetOracleVersion()                                                               #
 #                                                                                                #
 ##################################################################################################
 
@@ -461,6 +462,34 @@ def PrintError(Sql, Stdout, ErrorList=[]):
   return
 # ---------------------------------------------------------------------------
 # End PrintError()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetOracleVersion()
+# Desc: Determines the version of the Oracle binaries.
+# Args: <none>
+# Retn: 0 or exit(1)
+# ---------------------------------------------------------------------------
+def GetOracleVersion(OracleHome):
+
+  Sqlplus = pathjoin(OracleHome, 'bin', 'sqlplus')
+
+  # Start Sqlplus and login
+  Proc = Popen([Sqlplus, '-v'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
+
+  # Fetch the output
+  Stdout, SqlErr = Proc.communicate()
+  Stdout = Stdout.strip()
+
+  MatchObj = search(r'[0-9][0-9].[0-9].[0-9].[0-9].[0-9]', Stdout)
+  if (MatchObj):
+    OracleVersion = MatchObj.group()
+  else:
+    OracleVersion = 'unknown'
+
+  return(OracleVersion)
+# ---------------------------------------------------------------------------
+# End GetOracleVersion()
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
