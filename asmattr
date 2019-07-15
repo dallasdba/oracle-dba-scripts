@@ -1,17 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        asmattr                                                                           #
 # Author:      Randy Johnson                                                                     #
 # Description: Report ASM Attributes                                                             #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 09/08/2015 1.00 Randy Johnson    Initial write.                                                #
-# 07/12/2017 1.01 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -41,8 +34,8 @@ from Oracle       import ValidateDate
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'ASM Attributes'
-  Version        = '1.01'
-  VersionDate    = 'Wed Jul 12 08:56:12 CDT 2017'
+  Version        = '1.02'
+  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -51,11 +44,10 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   Ps             = '/bin/ps'
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
-
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nReports ASM disk group attributes.'
+  Usage =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'        % CmdDesc
+  Usage += '\n-------------------------------------------------------------------'
+  Usage += '\nReport all ASM disk group attributes.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-a',  dest='Attr',                         default='',    type=str,  help="where upper(attribute_name) like...")

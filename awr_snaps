@@ -1,20 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        awr_snaps                                                                         #
 # Author:      Randy Johnson                                                                     #
 # Description: Reports AWR Snapshots and the times they were taken.                              #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/01/2014 1.00 Randy Johnson    Initial write                                                 #
-# 07/02/2014 1.01 Randy Johnson    Minor changes/upgrades.                                       #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 08/01/2015 2.10 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 07/13/2017 2.20 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -39,8 +29,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'AWR Snapshots'
-  Version        = '2.20'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.21'
+  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -53,11 +43,10 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   InstList       = []
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
-
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nReports AWR Snapshots and the times they were taken.'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nReport AWR Snapshots and the times they were taken.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("-d",  dest="Days",                           default=0,                          type=int, help="how many days? (default 0  = unlimited")

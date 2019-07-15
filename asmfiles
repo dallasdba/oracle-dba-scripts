@@ -1,33 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        asmfiles                                                                          #
 # Author:      Randy Johnson                                                                     #
 # Description: ASM Storage by Diskgroup, by Database, by Type, by File                           #
-#                                                                                                #
-# Todo's                                                                                         #
-#  - Automatically set Oracle Home, Oracle Sid to local ASM instance.                            #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 06/25/2014 1.00 Randy Johnson    Initial write.                                                #
-# 10/05/2014 2.00 Randy Johnson    Several changes to reports.                                   #
-# 10/05/2014 2.10 Randy Johnson    Report enhancements.                                          #
-# 01/31/2015 2.20 Randy Johnson    Added as second part to the File Type report that breaks down #
-#                                  by disk group.                                                #
-# 03/15/2015 2.30 Randy Johnson    Increased the field length for Diskgroup.                     #
-# 07/21/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Changed order of    #
-#                                  precedence between -r and -s options.                         #
-# 08/01/2015 3.10 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 08/18/2015 3.20 Randy Johnson    If not connecting remotely via ConnStr, now determines the    #
-#                                  ORACLE_SID for local +ASM instance and sets ORACLE_SID and    #
-#                                  ORACLE_HOME based on local +ASM instance.                     #
-# 01/12/2016 3.30 Randy Johnson    Added username to the pickle file to avoid permissions issues #
-# 04/01/2017 3.40 Randy Johnson    Added csv report output.                                      #
-# 07/12/2017 3.41 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -104,8 +81,8 @@ def ConvertSize(bytes):
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'ASM Space Usage'
-  Version        = '3.41'
-  VersionDate    = 'Wed Jul 12 08:56:12 CDT 2017'
+  Version        = '3.42'
+  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -132,12 +109,11 @@ if (__name__ == '__main__'):
 
   setlocale(LC_ALL, 'en_US')
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
-
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nReports ASM storage utilization by file, by database, by file type, by disk'
-  Usage += '\ngroup.'
+  Usage =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'        % CmdDesc
+  Usage += '\n-------------------------------------------------------------------'
+  Usage += '\nReport ASM storage utilization by file, by database, by file type,'
+  Usage += '\nby disk.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("-a",  dest="AllFiles",  default=False,           action="store_true", help="All files report")

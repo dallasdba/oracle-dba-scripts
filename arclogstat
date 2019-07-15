@@ -30,7 +30,7 @@ from Oracle       import PrintError
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
-  CmdDesc        = 'Archivelog Status'
+  CmdDesc        = 'Archived Redo Log Status'
   Version        = '1.02'
   VersionDate    = 'Mon Jul 15 11:31:01 CDT 2019'
   DevState       = 'Production'
@@ -42,8 +42,10 @@ if (__name__ == '__main__'):
   ArgParser      = OptionParser()
   ConnStr        = ''
 
-  Usage = Cmd + ' [options]'
-  Usage += '\n\nReport archived redo log Status from v$archived_log.'
+  Usage =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'        % CmdDesc
+  Usage += '\n-------------------------------------------------------------------'
+  Usage += '\nReport archived redo log status from v$archived_log.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-c',  dest='ListCopy',   action='store_true', default=False,            help="RMAN> list copy of archivelog ...")

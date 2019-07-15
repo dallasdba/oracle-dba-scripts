@@ -1,19 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        awr_plan_change                                                                   #
 # Author:      Randy Johnson                                                                     #
 # Description: Reports SQL execution plan changes for a SQL ID.                                  #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 04/18/2012 1.00 Randy Johnson    Initial write.                                                #
-# 07/21/2015 2.00 Randy Johnson    Updated print(statements for Python 3.4 compatibility.        #
-# 08/01/2015 2.10 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 07/13/2017 2.20 Randy Johnson    Added prompts for username, password, tnsname.                #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -40,8 +31,8 @@ from Oracle       import ValidateDate
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'AWR Plan Change'
-  Version        = '2.20'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.21'
+  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -55,11 +46,10 @@ if (__name__ == '__main__'):
   Now            = datetime.now()
   EndTime        = (Now.strftime('%Y-%m-%d %H:%M:%S'))
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
-
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nReports SQL execution plan changes for a SQL ID.'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nReport SQL plan changes for a SQL ID.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-b',  dest='BeginTime',                      default='1960-01-01 00:00:00', type=str, help="AWR snap time >= BeginTime (default '1960-01-01 00:00:00')")

@@ -1,18 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        backup_spfile                                                                     #
 # Author:      Randy Johnson                                                                     #
 # Description: Creates a pfile from spfile.                                                      #
-#                                                                                                #
-#  History:                                                                                      #
-#                                                                                                #
-#  Date       Ver. Who              Change Description                                           #
-#  ---------- ---- ---------------- ------------------------------------------------------------ #
-#  10/09/2015 1.00 Randy Johnson    Initial write.                                               #
-#  10/22/2015 1.10 Randy Johnson    Minor non-functional changes.                                #
-#  07/13/2017 1.11 Randy Johnson    Added program description to Usage.                          #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -39,9 +31,9 @@ from Oracle       import PrintError
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
-  CmdDesc        = 'Backup spfile to pfile'
-  Version        = '1.11'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  CmdDesc        = 'Backup Spfile to Pfile'
+  Version        = '1.12'
+  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -52,11 +44,10 @@ if (__name__ == '__main__'):
   Now            = datetime.now()
   Timestamp      = Now.strftime("%Y%m%d.%H%M%S")
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
-
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nCreates a pfile from spfile.'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nDumps the spfile contents to a pfile.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("-f",  dest="Pfile",                        default='',    type=str, help="name of the backup file.")

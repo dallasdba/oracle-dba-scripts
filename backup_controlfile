@@ -1,17 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        backup_controlfile                                                                #
 # Author:      Randy Johnson                                                                     #
 # Description: alter database backup controlfile to [trace as] {filename} [reuse];               #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 10/09/2015 1.00 Randy Johnson    Initial write.                                                #
-# 07/13/2017 1.01 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -39,8 +32,8 @@ from Oracle       import PrintError
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Backup Controlfile'
-  Version        = '1.01'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '1.02'
+  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -51,11 +44,10 @@ if (__name__ == '__main__'):
   Now            = datetime.now()
   Timestamp      = Now.strftime("%Y%m%d.%H%M%S")
     
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
-
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nalter database backup controlfile to [trace as] {filename} [reuse];'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nMake a backup of the database control file.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-b',  dest='Binary',  action='store_true', default=False,           help="make binary copy of controlfile (default=trace).")

@@ -43,11 +43,10 @@ if (__name__ == '__main__'):
   Password       = ''
   ConnStr        = ''
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
-
-  Usage = Cmd + ' [options]'
-  Usage += '\n\nReport SQL plan changes.'
+  Usage =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'        % CmdDesc
+  Usage += '\n-------------------------------------------------------------------'
+  Usage += '\nReport SQL plan changes in the database.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("-a",  dest="DaysAgo",                       default='',    type=str, help="Days ago")

@@ -44,11 +44,10 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   InstList       = []
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
-
-  Usage = Cmd + ' [options]'
-  Usage += '\n\nReport currently executing SQL statements in the database.'
+  Usage =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'        % CmdDesc
+  Usage += '\n-------------------------------------------------------------------'
+  Usage += '\nReport currently executing SQL statements in the database.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-g',  dest='Global',     action='store_true', default=False,                 help="search gv$... (default is v$...)")

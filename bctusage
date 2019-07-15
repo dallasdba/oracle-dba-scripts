@@ -1,23 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 #  Name:        bctusage                                                                         #
 #  Author:      Randy Johnson                                                                    #
-#  Description: Reports block change tracking usage.                                             #
-#                                                                                                #
-#  Usage: bctusage [options]                                                                     #
-#                                                                                                #
-#  Options:                                                                                      #
-#    -h, --help    show this help message and exit                                               #
-#   --s            print SQL query.                                                              #
-#   --v            print version info.                                                           #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 10/30/2015 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
+#  Description: Report block change tracking usage.                                              #
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -41,9 +28,9 @@ from Oracle       import ParseConnectString
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
-  CmdDesc        = 'Report Block Change Tracking Usage'
-  Version        = '1.10'
-  VersionDate    = 'Sun Oct 30 09:11:05 MDT 2016'
+  CmdDesc        = 'Block Change Tracking Usage'
+  Version        = '1.12'
+  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -56,9 +43,6 @@ if (__name__ == '__main__'):
   InstList       = []
 
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
-
   # Check/setup the Oracle environment
   if (not('ORACLE_SID' in list(environ.keys()))):
     print('ORACLE_SID is required.')
@@ -67,6 +51,13 @@ if (__name__ == '__main__'):
     # Set the ORACLE_HOME just in case it isn't set already.
     if (not('ORACLE_HOME' in list(environ.keys()))):
       (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nReport whether or not block change tracking is activated and what has been'
+  Usage += '\ntracked.'
+  ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,            help="print SQL query.")
   ArgParser.add_option('--v', dest='ShowVer',    action='store_true', default=False,            help="print version info.")
