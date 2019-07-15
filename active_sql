@@ -30,7 +30,7 @@ from Oracle       import SetOracleEnv
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Active SQL'
-  Version        = '2.21'
+  Version        = '2.22'
   VersionDate    = 'Mon Jul 15 11:31:01 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
