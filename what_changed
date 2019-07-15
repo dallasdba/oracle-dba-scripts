@@ -1,17 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        what_changed                                                                      #
 # Author:      Randy Johnson                                                                     #
-# Description: Reports SQL Plan Changes                                                          #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 09/21/2017 1.00 Randy Johnson    Initial write.                                                #
-# 10/16/2017 1.10 Randy Johnson    Several formatting changes. Added -x option.                  #
-##################################################################################################
+# Description: Report SQL Plan Changes                                                           #
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -36,8 +29,8 @@ from Oracle       import SetOracleEnv
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'What Changed'
-  Version        = '1.10'
-  VersionDate    = 'Thu Oct 16 10:42:09 CDT 2017'
+  Version        = '1.11'
+  VersionDate    = 'Mon Jul 15 11:31:01 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -53,8 +46,8 @@ if (__name__ == '__main__'):
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nReport significant SQL plan changes.'
+  Usage = Cmd + ' [options]'
+  Usage += '\n\nReport SQL plan changes.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("-a",  dest="DaysAgo",                       default='',    type=str, help="Days ago")
