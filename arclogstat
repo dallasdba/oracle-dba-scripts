@@ -1,17 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        arclogstat                                                                        #
 # Author:      Randy Johnson                                                                     #
-# Description: Report information on archived redo logs.                                         #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 09/25/2016 1.00 Randy Johnson    Initial write.                                                #
-# 09/11/2017 1.01 Randy Johnson    Minor changes to comments.                                    #
-##################################################################################################
+# Description: Report archived redo log status.                                                  #
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -38,8 +31,8 @@ from Oracle       import PrintError
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Archivelog Status'
-  Version        = '1.01'
-  VersionDate    = 'Sun Sep 11 14:04:25 CDT 2017'
+  Version        = '1.02'
+  VersionDate    = 'Mon Jul 15 11:31:01 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Rcv            = ''
@@ -49,8 +42,9 @@ if (__name__ == '__main__'):
   ArgParser      = OptionParser()
   ConnStr        = ''
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
+  Usage = Cmd + ' [options]'
+  Usage += '\n\nReport archived redo log Status from v$archived_log.'
+  ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-c',  dest='ListCopy',   action='store_true', default=False,            help="RMAN> list copy of archivelog ...")
   ArgParser.add_option('-b',  dest='ListBackup', action='store_true', default=False,            help="RMAN> list backup of archivelog ...")
