@@ -47,8 +47,9 @@ if (__name__ == '__main__'):
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
 
-  Usage = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nReports currently executing SQL statements in the database.'
+  Usage = 'active_sql [options]'
+  Usage += '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nReport currently executing SQL statements in the database.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-g',  dest='Global',     action='store_true', default=False,                 help="search gv$... (default is v$...)")
