@@ -1,17 +1,10 @@
 #!/bin/env python
 
-###################################################################################################
-# Name:                                                                                           #
-# Author:      Randy Johnson                                                                      #
-# Description:                                                                                    #
-#                                                                                                 #
-#                                                                                                 #
-# History:                                                                                        #
-#                                                                                                 #
-# Date       Ver. Who              Change Description                                             #
-# ---------- ---- ---------------- -------------------------------------------------------------- #
-# 09/23/2015 1.00 Randy Johnson    Initial write.                                                 #
-###################################################################################################
+#------------------------------------------------------------------------------------------------#
+# Name:        cdbstorage                                                                        #
+# Author:      Randy Johnson                                                                     #
+# Description: Report tablespace storage utilization for multitenant (container) databases.      #
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -37,8 +30,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Container Database Storage Report'
-  Version        = '1.00'
-  VersionDate    = 'Wed Sep 23 11:50:25 EDT 2015'
+  Version        = '1.01'
+  VersionDate    = 'Tue Jul 16 09:58:23 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -48,8 +41,20 @@ if (__name__ == '__main__'):
   InStr          = ''
   ConnStr        = ''
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nReport tablespace storage utilization for multitenant (container) databases.'
+  ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,                 help="print SQL query.")
   ArgParser.add_option('--v', dest='ShowVer',    action='store_true', default=False,                 help="print version info.")

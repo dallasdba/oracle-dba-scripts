@@ -1,20 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        cbostats                                                                          #
 # Author:      Randy Johnson                                                                     #
-# Description: Reports tables/partitions/subpartitions with missing or stale CBO statistics.     #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 08/03/2015 1.00 Randy Johnson    Initial write.                                                #
-# 09/15/2015 1.10 Randy Johnson    Added option for CSV report. Added filter option (-f) and     #
-#                                  fixed the SQL for filter criteria which was not working.      #
-# 09/28/2015 1.11 Randy Johnson    Fixed error in help message.                                  #
-# 07/13/2017 1.12 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+# Description: Report tables/partitions/subpartitions with missing or stale CBO statistics.      #
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -39,8 +29,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Stale/Missing CBO Statistics'
-  Version        = '1.12'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '1.13'
+  VersionDate    = 'Tue Jul 16 09:58:23 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -72,11 +62,19 @@ if (__name__ == '__main__'):
   ExcludeList.append('XDB')
   ExcludeList.append('XS$NULL')
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nReports tables/partitions/subpartitions with missing or stale CBO statistics.'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nReport tables/partitions/subpartitions with missing or stale CBO statistics.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-f',  dest='Filter',  action='store_true', default=False,           help="filter out Oracle schemas: sys, system, dbsnmp, ...")
