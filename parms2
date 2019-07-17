@@ -1,10 +1,12 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        parms                                                                             #
+#------------------------------------------------------------------------------------------------#
+# Name:        parms2                                                                            #
 # Author:      Randy Johnson                                                                     #
-# Description: Prints a list of all instance parameters (including hidden parms). If you         #
-#              provide a parameter or part of a parameter on the command line then all           #
+# Description: This script is based on the parms.sql script from Kerry Osborne. This mod of the  #
+#              script is meant to be run in 12c and later Container databases only.              #
+#              The  script Prints a list of all instance parameters (including hidden parms). If #
+#              you provide a parameter or part of a parameter on the command line then all       #
 #              parameters not LIKE %parameter% will be filtered out. This script is similar to   #
 #              the parms script except it supports multitenant databases. So it reports on the   #
 #              container database ($ROOT) and the Seed database (PDB$SEED) ansd all pluggable    #
@@ -16,75 +18,7 @@
 #              ISMOD : If True, value has been modified since the instance was started.          #
 #              ISSET : If True, value has been set in the parameter file. This is TRUE even if   #
 #                      it is set to what would otherwise be the default value.                   #
-#                                                                                                #
-# Usage: parms [connect_string] [options] [parm_filter]                                          #
-#                                                                                                #
-# IsDef : If True, the parameter is currently set to the default value. Note that                #
-#         if the parameter is set to the default value in the spfile IsDef will be               #
-#         False. This is technically correct but can be a little misleading.                     #
-# IsMod : If True, value has been modified from its startup setting.                             #
-# IsSet : If True, value has been set in the parameter file. This is True even if                #
-#         it is set to what would otherwise be the default value.                                #
-#                                                                                                #
-# Options:                                                                                       #
-#   -h, --help  show this help message and exit                                                  #
-#   -a          parms for all running databases                                                  #
-#   -m          print parameter metrics                                                          #
-#   -n NAME     where name like ...                                                              #
-#   -u          include undocumented (hidden) parms                                              #
-#   --s         print SQL query                                                                  #
-#   --v         print version info.                                                              #
-#                                                                                                #
-#  Examples:                                                                                     #
-#                                                                                                #
-#  [enkdb03:oracle:RANDY1] /home/oracle                                                          #
-#  > parms -n pga -u                                                                             #
-#                                                                                                #
-#  Parameter                                          Value                                      #
-#  -------------------------------------------------- ---------------------------------------    #
-#  pga_aggregate_target                                8589934592                                #
-#  _kdli_sio_pga                                       FALSE                                     #
-#  _kdli_sio_pga_top                                   FALSE                                     #
-#  _ldr_pga_lim                                        0                                         #
-#  __pga_aggregate_target                              8589934592                                #
-#  _pgactx_cap_stacks                                  FALSE                                     #
-#  _pga_large_extent_size                              1048576                                   #
-#  _pga_max_size                                       1717985280                                #
-#  _use_ism_for_pga                                    TRUE                                      #
-#                                                                                                #
-#                                                                                                #
-#  [enkdb03:oracle:RANDY1] /home/oracle                                                          #
-#  > parms -n pga -u -m                                                                          #
-#                                                                                                # 
-#  Parameter                                     Value                         IsDef IsMod IsSet #
-#  --------------------------------------------  ----------------------------- ----- ----- ----- #
-#  pga_aggregate_target                          8589934592                    False False True  #
-#  _kdli_sio_pga                                 FALSE                         True  False False #
-#  _kdli_sio_pga_top                             FALSE                         True  False False #
-#  _ldr_pga_lim                                  0                             True  False False #
-#  __pga_aggregate_target                        8589934592                    False False True  #
-#  _pgactx_cap_stacks                            FALSE                         True  False False #
-#  _pga_large_extent_size                        1048576                       True  False False #
-#  _pga_max_size                                 1717985280                    True  False False #
-#  _use_ism_for_pga                              TRUE                          True  False False #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 08/27/2012 1.00 Randy Johnson    Initial release.                                              #
-# 05/31/2014 2.00 Randy Johnson    Added -m option to provide two different report formats (one  #
-#                                  with and without parameter change metrics). Added the -s      #
-#                                  option to print the SQL Query. Added the -u option to report  #
-#                                  undocumented (hidden) parameters. By default the report no    #
-#                                  longer includes undocumented parameters.                      #
-# 08/12/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 08/12/2015 3.10 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 08/25/2015 3.11 Randy Johnson    Cosmetic only. Tidied up the Sql. Flipped state from dev to   # 
-#                                  prod.                                                         # 
-# 09/16/2015 3.12 Randy Johnson    Fixed invalid results of IsSet (caused by change to INITCAP() #
-#                                  used for IsDef and IsMod.                                     #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -109,18 +43,15 @@ from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 from Oracle       import ParseConnectString
 
-# For handling termination in stdout pipe, ex: when you run: oerrdump | head
-signal(SIGPIPE, SIG_DFL)
-
 # --------------------------------------
 # ---- Main Program --------------------
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
-  CmdDesc        = 'Parameter Definitions'
+  CmdDesc        = 'Parameter Settings 2 (for container databases only)'
   Version        = '1.00'
-  VersionDate    = 'Mon May 20 20:16:53 CDT 2019'
-  DevState       = 'Development'
+  VersionDate    = 'Wed Jul 17 15:28:31 CDT 2019'
+  DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
@@ -137,13 +68,20 @@ if (__name__ == '__main__'):
 
   # Process command line options
   # ----------------------------------
-  Usage  = 'parms [connect_string] [options] [parm_filter]\n\n'
-  Usage += 'IsDef : If True, the parameter is currently set to the default value. Note that\n'
-  Usage += '        if the parameter is set to the default value in the spfile IsDef will be\n'
-  Usage += '        False. This is technically correct but can be a little misleading.\n'
-  Usage += 'IsMod : If True, value has been modified from its startup setting.\n'
-  Usage += 'IsSet : If True, value has been set in the parameter file. This is True even if\n'
-  Usage += '        it is set to what would otherwise be the default value.\n'
+  Usage  =  '%s [connect_string] [options] [parm_filter]' % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nReport database parameters for container databases. See parms script for'
+  Usage += '\nsingle tenant (non-container) databases.'
+  Usage += "\n"
+  Usage += '\nParameter Metrics (-m option) Explained:'
+  Usage += '\nIsDef : If True, the parameter is currently set to the default value. Note'
+  Usage += '\n        that if the parameter is set to the default value in the spfile IsDef'
+  Usage += '\n        will be False. This is technically correct but can be a little'
+  Usage += '\n        misleading.'
+  Usage += '\nIsMod : If True, value has been modified from its startup setting.'
+  Usage += '\nIsSet : If True, value has been set in the parameter file. This is True even'
+  Usage += '\n        if it is set to what would otherwise be the default value.'
 
   ArgParser = OptionParser(Usage)
 
