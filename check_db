@@ -1,35 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        check_db                                                                         #
+#------------------------------------------------------------------------------------------------#
+#  Name:        parmcheck                                                                        #
 #  Author:      Randy Johnson                                                                    #
-#  Description: Verifies database compliance with CBRE policies & Oracle best practices.         #
-#                                                                                                #
-#  Usage: check_db [Options]                                                                     #
-#                                                                                                #
-#  usage: check_db [options]                                                                     #
-#                                                                                                #
-#  options:                                                                                      #
-#    -a,            run a check_db using this list of application types, ex. exadata,app1,app2   #
-#    -s,            show application types defined in the check_db.ini file.                     #
-#    -h, --help     show this help message and exit                                              #
-#    -v Verbose     Vervose output                                                               #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 08/21/2012 1.00 Randy Johnson    Initial release.                                              #
-# 11/12/2012 1.10 Randy Johnson    Fix for "SP2-0027: Input is too long (> 2499 characters)"     #
-#                                  caused by SQL line length exceeding the limit. Put each parm  #
-#                                  in the where clause on a separate line.                       #
-#                                                                                                #
-# Todo's                                                                                         #
-# Add config_backup checks.                                                                      #
-#                                                                                                #
-#                                                                                                #
-#                                                                                                #
-##################################################################################################
+#  Description: Validates database parameters according to rules in parmcheck.cfg.               #
+#------------------------------------------------------------------------------------------------#
 
 
 # --------------------------------------
@@ -37,27 +12,66 @@
 # --------------------------------------
 import traceback
 import re
-from datetime import datetime
-from sys import exit, argv, stdout, exc_info, path
-from optparse import OptionParser
-from ConfigParser import SafeConfigParser
-from subprocess import Popen, PIPE, STDOUT, call
-from string import find, split, join, lower, upper, strip
-from decimal import *
-from os.path import exists, basename, dirname
-from os import environ
-import signal
+from datetime      import datetime
+from sys           import exit
+from sys           import argv
+from sys           import stdout
+from sys           import exc_info
+from optparse      import OptionParser
+from subprocess    import Popen
+from subprocess    import PIPE
+from subprocess    import STDOUT
+from subprocess    import call
+from os.path       import basename
+from os.path       import dirname
+from os.path       import isfile
+from os.path       import isfile
+from os.path       import join as pathjoin
+from os.path       import split as pathsplit
+from os            import environ
+from sys           import version_info
+from os            import access
+from os            import W_OK as WriteOk
+from os            import R_OK as ReadOk
+from os            import X_OK as ExecOk
 
-# For handling termination in stdout pipe.
-#  ex. when you run: oerrdump | head
-#--------------------------------------------
-signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+# This is only for supporting the changes from Python 2.x through 3.4
+# -------------------------------------------------------------------------------------
+PythonVersion = '%s.%s' % (version_info[0],version_info[1])
+try:
+  PythonVersion = float(PythonVersion)
+except:
+  print("Cannot convert string PythonVersion from string to float: %s" % PythonVersion)
+  exit(1)
 
+if (PythonVersion >= 3.2):
+  from configparser import ConfigParser as SafeConfigParser
+elif (PythonVersion in (3.0,3.1)):
+  from configparser import ConfigParser as SafeConfigParser
+else:
+  from ConfigParser import SafeConfigParser as ConfigParser
 
 # --------------------------------------
 # ---- Function Definitions ------------
 # --------------------------------------
 
+# ---------------------------------------------------------------------------
+# Def : IsReadable()
+# Desc: Verifies that a file is readable.
+# Args: Filepath = Fully qualified filename.
+# Retn: 1 file is readable by the current user.
+#       0 file failed isfile or read check.
+# ---------------------------------------------------------------------------
+def IsReadable(Filepath):
+  if (isfile(Filepath) and access(Filepath, ReadOk)):
+    return True
+  else:
+    return False
+# ---------------------------------------------------------------------------
+# End IsReadable()
+# ---------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------
 # Def  : formatExceptionInfo()
 # Desc : Format and print Python stack trace
 # Args : maxTBlevel (default 5). Levels of the call stack.
@@ -73,13 +87,15 @@ def formatExceptionInfo(maxTBlevel=5):
     excArgs = "<no args>"
   excTb = traceback.format_tb(trbk, maxTBlevel)
 
-  print excName, excArgs
+  print(excName, excArgs)
   for line in excTb:
-    print line
+    print(line)
   return(excName, excArgs, excTb)
+#---------------------------------------------------------------------------
 # End formatExceptionInfo()
+#---------------------------------------------------------------------------
 
-
+#---------------------------------------------------------------------------
 # Def : SetOracleEnv()
 # Desc: Setup your environemnt, eg. ORACLE_HOME, ORACLE_SID. (Parses oratab
 #       file).
@@ -96,8 +112,11 @@ def SetOracleEnv(Sid, Oratab):
     environ['ORACLE_SID']   = OracleSid
     environ['ORACLE_HOME']  = OracleHome
   return(OracleSid, OracleHome)
+#---------------------------------------------------------------------------
 # End SetOracleEnv()
+#---------------------------------------------------------------------------
 
+#---------------------------------------------------------------------------
 # Def : LoadOratab()
 # Desc: Parses the oratab file and returns a List of lists containing:
 #       SID, ORACLE_HOME, Stop/Start Flag
@@ -114,7 +133,7 @@ def LoadOratab():
     otab = open(OratabFile)
   except:
     formatExceptionInfo()
-    print 'Cannot open oratab file: ' + OratabFile + ' for read.'
+    print('Cannot open oratab file: ' + OratabFile + ' for read.')
     exit(1)
 
   OratabContents = otab.read().split('\n')
@@ -130,8 +149,10 @@ def LoadOratab():
         (OraSid, OraHome, Bootflag) = line.split(':')
         Oratab[OraSid] = OraHome
   return(Oratab)
+#---------------------------------------------------------------------------
 # End LoadOratab()
 
+#---------------------------------------------------------------------------
 # Def : ErrorCheck()
 # Desc: Check tnsping, sqlplus, crsctl, srvctl output for errors.
 # Args: Output(output you want to scan for errors)
@@ -182,45 +203,49 @@ def ErrorCheck(StdOut, ComponentList):
   return(rc, ErrorStack)
 # End ErrorCheck()
 
-
+#---------------------------------------------------------------------------
 # Def : PrintError()
 # Desc: Print a formatted error message.
 # Args: ErrorMsg (the error message to be printed)
 # Retn:
 #---------------------------------------------------------------------------
 def PrintError(ErrorStack):
-  print '\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'
+  print('\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
   for row in ErrorStack:
     ErrorMsg = LookupMessage(row[1])           # list structure: [facility, ErrorCode, OutputString]
-    print row[2]
+    print(row[2])
     for line in ErrorMsg:
-      print line
-  print '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n'
+      print(line)
+  print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n')
   return
+#---------------------------------------------------------------------------
 # End PrintError()
+#---------------------------------------------------------------------------
 
-
+#---------------------------------------------------------------------------
 # Def : PrintDbInfo()
 # Desc: Prints a dump of the DbInfo variable.
 # Args: DbInfo
 # Retn:
 #---------------------------------------------------------------------------
 def PrintDbInfo(DbInfo):
-  print '\n----------------------------------------------------------------------'
-  print '-- Active Database Parameters ----------------------------------------'
-  print '----------------------------------------------------------------------'
-  print 'Database Parameter                      Value'
-  print '--------------------------------------  ------------------------------'
+  print('\n----------------------------------------------------------------------')
+  print('-- Active Database Parameters ----------------------------------------')
+  print('----------------------------------------------------------------------')
+  print('Database Parameter                      Value')
+  print('--------------------------------------  ------------------------------')
   for Parm in sorted(DbInfo.keys()):
     if (Parm != 'Status'):
-      print '%-40s %-40s' % (Parm, DbInfo[Parm])
-  print '----------------------------------------------------------------------'
-  print '-- End of Report: Active Database Parameters -------------------------'
-  print '----------------------------------------------------------------------\n'
+      print('%-40s %-40s' % (Parm, DbInfo[Parm]))
+  print('----------------------------------------------------------------------')
+  print('-- End of Report: Active Database Parameters -------------------------')
+  print('----------------------------------------------------------------------\n')
   return
+#---------------------------------------------------------------------------
 # End PrintDbInfo()
+#---------------------------------------------------------------------------
 
-
+#---------------------------------------------------------------------------
 # Def : GetDbInfo()
 # Desc: Calls sqlplus and runs queries to collect database information from
 #       the database.
@@ -433,12 +458,11 @@ def GetDbInfo(Sid, ParmList):
   
   # Fetch parameters from the database
   try:
-    # dcli uses...  shell=True, stdin=PIPE, stdout=PIPE, close_fds=True
     proc = Popen([Sqlplus, '-s', '/', 'as', 'sysdba'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False) 
     (SqlOut, SqlErr) = proc.communicate(ParmQry)
   except:
     formatExceptionInfo()
-    print 'Failed to connect to database: ' + Sid + ' (database may be shutdown)'
+    print('Failed to connect to database: ' + Sid + ' (database may be shutdown)')
     return(proc.returncode)
   
   SqlOut = SqlOut.strip()      # remove leading/trailing whitespace
@@ -456,7 +480,7 @@ def GetDbInfo(Sid, ParmList):
   if (rc != 0):
     DbInfo['Status'] = 'Failure'
     PrintError(ErrorStack)
-    print ' Error Retrieving info from ' + Sid + '.'
+    print(' Error Retrieving info from ' + Sid + '.')
   else:
     DbInfo['Status'] = 'Success'
     for line in SqlOut.split('\n'):
@@ -466,9 +490,11 @@ def GetDbInfo(Sid, ParmList):
           DbInfo[Parm] = Value
 
   return(DbInfo)
+#---------------------------------------------------------------------------
 # End GetDbInfo()
+#---------------------------------------------------------------------------
 
-
+#---------------------------------------------------------------------------
 # Def : GetLogswitchInfo()
 # Desc: Calls sqlplus and runs queries to collect log switch activity.
 # Args: Oracle SID
@@ -500,7 +526,7 @@ def GetLogswitchInfo(Sid):
     (SqlOut, SqlErr) = proc.communicate(LswQry)
   except:
     formatExceptionInfo()
-    print 'Failed to connect to database: ' + Sid + ' (database may be shutdown)'
+    print('Failed to connect to database: ' + Sid + ' (database may be shutdown)')
     return(proc.returncode)
 
   # Check for sqlplus errors
@@ -516,7 +542,7 @@ def GetLogswitchInfo(Sid):
   if (rc != 0):
     LogSwitchInfo['Status'] = 'Failure'
     PrintError(ErrorStack)
-    print ' Error Retrieving info from ' + Sid + '.'
+    print(' Error Retrieving info from ' + Sid + '.')
   else:
     LogSwitchInfo['Status'] = 'Success'
     for line in SqlOut.split('\n'):
@@ -524,9 +550,11 @@ def GetLogswitchInfo(Sid):
       if (Sid == environ['ORACLE_SID']):
         LogSwitchInfo[Parm] = Value
   return(LogSwitchInfo)
+#---------------------------------------------------------------------------
 # End GetLogswitchInfo()
+#---------------------------------------------------------------------------
 
-
+#---------------------------------------------------------------------------
 # Def : CheckActualParms()
 # Desc: Calls sqlplus and runs queries to collect database parameter
 #       settings.
@@ -561,7 +589,7 @@ def CheckActualParms(Sid, ParmsList):
     (SqlOut, SqlErr) = proc.communicate(ParmQry)
   except:
     formatExceptionInfo()
-    print 'Failed to connect to database: ' + Sid + ' (database may be shutdown)'
+    print('Failed to connect to database: ' + Sid + ' (database may be shutdown)')
     return(proc.returncode)
     
   # Check for sqlplus errors
@@ -577,7 +605,7 @@ def CheckActualParms(Sid, ParmsList):
   if (rc != 0):
     #ActualParms['Status'] = 'Failure'
     PrintError(ErrorStack)
-    print ' Error Retrieving info from ' + Sid + '.'
+    print(' Error Retrieving info from ' + Sid + '.')
   else:
     #DbInfo['Status'] = 'Success'
     for line in SqlOut.split('\n'):
@@ -585,9 +613,11 @@ def CheckActualParms(Sid, ParmsList):
       if (Sid == environ['ORACLE_SID']):
         ActualParms[Parm] = Value
   return(ActualParms)
+#---------------------------------------------------------------------------
 # End CheckActualParms()
+#---------------------------------------------------------------------------
 
-
+#---------------------------------------------------------------------------
 # Def : ReportDbInfo()
 # Desc: Prints a detailed report of database configuration information.
 # Args: DbInfo
@@ -672,8 +702,11 @@ def ReportDbInfo(DbInfo):
     Report += '\n %-28s   %29s  %-28s = %29s' % ('',                           '',                         'Controlfiles',    controlfile_bytes)
     Report += '\n %-28s   %29s  %-28s = %29s' % ('',                           '',                         'Total Storage',   total_storage    )
   return(Report)
+#---------------------------------------------------------------------------
 # End ReportDbInfo()
+#---------------------------------------------------------------------------
 
+#---------------------------------------------------------------------------
 # def GetDbState()
 # Desc: Get the current state of the database (down, mounted, open)
 # Args: $0 is the database connect string
@@ -708,27 +741,31 @@ def GetDbState(Sid):
     pos = SqlOut.find(Sid + '~db_state~')
     DbState = SqlOut[strlen:]
   return DbState
+#---------------------------------------------------------------------------
 # End GetDbState()
+#---------------------------------------------------------------------------
 
-
+#---------------------------------------------------------------------------
 # Def : PrintOptions()
 # Desc: Prints the command line options specified.
 # Args:
 # Retn:
 #---------------------------------------------------------------------------
 def PrintOptions():
-  print '\n-------------------------------------------------------------------'
-  print '-- Command Line Options -------------------------------------------'
-  print '-------------------------------------------------------------------'
-  print ' AppType     = ', Options.AppType.split(',')
-  print ' ShowTypes   = ', Options.ShowTypes
-  print ' ORACLE_SID  = ', Sid
-  print '-------------------------------------------------------------------'
-  print '-- End of Report: Command Line Options ----------------------------'
-  print '-------------------------------------------------------------------\n'
+  print('\n-------------------------------------------------------------------')
+  print('-- Command Line Options -------------------------------------------')
+  print('-------------------------------------------------------------------')
+  print(' AppType     = ', AppType.split(','))
+  print(' ShowTypes   = ', ShowTypes)
+  print(' ORACLE_SID  = ', Sid)
+  print('-------------------------------------------------------------------')
+  print('-- End of Report: Command Line Options ----------------------------')
+  print('-------------------------------------------------------------------\n')
+#---------------------------------------------------------------------------
 # End PrintOptions()
+#---------------------------------------------------------------------------
 
-
+#---------------------------------------------------------------------------
 # Sub : TnsCheck()
 # Desc: Verifies a tnsping lookup
 # Args: ORACLE_SID
@@ -746,7 +783,7 @@ def TnsCheck(TnsName):
     (TnsOut, TnsErr) = proc.communicate()
   except:
     formatExceptionInfo()
-    print 'tnsping failed: ' + TnsName + ' (check tnsnames.ora file)'
+    print('tnsping failed: ' + TnsName + ' (check tnsnames.ora file)')
     return(proc.returncode)
 
   TnsOut = TnsOut.strip()
@@ -767,8 +804,11 @@ def TnsCheck(TnsName):
     PrintError(ErrorStack)
 
   return(rc)
+#---------------------------------------------------------------------------
 # End TnsCheck()
+#---------------------------------------------------------------------------
 
+#---------------------------------------------------------------------------
 # Def : splitThousands()
 # Desc: Simple function to format numbers with commas to separate thousands.
 # Args: s    = numeric_string
@@ -806,9 +846,11 @@ def splitThousands( s, tSep=',', dSep='.'):
     s = s[ :-3 ]
 
   return(lhs + splt[ :-1 ] + rhs)
+#---------------------------------------------------------------------------
 # End splitThousands
+#---------------------------------------------------------------------------
 
-
+#---------------------------------------------------------------------------
 # Def : ReportParms()
 # Desc: Prints a report showing the database parameters that do not conform
 #       to the provisioning plan.
@@ -843,8 +885,11 @@ def ReportParms(AppType, ActualParms, RecommendedParms):
     for (Parm, ActualParmVal, RecommendedParmVal) in ParmsList:
       Report += ' %-40s  %39s  %39s\n' % (Parm, RecommendedParmVal, ActualParmVal)
   return(Report)
+#---------------------------------------------------------------------------
 # End ReportParms()
+#---------------------------------------------------------------------------
 
+#---------------------------------------------------------------------------
 # Def : ReportFailedParms()
 # Desc: Prints a report showing the database parameters that do not conform
 #       to the provisioning plan.
@@ -856,7 +901,7 @@ def ReportFailedParms(AppType, ActualParms, RecommendedParms):
   FailureList = []
 
   for Parm in sorted(RecommendedParms.keys()):
-    #print RecommendedParm
+    #print(RecommendedParm)
     RecommendedParmVal     = RecommendedParms[Parm]
     RecommendedParmVal     = RecommendedParmVal.strip().upper()
     RecommendedParmValMin  = ''
@@ -867,7 +912,7 @@ def ReportFailedParms(AppType, ActualParms, RecommendedParms):
     CommaDelimCount        = RecommendedParmVal.count(',')
      
     if (DashDelimCount > 0 and CommaDelimCount > 0):
-    	print 'Invalid value for', Parm, '=', RecommendedParmVal
+    	print('Invalid value for', Parm, '=', RecommendedParmVal)
     else:
       if (DashDelimCount == 1):
         Delimiter = '-'
@@ -924,8 +969,11 @@ def ReportFailedParms(AppType, ActualParms, RecommendedParms):
     for (RecommendedParm, RecommendedParmVal, ActualParmVal) in FailureList:
       Report += '\n %-40s  %39s  %39s' % (RecommendedParm, ActualParmVal, RecommendedParmVal)
   return(Report)
+#---------------------------------------------------------------------------
 # End ReportFailedParms()
+#---------------------------------------------------------------------------
 
+#---------------------------------------------------------------------------
 # Def : MapToSection()
 # Desc: Converts section names received on the command line so the text
 #       case matches the case of the sections in the ini file. This
@@ -938,14 +986,15 @@ def MapToSection(optSection):
   Sections   = []
 
   Sections = Config.sections()
-  for iniSection in Sections:
-    #print optSection, iniSection
-    if(optSection.upper() == iniSection.upper()):
-      return iniSection
-
+  for CfgSection in Sections:
+    if(optSection.upper() == CfgSection.upper()):
+      return CfgSection
   return ''
+#---------------------------------------------------------------------------
 # End MapToSection
+#---------------------------------------------------------------------------
 
+#---------------------------------------------------------------------------
 # Def : LoadFacilities()
 # Desc: Parses the ficiliy file and returns a list of lists (2 dim array)
 #       containing:
@@ -960,7 +1009,7 @@ def LoadFacilities(FacilitiesFile):
   try:
     facfil = open(FacilitiesFile, 'r')
   except:
-    print 'Cannot open facilities file: ' + FacilitiesFile + ' for read.'
+    print('Cannot open facilities file: ' + FacilitiesFile + ' for read.')
     exit(1)
 
   FacFileContents = facfil.read().split('\n')
@@ -979,8 +1028,11 @@ def LoadFacilities(FacilitiesFile):
           }
           FacDD[strip(Facility)] = FacDict
   return(FacDD)
+#---------------------------------------------------------------------------
 # End LoadFacilities()
+#---------------------------------------------------------------------------
 
+#---------------------------------------------------------------------------
 # Def : LookupMessage()
 # Desc: Parses the ficiliy file and returns a list of lists (2 dim array)
 #       containing:
@@ -999,7 +1051,7 @@ def LookupMessage(FacilityCode):
   try:
     msgfil = open(MessagesFile, 'r')
   except:
-    print 'Cannot open Messages file: ' + MessagesFile + ' for read.'
+    print('Cannot open Messages file: ' + MessagesFile + ' for read.')
     exit(1)
 
   MsgFileContents = msgfil.readlines()
@@ -1019,7 +1071,9 @@ def LookupMessage(FacilityCode):
           Msg.append(line.strip())
           HeaderFound = True
   return(Msg)
+#---------------------------------------------------------------------------
 # End LookupMessage()
+#---------------------------------------------------------------------------
 
 # --------------------------------------
 # ---- End Function Definitions --------
@@ -1030,53 +1084,126 @@ def LookupMessage(FacilityCode):
 # ---- Main Program --------------------
 # --------------------------------------
 if (__name__ == '__main__'):      # if this is true, then this script is *not* being imported by another Python script.
-  Interactive   = stdout.isatty()
-  Cmd           = basename(argv[0])
-  CmdPrefix     = Cmd.split('.')[0]
-  CmdDesc       = 'CheckDatabase'
-  ConfigDir     = '/home/oracle/dba/etc'
-  Version       = '1.10'
-  OratabFile    = '/etc/oratab'
-  Config        = SafeConfigParser()
-  Now           = datetime.now()
-  Report        = ''
-  CheckDbIni    = ConfigDir + '/' + CmdPrefix + '.ini'
-  ###! Sid           = ''
+  Interactive    = stdout.isatty()
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Parameter Check'
+  Version        = '1.20'
+  VersionDate    = 'Mon Jul 16 14:36:57 CDT 2019'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  Report         = ''
+  Sql            = ''
+  ArgParser      = OptionParser()
+  Sid            = 0
+  Now            = datetime.now()
+  InStr          = ''
+  ConnStr        = ''
+  InstList       = []
+  ConfigDir      = '/home/oracle/dba/etc'
+  OratabFile     = '/etc/oratab'
+  Config         = SafeConfigParser()
 
-  try:
-    # The next two lines check to see if there is a config file (and that it 
-    # can be opened for read). If not then throw and exception and exit(1).
-    IniFile = open(CheckDbIni,'rb')
-    IniFile.close()
-    Config.read(CheckDbIni)
-  except:
-    formatExceptionInfo()
-    print "Cannot read configuration file: " + CheckDbIni
-    exit(1)
 
   # Process command line options
   # ----------------------------------
-  ArgParser = OptionParser()
-  ArgParser.add_option("-a",                      dest="AppType",   default='exadata,peoplesoft', type=str, help="Type of application check (PeopleSoft,Exadata,...)", metavar='AppType')
-  ArgParser.add_option("-s", action="store_true", dest="ShowTypes", default=False,                          help="Display application types available.")
-  ArgParser.add_option("-v", action="store_true", dest="Verbose",   default=False,                          help="Verbose mode.")
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nValidate database parameters according to rules in parmcheck.cfg.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("-a",  dest="AppType",                           default='exadata,peoplesoft', type=str, help="Type of application check (PeopleSoft,Exadata,...)", metavar='AppType')
+  ArgParser.add_option('-c',  dest='CreateConfig', action='store_true', default=False,                          help="Create a sample configuration file.")
+  ArgParser.add_option('-f',  dest="ConfigFile",                        default='',                   type=str, help="Configuration File")
+  ArgParser.add_option("-s",  dest="ShowTypes",    action="store_true", default=False,                          help="Display application types available.")
+  ArgParser.add_option("-v",  dest="Verbose",      action="store_true", default=False,                          help="Verbose mode.")
+  ArgParser.add_option('--v', dest='ShowVer',      action='store_true', default=False,                          help="print version info.")
   Options, args = ArgParser.parse_args()
   argc = len(args)
 
-  print '\n============================================================================================================================'
-  print '%s: Release %s Production - Database Check utility for Oracle 11g %45s' % (CmdDesc, Version, Now.strftime("%Y-%m-%d %H:%M"))
-  print '============================================================================================================================'
+  AppType       = Options.AppType
+  CreateConfig  = Options.CreateConfig
+  ConfigFile    = Options.ConfigFile
+  ShowTypes     = Options.ShowTypes
+  Verbose       = Options.Verbose
+  ShowVer       = Options.ShowVer
 
-  # Show all Sections, Options, Values in the ini file.
-  if (Options.ShowTypes == True):
-    iniSections = sorted(Config.sections())
-    print ' Configured Application Types from: ' + basename(CheckDbIni) + '\n'
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  # Set default config file name...
+  # ----------------------------------
+  if (ConfigFile == ''):
+    ConfigFile = pathjoin(ConfigDir, Cmd + '.cfg')
+
+  if (CreateConfig == True):
+    Response = 'Y'
+    if (isfile(ConfigFile)):
+      if(version_info[0] >= 3):
+        Response = input('\nOverwrite existing config file ' + ConfigFile + ' (y/N) : ')
+      else:
+        Response = raw_input('\nOverwrite existing config file ' + ConfigFile + ' (y/N) : ')
+    if (Response.upper() != 'Y'):
+      exit(0)
+    else:
+      try:
+        f = open(ConfigFile, 'w')
+        print('\nNew configuration file crated: %s' % ConfigFile)
+      except:
+        print('\nCannot open configuration file for write: %s' % ConfigFile)
+        exit(1)
+
+      f.write("\n[Applications]")
+      f.write("\nApplications                  = PeopleSoft, Exadata, Other")
+      f.write("\n")
+      f.write("\n[PeopleSoft]")
+      f.write("\n_optimizer_cartesian_enabled  = FALSE")
+      f.write("\n_optimizer_mjc_enabled        = FALSE")
+      f.write("\n_gby_hash_aggregation_enabled = FALSE")
+      f.write("\n_unnest_subquery              = true")
+      f.write("\noptimizer_dynamic_sampling    = 0")
+      f.write("\nparallel_max_servers          = 12-24")
+      f.write("\nparallel_min_servers          = 4-8")
+      f.write("\n")
+      f.write("\n[Exadata]")
+      f.write("\n_kill_diagnostics_timeout     = 140")
+      f.write("\n_lm_rcvr_hang_allow_time      = 140")
+      f.write("\ndb_block_checksum             = FULL")
+      f.write("\ndb_block_checking             = MEDIUM")
+      f.write("\ndb_lost_write_protect         = TYPICAL, full")
+      f.write("\n")
+      f.write("\n[Other]")
+      f.write("\nresource_manager_plan         = DEFAULT_PLAN")
+      
+      f.close()
+      print('\nConfiguration file created with sample values: %s' % ConfigFile)
+      exit(0)
+
+  # Load the configuration file
+  if (IsReadable(ConfigFile)):
+    Config.read(ConfigFile)
+    Settings = ''
+  else:
+      print('\nCannot open parameter file for read: %s' % ConfigFile)
+      exit(1)
+
+  print('\n============================================================================================================================')
+  print('%s: Release %s Production - Database Parameter Check %56s' % (CmdDesc, Version, Now.strftime("%Y-%m-%d %H:%M")))
+  print('============================================================================================================================')
+
+  # Show all Sections, Options, Values in the config file.
+  if (ShowTypes):
+    CfgSections = sorted(Config.sections())
+    print(' Configured Application Types from: ' + basename(ConfigFile) + '\n')
     Sections = Config.sections()
-    for Section in iniSections:
-      print ' [' + Section + ']'
+    for Section in CfgSections:
+      print(' [' + Section + ']')
       for Option in sorted(Config.options(Section)):
         Value = Config.get(Section, Option)
-        print ' %-40s = %-40s' % (Option, Value)
+        print(' %-40s = %-40s' % (Option, Value))
       print
     exit(0)
 
@@ -1088,14 +1215,14 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
     if (environ['ORACLE_SID'] != ''):
       Sid = environ['ORACLE_SID']
     else:
-      print '\n  Invalid value for ORACLE_SID.'
-      print '\n  Exiting...'
+      print('\n  Invalid value for ORACLE_SID.')
+      print('\n  Exiting...')
       exit(1)
   else:
-    print '\n  No ORACLE_SID found. You must either set ORACLE_SID'
-    print '  or provide an instance name on the command line.'
-    print '\n  For example: ' + Cmd + ' dbm1'
-    print '\n  Exiting...'
+    print('\n  No ORACLE_SID found. You must either set ORACLE_SID')
+    print('  or provide an instance name on the command line.')
+    print('\n  For example: ' + Cmd + ' dbm1')
+    print('\n  Exiting...')
     exit(1)
 
   # Setup the Oracle environment and setup Oracle commands.
@@ -1111,36 +1238,34 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
     FacilitiesFile = OracleHome + '/lib/facility.lis'
     FacilitiesDD = LoadFacilities(FacilitiesFile)
   else:
-    print 'Error setting the ORACLE_HOME using', Sid
-    print 'This is likely due to a lookup failure in the oratab file.'
+    print('Error setting the ORACLE_HOME using', Sid)
+    print('This is likely due to a lookup failure in the oratab file.')
 
-    print '\n  Contents of oratab file follows:\n'
-    print '  ORACLE_SID             ORACLE_HOME'
-    print '  ---------------------- -----------------------------------------------'
+    print('\n  Contents of oratab file follows:\n')
+    print('  ORACLE_SID             ORACLE_HOME')
+    print('  ---------------------- -----------------------------------------------')
     for OraSid in sorted(Oratab.keys()):
-      print '  %-20s   %-50s' % (OraSid, Oratab[OraSid])
+      print('  %-20s   %-50s' % (OraSid, Oratab[OraSid]))
     exit(1)
   
-  # Configure the application type filter. AppTypes correspond to sections in the ini file.
+  # Configure the application type filter. AppTypes correspond to sections in the config file.
   AppTypes = []
-  for AppType in split(Options.AppType, ','):
+  for AppType in split(AppType, ','):
     if (AppType != ''):
       TypeLookup = MapToSection(AppType)
       if (TypeLookup != ''):
         AppTypes.append(TypeLookup)
       else:
-        print 'Application type [' + AppType + '] not found in ini file and will be skipped.'
+        print('Application type [%s] not found in config file and will be skipped.' % AppType)
 
-  print ' ORACLE_SID   =', Sid 
-  print ' ORACLE_HOME  =', OracleHome
   if (len(AppTypes) >= 1):
-  	print ' Applications =', join(AppTypes, ', ')
+  	print(' Applications = %s' % join(AppTypes, ', '))
   else:
-  	print ' Applications = <none>', '\n'
+  	print(' Applications = <none>\n')
   print
 
 
-  # Collect parameters to check from the ini file
+  # Collect parameters to check from the config file
   # ------------------------------------------------------------
   AllParmsToCheck = []
   for AppType in AppTypes:
@@ -1150,8 +1275,8 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
 
   DbState = GetDbState(OracleSid);
   if (DbState != 'OPEN'):
-    print "Database must be open to continue."
-    print "Current state:", DbState
+    print("Database must be open to continue.")
+    print("Current state: %s" % DbState)
     exit(1)
 
   # Login to the database and run the queries to collect metrics.
@@ -1166,7 +1291,7 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
   if (len(AppTypes) >= 1):
     # Report Good Parameters (set to recommended values)
     # ------------------------------------------------------------
-    if (Options.Verbose):
+    if (Verbose):
       Report += '\n\n --------------------------------------------------------------------------------------------------------------------------\n'
       for AppType in AppTypes:
         ParmsToCheck = {}
@@ -1189,10 +1314,10 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
         Report += '\n' + tmp
       Report += '\n'
 
-  print Report
-  print '============================================================================================================================'
-  print 'End of Report                                                                   %44s' % (Now.strftime("%Y-%m-%d %H:%M"))
-  print '============================================================================================================================'
+  print(Report)
+  print('============================================================================================================================')
+  print('End of Report                                                                   %44s' % (Now.strftime("%Y-%m-%d %H:%M")))
+  print('============================================================================================================================')
 
   exit(0)
 # --------------------------------------
