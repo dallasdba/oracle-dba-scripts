@@ -1130,7 +1130,7 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
         print('\nCannot open configuration file for write: %s' % ConfigFile)
         exit(1)
 
-      f.write("\n[Applications]")
+      f.write("[Applications]")
       f.write("\nApplications                  = PeopleSoft, Exadata, Other")
       f.write("\n")
       f.write("\n[PeopleSoft]")
