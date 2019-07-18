@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #------------------------------------------------------------------------------------------------#
-#  Name:        parmcheck                                                                        #
+#  Name:        check_db                                                                         #
 #  Author:      Randy Johnson                                                                    #
-#  Description: Validates database parameters according to rules in parmcheck.cfg.               #
+#  Description: Validates database parameters according to rules in check_db.cfg.                #
 #------------------------------------------------------------------------------------------------#
 
 
@@ -172,24 +172,6 @@ def ErrorCheck(StdOut, ComponentList):
       for Component in ComponentList:
         if (Component == FacilitiesDD[key]['Component']):
           FacilityList.append(key.upper())
-
-  # Component:
-  #  Facility class is major error type such as SP1, SP2, IMP, TNS, ...
-  #  Component class is the application such as sqlplus, rdbms, imp, network.
-  #  A component can have several error facilities. For example the sqlplus 
-  #  has 5:
-  #    grep sqlplus  /u01/app/oracle/product/11.2.0.3/dbhome_1/lib/facility.lis
-  #    cpy:sqlplus:*:
-  #    sp1:sqlplus:*:
-  #    sp2:sqlplus:*:
-  #    sp3:sqlplus:*:
-  #    spw:sqlplus:*:
-  #  
-  #  The error SP2-06063 breaks down as Component=sqlplus, Facility=sp2, Error=06063. See below:
-  #    SP2-06063 : 06063,0, "When SQL*Plus starts, and after CONNECT commands, the site profile\n"
-  #    SP2-06063 : // *Document: NO
-  #    SP2-06063 : // *Cause:  Usage message.
-  #    SP2-06063 : // *Action:
 
   for line in StdOut.split('\n'):
     for Facility in FacilityList:
@@ -788,15 +770,6 @@ def TnsCheck(TnsName):
 
   TnsOut = TnsOut.strip()
   
-  # Check for tns errors
-  # Components are installed applications/components such as sqlplus, import, export, rdbms, network, ...
-  # ComponentList contains a list of all components for which the error code will be searched. 
-  # For example a component of rdbms will result in ORA-nnnnn errors being included in the search. 
-  # ALL_COMPONENTS is an override in the ErrorCheck function that results in *all* installed components 
-  # being selected. Searching all component errors is pretty fast so for now we'll just search them all.
-  # Once we are more confident in selecting the components to search we can specify those components.
-  # -------------------------------------------------------------------------------------------------------
-  #ComponentList = ['network']
   ComponentList = ['ALL_COMPONENTS']
   (rc, ErrorStack) = ErrorCheck(TnsOut, ComponentList)
 
@@ -817,7 +790,7 @@ def TnsCheck(TnsName):
 # Retn: formatted string
 #---------------------------------------------------------------------------
 def splitThousands( s, tSep=',', dSep='.'):
-  '''Splits a general float on thousands. GIGO on general input'''
+  'Splits a general float on thousands. GIGO on general input'
   if s == None:
     return(0)
   if not isinstance( s, str ):
@@ -1111,7 +1084,7 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
   Usage += '\n------------------------------------------------------------------------------'
-  Usage += '\nValidate database parameters according to rules in parmcheck.cfg.'
+  Usage += '\nValidate database parameters according to rules in check_db.cfg.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("-a",  dest="AppType",                           default='exadata,peoplesoft', type=str, help="Type of application check (PeopleSoft,Exadata,...)", metavar='AppType')
