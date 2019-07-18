@@ -3,7 +3,7 @@
 #------------------------------------------------------------------------------------------------#
 #  Name:        check_db                                                                         #
 #  Author:      Randy Johnson                                                                    #
-#  Description: Validates database parameters according to rules in check_db.cfg.                #
+#  Description: Validates database configuration according to rules in check_db.cfg.             #
 #------------------------------------------------------------------------------------------------#
 
 
@@ -1059,7 +1059,7 @@ def LookupMessage(FacilityCode):
 if (__name__ == '__main__'):      # if this is true, then this script is *not* being imported by another Python script.
   Interactive    = stdout.isatty()
   Cmd            = basename(argv[0]).split('.')[0]
-  CmdDesc        = 'Parameter Check'
+  CmdDesc        = 'Database Check'
   Version        = '1.20'
   VersionDate    = 'Mon Jul 16 14:36:57 CDT 2019'
   DevState       = 'Production'
@@ -1084,7 +1084,8 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
   Usage += '\n------------------------------------------------------------------------------'
-  Usage += '\nValidate database parameters according to rules in check_db.cfg.'
+  Usage += '\nValidate database configuration and parameters according to rules specified'
+  Usage += '\nin the configuration file.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("-a",  dest="AppType",                           default='exadata,peoplesoft', type=str, help="Type of application check (PeopleSoft,Exadata,...)", metavar='AppType')
