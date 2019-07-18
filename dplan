@@ -1,21 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 #  Name:        dplan                                                                            #
 #  Author:      Randy Johnson                                                                    #
 #  Description: Executes a dbms_xplan.display_awr report on a SQL_ID and prints the rerport.     #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 04/13/2012 1.00 Randy Johnson    Initial write.                                                #
-# 05/19/2014 1.10 Randy Johnson    Removed Keyboard input for Child ID. Now must use -c          #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 07/17/2015 2.10 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 08/09/2015 3.00 Randy Johnson    Folded in dplan_awr script. Invoke with -a option.            #
-# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------

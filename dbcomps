@@ -1,24 +1,11 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 #  Name:        dbcomps                                                                          #
 #  Author:      Randy Johnson                                                                    #
 #  Description: Prints database component version information from product_component_version,    #
 #               and dba_registry_history.                                                        #
-#                                                                                                #
-#  Usage: dbcomps [options]                                                                      #
-#                                                                                                #
-#  Options:                                                                                      #
-#    -h, --help  show this help message and exit                                                 #
-#    -s          print SQL query.                                                                #
-#    -v          print version info.                                                             #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 12/09/2015 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 
 # --------------------------------------
@@ -43,7 +30,7 @@ from Oracle       import ParseConnectString
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
-  CmdDesc        = 'Db Components'
+  CmdDesc        = 'Database Components'
   Version        = '1.00'
   VersionDate    = 'Wed Dec  9 17:17:35 CST 2015'
   DevState       = 'Production'

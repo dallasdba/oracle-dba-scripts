@@ -1,26 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        dbfeatusage                                                                       #
 # Author:      Randy Johnson                                                                     #
 # Description: Report Database Features in Use.                                                  #
-#                                                                                                #
-# Usage: dbfeatusage [options]                                                                   #
-#                                                                                                #
-# Options:                                                                                       #
-#   -h, --help  show this help message and exit                                                  #
-#   -o ORDERBY  order by 1,2,3 ...                                                               #
-#   -n NAME     where feature name like...                                                       #
-#   -u          update the feature usage table before report.                                    #
-#   --s         print SQL query.                                                                 #
-#   --v         print version info.                                                              #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 09/16/2015 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------

@@ -1,20 +1,10 @@
 #!/bin/env python
 
-##################################################################################################################
-# Name:        dpw (decode password)                                                                             #
-# Author:      Randy Johnson                                                                                     #
-# Description: Decodes a UU encoded string.                                                                      #
-#                                                                                                                #
-# History:                                                                                                       #
-#                                                                                                                #
-# Date       Ver. Who              Change Description                                                            #
-# ---------- ---- ---------------- ----------------------------------------------------------------------------- #
-# 07/06/2012 1.00 Randy Johnson    Initial release.                                                              #
-# 09/19/2012 2.00 Randy Johnson    Corrections to Usage (removed -v) and improved error handling                 #
-# 12/07/2012 2.10 Randy Johnson    Changed encode/decode to use built-in string functions.                       #
-# 07/17/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                                     #
-# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                                           #
-##################################################################################################################
+#------------------------------------------------------------------------------------------------#
+# Name:        dpw (decode password)                                                             #
+# Author:      Randy Johnson                                                                     #
+# Description: Decodes a UU encoded string.                                                      #
+#------------------------------------------------------------------------------------------------#
 
 
 # --------------------------------------

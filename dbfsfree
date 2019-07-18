@@ -1,19 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        dbfsfree                                                                          #
 # Author:      Randy Johnson                                                                     #
 # Description: Reports the real freespace available in the mounted DBFS file system(s).          #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 10/11/2012 1.02 Randy Johnson    Removed the dbfs user password from the script.               #
-# 10/11/2012 1.03 Randy Johnson    Internal documentation.                                       #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 07/13/2017 2.01 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 
 # --------------------------------------

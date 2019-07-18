@@ -1,6 +1,6 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        dggen                                                                             #
 # Author:      Randy Johnson                                                                     #
 # Description: Generates a Step-Byt-Step Guide for Configuring a Data Guard Standby Database.    #
@@ -15,23 +15,7 @@
 #                                                                                                #
 # Wish List:                                                                                     #
 #  - Add configurable Listener Name                                                              #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 03/20/2017 1.00 Randy Johnson    Initial write.                                                #
-# 08/22/2017 1.10 Randy Johnson    Moved initialization for TempPfile and BackupPfile to after   #
-#                                  config file has been processed since there is a dependency on #
-#                                  DbName.                                                       #
-# 08/06/2017 1.20 Randy Johnson    Several fixes as result of QA tests.                          #
-# 08/29/2017 1.21 Randy Johnson    Added textual helps on the summary re. Standby Online Redo    #
-#                                  Logs.                                                         #
-# 01/09/2018 1.22 Randy Johnson    Moved alter database force logging up to just before          #
-#                                  duplication of primary.                                       #
-#                                  Added --privilege sysasm to asmcmd commands.                  #
-#                                  Removed hard dependency on the dbmap.                         # 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------

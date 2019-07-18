@@ -1,10 +1,9 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 # Name:        dggen4                                                                            #
 # Author:      Randy Johnson                                                                     #
 # Description: Generates Step-Byt-Step Commands for Configuring 1 Data Guard Standby Database.   #
-#                                                                                                #
 #              This includes the following:                                                      #
 #                1) RMAN Duplicate from Backup                                                   #
 #                2) Configuration of listener.ora and tnsnames.ora files                         #
@@ -15,24 +14,7 @@
 #                                                                                                #
 # Wish List:                                                                                     #
 #  - Add configurable Listener Name                                                              #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 11/19/2017 1.00 Randy Johnson    Spinoff from dggen2.                                          #
-# 12/03/2017 1.20 Randy Johnson    Added local_listener to support non-default port, added       #
-#                                  StaticConnectIdentifier to DG Config -- maybe temporary.      #
-# 12/04/2017 1.30 Randy Johnson    Added PrimaryListenerName, Standby{1/2}ListenerName.          #
-#                                  Replaced NodeName with ListenerHost.                          #
-#                                  Added LISTENER = ... to listener.ora when listener host !=    #
-#                                  hostname or port != 1521. Added local_listener to instance    #
-#                                  parameters when listener host != hostname or port != 1521.    #
-#                                  Added set property StaticConnectIdentifier when listener host #
-#                                  !=  hostname or port != 1521. Added listener entry in         #
-#                                  tnsnames.ora file when listener host !=  hostname or port !=  #
-#                                  1521.                                                         #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------

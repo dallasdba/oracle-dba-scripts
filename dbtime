@@ -1,21 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 #  Name:        dbtime                                                                           #
 #  Author:      Randy Johnson                                                                    #
 #  Description: Find busiest time periods in AWR.                                                #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 05/29/2014 1.00 Randy Johnson    Initial write.                                                #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Added prompts for   #
-#                                  username, password, tnsname.                                  #
-# 08-25-2015 2.10 Randy Johnson    Added -l and -m options. Set EndTime default to               #
-#                                  '3000-01-01 00:00:00'                                         #
-# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
