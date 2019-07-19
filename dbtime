@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #------------------------------------------------------------------------------------------------#
-#  Name:        dbtime                                                                           #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Find busiest time periods in AWR.                                                #
+# Name:        dbtime                                                                            #
+# Author:      Randy Johnson                                                                     #
+# Description: Find busiest time periods in AWR.                                                 #
 #------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -16,8 +16,6 @@ from os.path      import basename
 from sys          import argv
 from sys          import exit
 from sys          import version_info
-from signal       import SIGPIPE
-from signal       import SIG_DFL
 from signal       import signal
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
@@ -30,9 +28,9 @@ from Oracle       import ValidateDate
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
-  CmdDesc        = 'Db Time'
-  Version        = '2.11'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  CmdDesc        = 'Database Time'
+  Version        = '2.12'
+  VersionDate    = 'Fri Jul 19 10:12:14 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -49,11 +47,12 @@ if (__name__ == '__main__'):
   MaxSnapId      = '9999999999999999999'
 
            
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nFind busiest time periods in AWR.'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nFind busiest time periods in the database according to the Automatic Workload'
+  Usage += '\nRepository.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-b',  dest='BeginTime',                       default='1960-01-01 00:00:00', type=str, help="sample_time >= BeginTime   (default 1960-01-01 00:00:00)")

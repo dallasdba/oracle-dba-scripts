@@ -32,7 +32,7 @@ from Oracle       import ValidateDate
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'ASH Load Groups'
-  Version        = '1.53'
+  Version        = '1.54'
   VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate

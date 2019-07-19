@@ -30,13 +30,15 @@ if (version_info[0] >= 3):
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Decode Password'
-  Version        = '3.01'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '3.02'
+  VersionDate    = 'Fri Jul 19 10:12:14 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nDecodes a UU encoded string.'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nDecode a UU encoded string.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('--v', dest='ShowVer', action='store_true', default=False, help="print version info.")

@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #------------------------------------------------------------------------------------------------#
-#  Name:        dbfreespace                                                                      #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Report unused space at table, partition, subpartition level.                     #
+# Name:        dbfreespace                                                                       #
+# Author:      Randy Johnson                                                                     #
+# Description: Report unused space at table, partition, subpartition level.                      #
 #------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -15,8 +15,6 @@ from os.path      import basename
 from sys          import argv
 from sys          import exit
 from sys          import version_info
-from signal       import SIGPIPE
-from signal       import SIG_DFL
 from signal       import signal
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
@@ -29,9 +27,9 @@ from Oracle       import PrintError
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
-  CmdDesc        = 'Report Free Tab/Part/Subpart Space'
-  Version        = '1.00'
-  VersionDate    = 'Wed Aug 2 12:16:45 CDT 2017'
+  CmdDesc        = 'Database Free Space'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jul 19 10:12:14 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -41,11 +39,11 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   InstList       = []
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nReport where database time is spent, (from v$sys_time_model -- by event).'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nReport free space in tables, partitions, and subpartitions.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-o',  dest='Owner',                         default='',    type=str, help="where owner = '...'")

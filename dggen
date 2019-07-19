@@ -100,8 +100,8 @@ def LoadConfig(ConfigFile):
 if (__name__ == '__main__'):
   Cmd                   = basename(argv[0]).split('.')[0]
   CmdDesc               = 'Generate Dataguard Configuration'
-  Version               = '1.22'
-  VersionDate           = 'Tue Jan 09 07:00:00 CDT 2018'
+  Version               = '1.24'
+  VersionDate           = 'Fri Jul 19 10:12:14 CDT 2019'
   DevState              = 'Production'
   Banner                = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   ArgParser             = OptionParser()
@@ -164,9 +164,23 @@ if (__name__ == '__main__'):
   StandbyOracleHome         = '/u01/app/oracle/product/12.1.0.2/dbhome_1'
   StandbyGridHome           = '/u01/app/12.1.0.2/grid'
 
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nGenerate a command-by-command guide for configuring a Data Guard physical'
+  Usage += '\nstandby database. Includes the following:'
+  Usage += '\n  1) RMAN Duplicate from Active Database'
+  Usage += '\n  2) Configuration of listener.ora and tnsnames.ora files'
+  Usage += '\n  3) Server Control commands to register the standby database (RAC only)'
+  Usage += '\n  4) Instance parameters for DG'
+  Usage += '\n  5) Data Guard Broker Commands for creating the configuration'
+  Usage += '\n  6) Switchover commands and other useful commands for testing the configuration'
+  #Usage += '\n  7) Generate a shell script for starting/stopping the DG Observer'
+  ArgParser = OptionParser(Usage)
+
   ArgParser.add_option('-c',  dest='CreateConfig', action='store_true', default=False,           help="Create a sample configuration file.")
   ArgParser.add_option('-f',  dest="ConfigFile",                        default='',    type=str, help="Configuration File")
-  ArgParser.add_option('-v',  dest='Version',      action='store_true', default=False,           help="print version info.")
+  ArgParser.add_option('--v', dest='Version',      action='store_true', default=False,           help="print version info.")
 
   # Parse command line arguments
   Options, args = ArgParser.parse_args()
@@ -510,7 +524,7 @@ if (__name__ == '__main__'):
   print('   Standby Online Redolog Size              : %-10s  <- %s' % (SrlSize, 'Must be precisely the same size as online redo logs.'))
   print('   Standby Online Redolog Count             : %-10s  <- %s' % (SrlCount, 'Must be the number of online redo log groups + 1'))
   print('   Standby Online Redolog Starting Sequence : %-10s  <- %s' % (SrlGroupStart, 'Must not conflict with any existing online redo log group ID\'s'))
-  
+
   print("")
   print(' Primary Settings')
   print('   Node Count                               : %s' % PrimaryNodeCount)
@@ -559,13 +573,13 @@ if (__name__ == '__main__'):
     print("[PRIMARY] " + PrimaryNodeDict[NodeId]['Name'])
     print("---------------------------------------------------------------------------------------------------------------")
     print('echo "' + PrimaryNodeDict[NodeId]['Inst'] + ':' + PrimaryOracleHome + ':N"' + ' >> ' + Oratab)
-  
+
   for NodeId in StandbyNodeDict:
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[STANDBY] " + StandbyNodeDict[NodeId]['Name'])
     print("---------------------------------------------------------------------------------------------------------------")
     print('echo "' + StandbyNodeDict[NodeId]['Inst'] + ':' + StandbyOracleHome + ':N"' + ' >> ' + Oratab)
-  
+
   if (Dbmap != ''):
     print("\n\n=========================================================================================================================")
     print("Dbmap - Update the " + Dbmap + " file on all nodes Primary and Standby")
@@ -575,17 +589,17 @@ if (__name__ == '__main__'):
       print("[PRIMARY] " + PrimaryNodeDict[NodeId]['Name'])
       print("---------------------------------------------------------------------------------------------------------------")
       print('echo "' + PrimaryNodeDict[NodeId]['Inst'] + '       : ' + PrimaryDbUniqueName + '" >> ' + Dbmap)
-    
+
     for NodeId in StandbyNodeDict:
       print("\n---------------------------------------------------------------------------------------------------------------")
       print("[PRIMARY] " + StandbyNodeDict[NodeId]['Name'])
       print("---------------------------------------------------------------------------------------------------------------")
       print('echo "' + StandbyNodeDict[NodeId]['Inst'] + '       : ' + StandbyDbUniqueName + '" >> ' + Dbmap)
-  
+
   print("\n\n=========================================================================================================================")
   print("Network - Static Listener Settings")
   print("=========================================================================================================================")
-  
+
   for NodeId in PrimaryNodeDict:
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[PRIMARY] " + PrimaryNodeDict[NodeId]['Name'] + " " + PrimaryGridHome + "/network/admin/listener.ora")
@@ -601,7 +615,7 @@ if (__name__ == '__main__'):
     print("      (ORACLE_HOME   = " + PrimaryOracleHome + ")")
     print("    )")
     print("  )")
-  
+
   for NodeId in StandbyNodeDict:
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[STANDBY] " + StandbyNodeDict[NodeId]['Name'] + " " + StandbyGridHome + "/network/admin/listener.ora")
@@ -617,7 +631,7 @@ if (__name__ == '__main__'):
     print("      (ORACLE_HOME   = " + StandbyOracleHome + ")")
     print("    )")
     print("  )")
-  
+
   for NodeId in PrimaryNodeDict:
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[PRIMARY] " + PrimaryNodeDict[NodeId]['Name'] + " stop/start/status the listener.")
@@ -627,7 +641,7 @@ if (__name__ == '__main__'):
     print(PrimaryGridHome + "/bin/lsnrctl stop")
     print(PrimaryGridHome + "/bin/lsnrctl start")
     print(PrimaryGridHome + "/bin/lsnrctl stat | grep " + PrimaryDbUniqueName + '_DGMGRL')
-  
+
   for NodeId in StandbyNodeDict:
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[STANDBY] " + StandbyNodeDict[NodeId]['Name'] + " stop/start/status the listener.")
@@ -637,7 +651,7 @@ if (__name__ == '__main__'):
     print(StandbyGridHome + "/bin/lsnrctl stop")
     print(StandbyGridHome + "/bin/lsnrctl start")
     print(StandbyGridHome + "/bin/lsnrctl stat | grep " + StandbyDbUniqueName + '_DGMGRL')
-  
+
   print("\n\n=========================================================================================================================")
   print("Network - Temporary tnsnames.ora Settings for node 1 of primary and standby")
   print("=========================================================================================================================")
@@ -650,7 +664,7 @@ if (__name__ == '__main__'):
   print("    (ADDRESS = (PROTOCOL = TCP)(HOST = " + PrimaryNodeDict[1]['Vip'] + '.' + PrimaryDomain  + ")(PORT = " + PrimaryPort + "))")
   print("    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + PrimaryNodeDict[1]['Inst'] + "))")
   print("  )")
-  
+
   #print("\n# For Dataguard Connectivity")
   print("")
   print(StandbyDbUniqueName + " =")
@@ -660,7 +674,7 @@ if (__name__ == '__main__'):
   print("    (ADDRESS = (PROTOCOL = TCP)(HOST = " + StandbyNodeDict[1]['Vip'] + '.' + StandbyDomain  + ")(PORT = " + StandbyPort + "))")
   print("    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + StandbyNodeDict[1]['Inst'] + "))")
   print("  )")
-  
+
   print("\n\n=========================================================================================================================")
   print("Create Audit File Dest On All Standby Nodes")
   print("=========================================================================================================================")
@@ -668,7 +682,7 @@ if (__name__ == '__main__'):
   print("[STANDBY] All Nodes")
   print("---------------------------------------------------------------------------------------------------------------")
   print("mkdir -p " + StandbyAuditFileDest)
- 
+
   print("\n\n=========================================================================================================================")
   print("Create Temporary Password File On Standby (node 1 only)")
   print("=========================================================================================================================")
@@ -676,7 +690,7 @@ if (__name__ == '__main__'):
   print("[STANDBY] " + StandbyNodeDict[1]['Name'])
   print("---------------------------------------------------------------------------------------------------------------")
   print("orapwd file=" + StandbyOracleHome + "/dbs/orapw" + StandbyNodeDict[1]['Inst'] + " password=" + SysPassword)
-  
+
   print("\n\n=========================================================================================================================")
   print("Create Temporary init.ora File On Standby (node 1 only)")
   print("=========================================================================================================================")
@@ -685,7 +699,7 @@ if (__name__ == '__main__'):
   print("---------------------------------------------------------------------------------------------------------------")
   print('echo "*.db_name=%s > %s' % ("'" + DbName + "'\"", TempPfile))
   print('echo "*.shared_pool_size=2800m" >> ' + TempPfile)
-  
+
   print("\n\n=========================================================================================================================")
   print("Startup the Standby Instance Nomount (node 1 only)")
   print("=========================================================================================================================")
@@ -717,7 +731,7 @@ if (__name__ == '__main__'):
     for MemberId in range(1, SrlCount + 1):
       print("alter database add standby logfile thread " + str(NodeId) + " group " + str(GroupId) + " '" + PrimaryRecoDg + "' size " + SrlSize + ";")
       GroupId += 1
-  
+
   print("\n\n=========================================================================================================================")
   print("Create Alias for Spfile in ASM for the Primary Database (only required if one doesn't already exist)")
   print("=========================================================================================================================")
@@ -1204,18 +1218,18 @@ if (__name__ == '__main__'):
   print("ADD DATABASE '" + StandbyDbUniqueName + "' AS CONNECT IDENTIFIER IS '" + StandbyDbUniqueName + "' MAINTAINED AS PHYSICAL;")
   print("\nENABLE CONFIGURATION;")
   print("")
-  
+
   print("show configuration verbose;")
-  
+
   print("show database verbose '" + PrimaryDbUniqueName + "';")
-  
+
   for NodeId in PrimaryNodeDict:
     print("show instance verbose '" + PrimaryNodeDict[NodeId]['Inst'] + "' on database '" + PrimaryDbUniqueName + "';")
-  
+
   print("show database verbose '" + StandbyDbUniqueName + "';")
   for NodeId in StandbyNodeDict:
     print("show instance verbose '" + StandbyNodeDict[NodeId]['Inst'] + "' on database '" + StandbyDbUniqueName + "';")
-  
+
   print("")
   print("switchover to '" + StandbyDbUniqueName + "';")
   print("switchover to '" + PrimaryDbUniqueName + "';")
@@ -1239,18 +1253,18 @@ if (__name__ == '__main__'):
   if (DbVersion >= 11):
     print("For 11.2.0.2 and 11.2.0.3 databases consider setting the following:")
     print("")
-    # In Oracle Database versions 11.2.0.2 through 11.2.0.3 for physical standby database configurations in an Oracle RAC environment, 
+    # In Oracle Database versions 11.2.0.2 through 11.2.0.3 for physical standby database configurations in an Oracle RAC environment,
     # set "_switchover_to_standby_option"= OPEN_ALL_IGNORE_SESSIONS. This becomes the default behavior in version 11.2.0.4.
     # This parameter will terminate all remaining primary instances at the right time during execution and ignores active sessions.
-    # You can keep all nodes of the primary open when performing "switchover to standby". In lieu of this parameter, ensure that there 
-    #is only one instance active for each primary and standby database and use the WITH SESSION SHUTDOWN clause with the switchover 
+    # You can keep all nodes of the primary open when performing "switchover to standby". In lieu of this parameter, ensure that there
+    #is only one instance active for each primary and standby database and use the WITH SESSION SHUTDOWN clause with the switchover
     # command.
     # ---------------------------------------------------------------------------------------------------------------------------------
     print("alter system set \"_switchover_to_standby_option\"=OPEN_ALL_IGNORE_SESSIONS scope=both sid='*';")
-    
-    # In Oracle Database version s 11.2.0.2 through 11.2.0.3 set "_defer_eor_orl_arch_for_so"=TRUE. This becomes the default behavior 
-    # in version 11.2.0.4. This parameter defers the archiving of the final End-Of_Redo (EOR) redo log files at the old primary. 
-    # Performing this archival when the old primary is mounted as a standby saves time during switchover.    
+
+    # In Oracle Database version s 11.2.0.2 through 11.2.0.3 set "_defer_eor_orl_arch_for_so"=TRUE. This becomes the default behavior
+    # in version 11.2.0.4. This parameter defers the archiving of the final End-Of_Redo (EOR) redo log files at the old primary.
+    # Performing this archival when the old primary is mounted as a standby saves time during switchover.
     # ---------------------------------------------------------------------------------------------------------------------------------
     print("alter system set \"_defer_eor_orl_arch_for_so\"=TRUE scope=both sid='*';")
 

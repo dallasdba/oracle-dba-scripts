@@ -114,8 +114,8 @@ def LoadConfig(ConfigFile):
 if (__name__ == '__main__'):
   Cmd                   = basename(argv[0]).split('.')[0]
   CmdDesc               = 'Generate Dataguard Configuration'
-  Version               = '1.30'
-  VersionDate           = 'Mon Dec 4 12:58:01:26 CST 2017'
+  Version               = '1.31'
+  VersionDate           = 'Fri Jul 19 10:12:14 CDT 2019'
   DevState              = 'Production'
   Banner                = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   ArgParser             = OptionParser()
@@ -171,9 +171,22 @@ if (__name__ == '__main__'):
   StandbyAuditFileDest     = '/u01/app/oracle/admin/MYDB/adump'
   StandbyOracleHome        = '/u01/app/oracle/product/11.2.0.4/dbhome_1'
 
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nGenerate a command-by-command guide for configuring a Data Guard physical'
+  Usage += '\nstandby database. Includes the following:'
+  Usage += '\n  1) RMAN Duplicate from Backup'                                                 
+  Usage += '\n  2) Configuration of listener.ora and tnsnames.ora files'                       
+  Usage += '\n  3) Instance parameters for DG'                                                 
+  Usage += '\n  4) Data Guard Broker Commands for creating the configuration'                  
+  Usage += '\n  5) Switchover commands and other useful commands for testing the configuration'
+  #Usage += '\n  6) Generate a shell script for starting/stopping the DG Observer'
+  ArgParser = OptionParser(Usage)
+
   ArgParser.add_option('-c',  dest='CreateConfig', action='store_true', default=False,           help="Create a sample configuration file.")
   ArgParser.add_option('-f',  dest="ConfigFile",                        default='',    type=str, help="Configuration File")
-  ArgParser.add_option('-v',  dest='Version',      action='store_true', default=False,           help="print version info.")
+  ArgParser.add_option('--v', dest='Version',      action='store_true', default=False,           help="print version info.")
 
   # Parse command line arguments
   Options, args = ArgParser.parse_args()

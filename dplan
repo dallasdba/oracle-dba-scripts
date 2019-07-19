@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #------------------------------------------------------------------------------------------------#
-#  Name:        dplan                                                                            #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Executes a dbms_xplan.display_awr report on a SQL_ID and prints the rerport.     #
+# Name:        dplan                                                                             #
+# Author:      Randy Johnson                                                                     #
+# Description: Executes a dbms_xplan.display_awr report on a SQL_ID and prints the rerport.      #
 #------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -15,8 +15,6 @@ from os.path      import basename
 from sys          import argv
 from sys          import exit
 from sys          import version_info
-from signal       import SIGPIPE
-from signal       import SIG_DFL
 from signal       import signal
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
@@ -29,8 +27,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'DBMS Xplan'
-  Version        = '2.10'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.11'
+  VersionDate    = 'Fri Jul 19 10:12:14 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -39,13 +37,12 @@ if (__name__ == '__main__'):
   InStr          = ''
   ConnStr        = ''
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
-
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nExecutes a dbms_xplan.display_awr report on a SQL_ID and prints the rerport.'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nExecute a dbms_xplan.display_awr report on a SQL ID and print the rerport.'
   ArgParser = OptionParser(Usage)
-  
+
   ArgParser.add_option('-a',  dest='Awr',        action='store_true', default=False,           help="retrieve the exec plan from the AWR")
   ArgParser.add_option("-i",  dest="SqlId",                           default='',    type=str, help="value for sql_id")
   ArgParser.add_option("-c",  dest="ChildNum",                        default=0,     type=int, help="value for child_no")

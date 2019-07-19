@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #------------------------------------------------------------------------------------------------#
-#  Name:        dbinfo                                                                           #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Report key database information.                                                 #
+# Name:        dbinfo                                                                           #
+# Author:      Randy Johnson                                                                    #
+# Description: Report key database information.                                                 #
 #------------------------------------------------------------------------------------------------#
 
 
@@ -25,8 +25,6 @@ from sys        import exit
 from sys        import stdout
 from subprocess import Popen
 from subprocess import PIPE
-from signal     import SIGPIPE
-from signal     import SIG_DFL
 from subprocess import STDOUT
 from Oracle     import GetDbState
 from Oracle     import RunSqlplus
@@ -732,9 +730,9 @@ def FormatNumber( s, tSep=',', dSep='.'):
 # --------------------------------------
 if (__name__ == '__main__'):      # if this is true, then this script is *not* being imported by another Python script.
   Cmd            = basename(argv[0]).split('.')[0]
-  CmdDesc        = 'Database Info.'
-  Version        = '2.12'
-  VersionDate    = 'Thu Feb 13 10:54:00 CDT 201'
+  CmdDesc        = 'Database Information'
+  Version        = '2.13'
+  VersionDate    = 'Fri Jul 19 10:12:14 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ' Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   OratabFile     = '/etc/oratab'
@@ -744,14 +742,16 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
   SidList        = []
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
   Usage += '\nReport key database information.'
   ArgParser = OptionParser(Usage)
 
-  ArgParser.add_option("-a",  action="store_true", dest="All",       default=False, help="info for all running databases.")
-  ArgParser.add_option("-k",  action="store_true", dest="KeyVal",    default=False, help="Key=Value Format")
-  ArgParser.add_option('--s', action='store_true', dest='Show',      default=False, help="print SQL query.")
-  ArgParser.add_option("--v", action="store_true", dest="ShowVer",   default=False, help="print version info.")
+  ArgParser.add_option("-a",  dest="All",     action="store_true", default=False, help="info for all running databases.")
+  ArgParser.add_option("-k",  dest="KeyVal",  action="store_true", default=False, help="Key=Value Format")
+  ArgParser.add_option('--s', dest='Show',    action='store_true', default=False, help="print SQL query.")
+  ArgParser.add_option("--v", dest="ShowVer", action="store_true", default=False, help="print version info.")
 
   Options, args = ArgParser.parse_args()
   argc = len(args)
