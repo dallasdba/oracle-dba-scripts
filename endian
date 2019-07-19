@@ -1,27 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        endian                                                                            #
-# Author:      Randy Johnson                                                                     #
-# Description: Prints contents of the V$TRANSPORTABLE_PLATFORM view.                             #
-# Usage: endian [options]                                                                        #
-#                                                                                                #
-# Options:                                                                                       #
-#   -h, --help  show this help message and exit                                                  #
-#   -c          include property comments                                                        #
-#   -s          print SQL query                                                                  #
-#   -v          print version info.                                                              #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 03/06/2015 1.00 Randy Johnson    Initial write.                                                #
-# 04/23/2015 1.30 Randy Johnson    Updated print statements for Python 3.4 compatibility. This   #
-#                                  is most commonly changes to the print() and join() functions. #
-# 08/13/2015 3.00 Randy Johnson    Added prompts for username, password, tnsname.                #
-##################################################################################################
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   endian                                                                                   #
+# Author: Randy Johnson                                                                            #
+# Descr:  Prints contents of the V$TRANSPORTABLE_PLATFORM view.                                    #
+#--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -45,8 +28,8 @@ from Oracle       import SetOracleEnv
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Endian'
-  Version        = '1.00'
-  VersionDate    = 'Tue Feb 14 14:52:05 CST 2017'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jul 19 10:52:43 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -60,8 +43,11 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nReport endian quality of OS platforms known to the database.'
+  ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("-p",  dest="Platform",                      default='',    type=str, help="where upper(platform_name) like upper(%...%)")
   ArgParser.add_option('--s', dest='Show',     action='store_true', default=False,           help="print SQL query.")

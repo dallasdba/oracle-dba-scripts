@@ -1,23 +1,22 @@
 #!/bin/env python
 
-#------------------------------------------------------------------------------------------------#
-# Name:        dggen                                                                             #
-# Author:      Randy Johnson                                                                     #
-# Description: Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.     #
-#              This includes the following:                                                      #
-#                1) RMAN Duplicate from Active Database                                          #
-#                2) Configuration of listener.ora and tnsnames.ora files                         #
-#                3) Server Control commands to register the standby database (RAC only)          #
-#                4) Instance parameters for DG                                                   #
-#                5) Data Guard Broker Commands for creating the configuration                    #
-#                6) Switchover commands and other useful commands for testing the configuration  #
-#                7) Generate a shell script for starting/stopping the DG Observer                #
-#                                                                                                #
-# Wish List:                                                                                     #
-#  - Add configurable Listener Name                                                              #
-#  - Parameterize DBNAME for mass build of mutiple config files.                                 #
-#------------------------------------------------------------------------------------------------#
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   dggen                                                                                    #
+# Author: Randy Johnson                                                                            #
+# Descr:  Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.            #
+#              This includes the following:                                                        #
+#                1) RMAN Duplicate from Active Database                                            #
+#                2) Configuration of listener.ora and tnsnames.ora files                           #
+#                3) Server Control commands to register the standby database (RAC only)            #
+#                4) Instance parameters for DG                                                     #
+#                5) Data Guard Broker Commands for creating the configuration                      #
+#                6) Switchover commands and other useful commands for testing the configuration    #
+#                7) Generate a shell script for starting/stopping the DG Observer                  #
+#                                                                                                  #
+# Wish List:                                                                                       #
+#  - Add configurable Listener Name                                                                #
+#  - Parameterize DBNAME for mass build of mutiple config files.                                   #
+#--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------

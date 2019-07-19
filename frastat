@@ -1,26 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        frastat                                                                           #
-# Author:      Randy Johnson                                                                     #
-# Description: Report information on the fast recovery area (FRA).                               #
-#                                                                                                #
-# Usage: frastat [options]                                                                       #
-#                                                                                                #
-# Options:                                                                                       #
-#  -h, --help  show this help message and exit                                                   #
-#  -f          FRA Space Usage by File Type                                                      #
-#  -e          FRA Status Extended Report                                                        #
-#  --s         print SQL query.                                                                  #
-#  --v         print version info.                                                               #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 09/16/2015 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   frastat                                                                                  #
+# Author: Randy Johnson                                                                            #
+# Descr:  Report information on the fast recovery area (FRA).                                      #
+#--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------

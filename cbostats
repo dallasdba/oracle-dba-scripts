@@ -1,11 +1,10 @@
 #!/bin/env python
 
-#------------------------------------------------------------------------------------------------#
-# Name:        cbostats                                                                          #
-# Author:      Randy Johnson                                                                     #
-# Description: Report tables/partitions/subpartitions with missing or stale CBO statistics.      #
-#------------------------------------------------------------------------------------------------#
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   cbostats                                                                                 #
+# Author: Randy Johnson                                                                            #
+# Descr:  Report tables/partitions/subpartitions with missing or stale CBO statistics.             #
+#--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------

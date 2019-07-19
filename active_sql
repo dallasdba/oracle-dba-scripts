@@ -1,12 +1,11 @@
 #!/bin/env python
 
-#------------------------------------------------------------------------------------------------#
-# Name:        active_sql                                                                        #
-# Author:      Randy Johnson                                                                     #
-# Description: Prints a report of currently executing SQL. The report includes:                  #
-#              SQL_ID, CHILD, PLAN_HASH, EXECS, AVG_ETIME, AVG_LIO, and SQL_TEXT.                #
-#------------------------------------------------------------------------------------------------#
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   active_sql                                                                               #
+# Author: Randy Johnson                                                                            #
+# Descr:  Prints a report of currently executing SQL. The report includes:                         #
+#         SQL_ID, CHILD, PLAN_HASH, EXECS, AVG_ETIME, AVG_LIO, and SQL_TEXT.                       #
+#--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------

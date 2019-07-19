@@ -1,31 +1,10 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        filestorage                                                                      #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Prints controlfile, redolog, datafile, tempfile storage utilization for a        #
-#               database.                                                                        #
-#                                                                                                #
-#  Usage: filestorage [options]                                                                  #
-#                                                                                                #
-#  Options:                                                                                      #
-#    -h, --help  show this help message and exit                                                 #
-#    -s          print SQL query.                                                                #
-#    -v          print version info.                                                             #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 08/27/2012 1.00 Randy Johnson    Initial release.                                              #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 08/09/2015 3.00 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 10/25/2015 3.01 Randy Johnson    Added error checking.                                         #
-# 12/19/2017 4.00 Randy Johnson    Substantial updates to include file level detail in addition  #
-#                                   to changing from using Python to format the report to using  #
-#                                   native SQL*Plus.                                             #
-##################################################################################################
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   filestorage                                                                              #
+# Author: Randy Johnson                                                                            #
+# Descr:  Prints controlfile, redolog, datafile, tempfile storage utilization for a database.      #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------

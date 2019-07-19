@@ -1,11 +1,10 @@
 #!/bin/env python
 
-#------------------------------------------------------------------------------------------------#
-#  Name:        check_db                                                                         #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Validates database configuration according to rules in check_db.cfg.             #
-#------------------------------------------------------------------------------------------------#
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   0check_db                                                                                #
+# Author: 0Randy Johnson                                                                           #
+# Descr:  Validates database configuration according to rules in check_db.cfg.                     #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------

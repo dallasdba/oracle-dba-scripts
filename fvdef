@@ -1,24 +1,23 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        fvdef                                                                             #
-# Author:      Randy Johnson                                                                     #
-# Description: Dumps the SQL definition for Fixed V$ and GV$ views.                              #
-#                                                                                                #
-# Usage: fvdef [options]                                                                         #
-#                                                                                                #
-#   -h, --help   show this help message and exit                                                 #
-#   -n VIEWNAME  where view_name = ...                                                           #
-#   --s          print SQL query.                                                                #
-#   --v          print version info.                                                             #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 10/13/2016 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   fvdef                                                                                    #
+# Author: Randy Johnson                                                                            #
+# Descr:  Dumps the SQL definition for Fixed V$ and GV$ views.                                     #
+#                                                                                                  #
+# Usage: fvdef [options]                                                                           #
+#                                                                                                  #
+#   -h, --help   show this help message and exit                                                   #
+#   -n VIEWNAME  where view_name = ...                                                             #
+#   --s          print SQL query.                                                                  #
+#   --v          print version info.                                                               #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 10/13/2016 1.00 Randy Johnson    Initial write.                                                  #
+#--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------

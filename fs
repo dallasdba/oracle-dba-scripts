@@ -1,44 +1,43 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        fs                                                                               #
-#  Author:      Randy Johnson                                                                    #
-#  Description: This script can be used to locate statements in the shared pool and              #
-#               determine whether they have been executed via Smart Scans.                       #
-#                                                                                                #
-#               It is based on the observation that the IO_CELL_OFFLOAD_ELIGIBLE_BYTES           #
-#               column in V$SQL is only greater than 0 when a statement is executed              #
-#               using a Smart Scan. The IO_SAVED_% column attempts to show the ratio of          #
-#               of data received from the storage cells to the actual amount of data             #
-#               that would have had to be retrieved on non-Exadata storage. Note that            #
-#               as of 11.2.0.2, there are issues calculating this value with some queries.       #
-#                                                                                                #
-#               Note that the AVG_ETIME will not be acurate for parallel queries. The            #
-#               ELAPSED_TIME column contains the sum of all parallel slaves. So the              #
-#               script divides the value by the number of PX slaves used which gives an          #
-#               approximation.                                                                   #
-#                                                                                                #
-#               Note also that if parallel slaves are spread across multiple nodes on            #
-#               a RAC database the PX_SERVERS_EXECUTIONS column will not be set.                 #
-#                                                                                                #
-#               Credit to Kerry Osborne for the core logic in the SQL queries.                   #
-#                                                                                                #
-# Todo's                                                                                         #
-# Switch from gv$sqltext and v$sqltext (sql_text) to gv$sql and v$sql (sql_fulltext)             #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/23/2015 1.00 Randy Johnson    Initial write.                                                #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Folded in the fsx   #
-#                                  script and assigned it to the -x option. Folded in the fs_awr #
-#                                  and fsx_awr scripts -a and -a -x options.                     #
-# 07/17/2015 2.10 Randy Johnson    Added prompts for username, password, tnsname.                #
-#                                  Changed -b and -e options from SnapID to SnapTime.            #
-# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   fs                                                                                       #
+# Author: Randy Johnson                                                                            #
+# Descr:  This script can be used to locate statements in the shared pool and                      #
+#         determine whether they have been executed via Smart Scans.                               #
+#                                                                                                  #
+#         It is based on the observation that the IO_CELL_OFFLOAD_ELIGIBLE_BYTES                   #
+#         column in V$SQL is only greater than 0 when a statement is executed                      #
+#         using a Smart Scan. The IO_SAVED_% column attempts to show the ratio of                  #
+#         of data received from the storage cells to the actual amount of data                     #
+#         that would have had to be retrieved on non-Exadata storage. Note that                    #
+#         as of 11.2.0.2, there are issues calculating this value with some queries.               #
+#                                                                                                  #
+#         Note that the AVG_ETIME will not be acurate for parallel queries. The                    #
+#         ELAPSED_TIME column contains the sum of all parallel slaves. So the                      #
+#         script divides the value by the number of PX slaves used which gives an                  #
+#         approximation.                                                                           #
+#                                                                                                  #
+#         Note also that if parallel slaves are spread across multiple nodes on                    #
+#         a RAC database the PX_SERVERS_EXECUTIONS column will not be set.                         #
+#                                                                                                  #
+#         Credit to Kerry Osborne for the core logic in the SQL queries.                           #
+#                                                                                                  #
+# Todo's                                                                                           #
+# Switch from gv$sqltext and v$sqltext (sql_text) to gv$sql and v$sql (sql_fulltext)               #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- --------------------------------------------------------------- #
+# 07/23/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Folded in the fsx     #
+#                                  script and assigned it to the -x option. Folded in the fs_awr   #
+#                                  and fsx_awr scripts -a and -a -x options.                       #
+# 07/17/2015 2.10 Randy Johnson    Added prompts for username, password, tnsname.                  #
+#                                  Changed -b and -e options from SnapID to SnapTime.              #
+# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                             #
+#--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------

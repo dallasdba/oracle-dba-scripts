@@ -1,12 +1,11 @@
 #!/bin/env python
 
-#------------------------------------------------------------------------------------------------#
-# Name:        dbvn                                                                              #
-# Author:      Randy Johnson                                                                     #
-# Description: Report database version and patch information from produt_component_version, and  #
-#              dba_registry_history.                                                             #
-#------------------------------------------------------------------------------------------------#
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   dbvn                                                                                     #
+# Author: Randy Johnson                                                                            #
+# Descr:  Report database version and patch information from produt_component_version, and         #
+#              dba_registry_history.                                                               #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------

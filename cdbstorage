@@ -1,11 +1,10 @@
 #!/bin/env python
 
-#------------------------------------------------------------------------------------------------#
-# Name:        cdbstorage                                                                        #
-# Author:      Randy Johnson                                                                     #
-# Description: Report tablespace storage utilization for multitenant (container) databases.      #
-#------------------------------------------------------------------------------------------------#
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   cdbstorage                                                                               #
+# Author: Randy Johnson                                                                            #
+# Descr:  Report tablespace storage utilization for multitenant (container) databases.             #
+#--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------

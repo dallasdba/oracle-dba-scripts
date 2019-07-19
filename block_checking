@@ -1,12 +1,11 @@
 #!/bin/env python
 
-#------------------------------------------------------------------------------------------------#
-#  Name:        bctusage                                                                         #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Report block integrity parameters in the database (db_block_checking,            #
-#               db_block_checksum, and lost_write_protect).                                      #
-#------------------------------------------------------------------------------------------------#
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   bctusage                                                                                 #
+# Author: Randy Johnson                                                                            #
+# Descr:  Report block integrity parameters in the database (db_block_checking,                    #
+#         db_block_checksum, and lost_write_protect).                                              #
+#--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------

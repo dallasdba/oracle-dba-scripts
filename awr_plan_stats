@@ -1,14 +1,13 @@
 #!/bin/env python
 
-#------------------------------------------------------------------------------------------------#
-# Name:        awr_plan_stats                                                                    #
-# Author:      Randy Johnson                                                                     #
-# Description: Reports SQL execution plan statistics for a SQL ID.                               #
-#                                                                                                #
-#              Credit to Kerry Osborne for the core logic in the SQL queries.                    #
-#              See http://kerryosborne.oracle-guy.com/2008/10/unstable-plans/ for more info.     #
-#------------------------------------------------------------------------------------------------#
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   awr_plan_stats                                                                           #
+# Author: Randy Johnson                                                                            #
+# Descr:  Reports SQL execution plan statistics for a SQL ID.                                      #
+#                                                                                                  #
+#              Credit to Kerry Osborne for the core logic in the SQL queries.                      #
+#              See http://kerryosborne.oracle-guy.com/2008/10/unstable-plans/ for more info.       #
+#--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------

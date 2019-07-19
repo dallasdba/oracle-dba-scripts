@@ -1,12 +1,11 @@
 #!/bin/env python
 
-#------------------------------------------------------------------------------------------------#
-# Name:        dbcomps                                                                           #
-# Author:      Randy Johnson                                                                     #
-# Description: Prints database component version information from product_component_version,     #
-#              and dba_registry_history.                                                         #
-#------------------------------------------------------------------------------------------------#
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   dbcomps                                                                                  #
+# Author: Randy Johnson                                                                            #
+# Descr:  Prints database component version information from product_component_version,            #
+#         and dba_registry_history.                                                                #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
