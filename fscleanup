@@ -13,22 +13,8 @@
 #                                                                                                  #
 # Todo's                                                                                           #
 # - Check for existance of tnsnames.ora before attempting to scan it.                              #
-#                                                                                                  #
-# History:                                                                                         #
-#                                                                                                  #
-# Date       Ver. Who              Change Description                                              #
-# ---------- ---- ---------------- -------------------------------------------------------------   #
-# 11/09/2012 1.00 Randy Johnson    Initial release.                                                #
-# 07/20/2015 2.00 Randy Johnson    Automated locating tnsnames.ora and listener.ora files.         # 
-#                                  Added the -x and -s options. Updated for Python 2.4-3.4         #
-#                                  compatibility.                                                  #
-# 08/19/2015 2.10 Randy Johnson    Better error message when I cannot open a file for read.        #
-# 08/25/2015 2.20 Randy Johnson    Renamed script from dbcleanup to fscleanup.                     #
-# 09/02/2015 2.30 Randy Johnson    Removed file permissions/ownership check as it was causing      #
-#                                  issue with symlinks. Fixed bug in file search logic that was    #
-#                                  causing a miss in certain cases.                                #
-# 07/13/2017 2.31 Randy Johnson    Added program description to Usage.                             #
 #--------------------------------------------------------------------------------------------------#
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -48,8 +34,6 @@ from re           import IGNORECASE
 from re           import compile
 from re           import match
 from re           import search
-from signal       import SIG_DFL
-from signal       import SIGPIPE
 from signal       import signal
 from socket       import gethostname
 from stat         import ST_UID
@@ -116,8 +100,8 @@ def ScanFile(Filename, SearchString):
 if (__name__ == '__main__'):
   Cmd            = pathsplit(argv[0])[1]
   CmdDesc        = 'File System Cleanup Utility'
-  Version        = '2.31'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.32'
+  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   OratabFile     = '/etc/oratab'
@@ -130,7 +114,6 @@ if (__name__ == '__main__'):
   ExcludeList    = ['/bin','/boot','/dev','/lib','/lib64','/opt','/proc','/root','/sbin','/sys']
   Hostname       = gethostname().split('.')[0]
 
-
   ScanList.append('/etc/oratab')
   ScanList.append('/home/oracle/.env/dbmap')
   ScanList.append('/home/oracle/.bash_profile')
@@ -139,15 +122,12 @@ if (__name__ == '__main__'):
   ScanList.append('/home/oracle/dba/etc/.passwd')
   ScanList.append('/home/oracle/dba/etc/logrotate.conf')
 
-  # For handling termination in stdout pipe.
-  #  ex. when you run: oerrdump | head
-  #--------------------------------------------
-  signal(SIGPIPE, SIG_DFL)
-
   # Process command line options
   # ----------------------------------
-  Usage = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nLocates file and directory names that belong to a particular database. That is'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nLocate file and directory names that belong to a particular database. That is'
   Usage += '\nthe file or directory name contains the name of the database. For some files'
   Usage += '\nsuch as tnsnames.ora and listener.ora the lines from the file containing the'
   Usage += '\ndatabase name are reported.'

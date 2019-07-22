@@ -3,7 +3,7 @@
 #--------------------------------------------------------------------------------------------------#
 # Name:   filestorage                                                                              #
 # Author: Randy Johnson                                                                            #
-# Descr:  Prints controlfile, redolog, datafile, tempfile storage utilization for a database.      #
+# Descr:  Reports controlfile, redolog, datafile, tempfile storage utilization for a database.     #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -15,8 +15,6 @@ from os.path      import basename
 from sys          import argv
 from sys          import exit
 from sys          import version_info
-from signal       import SIGPIPE
-from signal       import SIG_DFL
 from signal       import signal
 from Oracle       import ErrorCheck
 from Oracle       import RunSqlplus
@@ -30,8 +28,8 @@ from Oracle       import FormatNumber
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'File Storage Report'
-  Version        = '4.00'
-  VersionDate    = 'Tue Dec 19 19:06:16 CST 2017'
+  Version        = '4.01'
+  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -42,8 +40,12 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   Colsep         = "'~'"
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nReport controlfile, redolog, datafile, tempfile storage utilization for a'
+  Usage += '\ndatabase.'
+  ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-d',  dest='Detail',  action='store_true', default=False, help="Show Detail")
   ArgParser.add_option('--s', dest='Show',    action='store_true', default=False, help="print SQL query.")

@@ -4,20 +4,8 @@
 # Name:   fvdef                                                                                    #
 # Author: Randy Johnson                                                                            #
 # Descr:  Dumps the SQL definition for Fixed V$ and GV$ views.                                     #
-#                                                                                                  #
-# Usage: fvdef [options]                                                                           #
-#                                                                                                  #
-#   -h, --help   show this help message and exit                                                   #
-#   -n VIEWNAME  where view_name = ...                                                             #
-#   --s          print SQL query.                                                                  #
-#   --v          print version info.                                                               #
-#                                                                                                  #
-# History:                                                                                         #
-#                                                                                                  #
-# Date       Ver. Who              Change Description                                              #
-# ---------- ---- ---------------- -------------------------------------------------------------   #
-# 10/13/2016 1.00 Randy Johnson    Initial write.                                                  #
 #--------------------------------------------------------------------------------------------------#
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -27,8 +15,6 @@ from os.path      import basename
 from sys          import argv
 from sys          import exit
 from sys          import version_info
-from signal       import SIGPIPE
-from signal       import SIG_DFL
 from signal       import signal
 from Oracle       import RunSqlplus
 from Oracle       import RunRman
@@ -43,8 +29,8 @@ from Oracle       import PrintError
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Fixed V$ View Definitions'
-  Version        = '1.00'
-  VersionDate    = 'Thu Oct 13 20:55:03 CST 2016'
+  Version        = '1.01'
+  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Rcv            = ''
@@ -54,8 +40,11 @@ if (__name__ == '__main__'):
   ArgParser      = OptionParser()
   ConnStr        = ''
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nReport the SQL definition for Fixed V$ and GV$ views.'
+  ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-n',  dest='ViewName',                        default='',    type=str,  help="where view_name = '...'")
   ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,            help="print SQL query.")

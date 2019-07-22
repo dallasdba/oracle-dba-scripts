@@ -1,45 +1,29 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        genddl                                                                            #
-# Author:      Randy Johnson                                                                     #
-# Description: Dumps DDL for an object using DBMS_METADATA.GET_DDL                               #
-#                                                                                                #
-# Notes:       Types known to be supported:                                                      #
-#                *CONTEXT                                                                        #
-#                *DIRECTORY                                                                      #
-#                CLUSTER                                                                         #
-#                FUNCTION                                                                        #
-#                INDEX                                                                           #
-#                LIBRARY                                                                         #
-#                OPERATOR                                                                        #
-#                PACKAGE                                                                         #
-#                PROCEDURE                                                                       #
-#                SEQUENCE                                                                        #
-#                SYNONYM                                                                         #
-#                TABLE                                                                           #
-#                TRIGGER                                                                         #
-#                TYPE                                                                            #
-#                VIEW                                                                            #
-#                                                                                                #
-#                * Do not require schema (owner)                                                 #
-#                                                                                                #
-# Usage: genddl [options]                                                                        #
-#                                                                                                #
-# Options:                                                                                       #
-#   -h, --help  show this help message and exit                                                  #
-#   -n NAME     object name                                                                      #
-#   -t TYPE     object_type                                                                      #
-#   -r          report objects                                                                   #
-#   -s SCHEMA   schema                                                                           #
-#   --v         print version info.                                                              #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/07/2016 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:        genddl                                                                              #
+# Author:      Randy Johnson                                                                       #
+# Description: Generates DDL for an object using DBMS_METADATA.GET_DDL                             #
+#                                                                                                  #
+# Notes:       Types known to be supported:                                                        #
+#                *CONTEXT                                                                          #
+#                *DIRECTORY                                                                        #
+#                CLUSTER                                                                           #
+#                FUNCTION                                                                          #
+#                INDEX                                                                             #
+#                LIBRARY                                                                           #
+#                OPERATOR                                                                          #
+#                PACKAGE                                                                           #
+#                PROCEDURE                                                                         #
+#                SEQUENCE                                                                          #
+#                SYNONYM                                                                           #
+#                TABLE                                                                             #
+#                TRIGGER                                                                           #
+#                TYPE                                                                              #
+#                VIEW                                                                              #
+#                                                                                                  #
+#                * Do not require schema (owner)                                                   #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -50,8 +34,6 @@ from os.path      import basename
 from sys          import argv
 from sys          import exit
 from sys          import version_info
-from signal       import SIGPIPE
-from signal       import SIG_DFL
 from signal       import signal
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
@@ -64,8 +46,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Generate DDL'
-  Version        = '1.00'
-  VersionDate    = 'Thu Jul  7 07:40:34 PDT 2016'
+  Version        = '1.02'
+  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -75,8 +57,11 @@ if (__name__ == '__main__'):
   InStr          = ''
   ConnStr        = ''
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nGenerates DDL for an object using DBMS_METADATA.GET_DDL'
+  ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-n',  dest='Name',                         default='',    type=str, help="object name")
   ArgParser.add_option('-t',  dest='Type',                         default='',    type=str, help="object type")

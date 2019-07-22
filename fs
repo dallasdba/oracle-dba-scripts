@@ -25,19 +25,8 @@
 #                                                                                                  #
 # Todo's                                                                                           #
 # Switch from gv$sqltext and v$sqltext (sql_text) to gv$sql and v$sql (sql_fulltext)               #
-#                                                                                                  #
-# History:                                                                                         #
-#                                                                                                  #
-# Date       Ver. Who              Change Description                                              #
-# ---------- ---- ---------------- --------------------------------------------------------------- #
-# 07/23/2015 1.00 Randy Johnson    Initial write.                                                  #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Folded in the fsx     #
-#                                  script and assigned it to the -x option. Folded in the fs_awr   #
-#                                  and fsx_awr scripts -a and -a -x options.                       #
-# 07/17/2015 2.10 Randy Johnson    Added prompts for username, password, tnsname.                  #
-#                                  Changed -b and -e options from SnapID to SnapTime.              #
-# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                             #
 #--------------------------------------------------------------------------------------------------#
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -45,8 +34,6 @@ from datetime     import datetime
 from optparse     import OptionParser
 from os           import environ
 from os.path      import basename
-from signal       import SIG_DFL
-from signal       import SIGPIPE
 from signal       import signal
 from sys          import argv
 from sys          import exit
@@ -63,8 +50,8 @@ from Oracle       import ValidateDate
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Find SQL'
-  Version        = '2.11'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.12'
+  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -74,14 +61,13 @@ if (__name__ == '__main__'):
   EndTime        = (Now.strftime('%Y-%m-%d %H:%M:%S'))
   ConnStr        = ''
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
-
-  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
   Usage += '\nThis script can be used to locate statements in the shared pool and determine'
   Usage += '\nif they made use of Exadata Smart Scan feature. Other information is also'
-  Usage += '\nreported such as the plan hash value, nuber of executions, and last time it was'
-  Usage += '\nactive.'
+  Usage += '\nreported such as the plan hash value, nuber of executions, and last time it'
+  Usage += '\nwas active.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-a',  dest='Awr',       action='store_true', default=False,                           help="search the AWR (default is v$sql)")

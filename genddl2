@@ -27,8 +27,6 @@ from os.path      import basename
 from sys          import argv
 from sys          import exit
 from sys          import version_info
-from signal       import SIGPIPE
-from signal       import SIG_DFL
 from signal       import signal
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
@@ -41,8 +39,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Generate DDL'
-  Version        = '1.00'
-  VersionDate    = 'Mon Mar 20 10:00:56 CDT 2017'
+  Version        = '1.01'
+  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -53,8 +51,11 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   RecSep         = '!!!EOL!!!'
 
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nGenerates DDL for an schema using DBMS_METADATA.GET_DDL'
+  ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-r',  dest='Report',  action='store_true', default=False,           help="report objects")
   ArgParser.add_option('-s',  dest='Schema',                       default='',    type=str, help="schema")

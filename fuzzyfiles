@@ -5,6 +5,7 @@
 # Author: Randy Johnson                                                                            #
 # Descr:  Checks the fuzzy state of the database datafiles.                                        #
 #--------------------------------------------------------------------------------------------------#
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -24,17 +25,19 @@ from Oracle     import SetOracleEnv
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0])
   CmdPrefix      = Cmd.split('.')[0]
-  CmdDesc        = 'Fuzzy Files (' + Cmd + ')'
-  VersionDate    = 'Thu Sep 7 11:54:57 CST 2018'
-  Version        = '1.00'
+  CmdDesc        = 'Fuzzy Files'
+  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
+  Version        = '1.01'
   Sql            = ''
   ErrChk         = False
   ArgParser      = OptionParser()
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ConnStr        = ''
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nChecks the fuzzy state of datafiles for recovery purposes.'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nReport the fuzzy state of datafiles for database recovery purposes.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("--s", dest="Show",    default=False, action="store_true",           help="print SQL query.")

@@ -95,19 +95,19 @@ def GetPassword(dbName, dbUser):
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Get Password'
-  Version        = '3.01'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '3.02'
+  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   ArgParser      = OptionParser()
   pwdFilename    = '/home/oracle/dba/etc/.passwd'
 
-  # Process command line options
-  # ----------------------------------
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nRetrieves password entry from the password file.'
-  Usage += '\n\n' + Cmd + ' database_name user_name [[-t] [-p]]'
-  
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\nRetrieves (and optionally decodes) a password from the password file.'
+  ArgParser = OptionParser(Usage)
+
   ArgParser = OptionParser(usage=Usage)
   ArgParser.add_option("-p",  dest="PlainText", action="store_true", default=False, help="plaintext mode.")
   ArgParser.add_option("-t",  dest="Trace",     action="store_true", default=False, help="print runtime trace information.")

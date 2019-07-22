@@ -46,7 +46,7 @@ if (__name__ == '__main__'):
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
   Usage += '\n------------------------------------------------------------------------------'
-  Usage += '\nReport endian quality of OS platforms known to the database.'
+  Usage += '\nReport endian orientation of OS platforms known to the database.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("-p",  dest="Platform",                      default='',    type=str, help="where upper(platform_name) like upper(%...%)")
