@@ -81,8 +81,8 @@ def Gbytes(bytes):
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'ASM Space Usage'
-  Version        = '3.42'
-  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
+  Version        = '3.43'
+  VersionDate    = 'Sat Aug 10 11:46:17 CDT 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
