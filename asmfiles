@@ -48,28 +48,26 @@ else:
 # --------------------------------------
 
 #---------------------------------------------------------------------------
-# Def : ConvertSize()
-# Desc: Reduces the size of a number from Bytes .. Yeta Bytes
+# Def : Gbytes()
+# Desc: Converts Bytes to Gigabytes
 # Args: s    = numeric_string
 #       tSep = thousands_separation_character (default is ',')
 #       dSep = decimal_separation_character (default is '.')
 # Retn: formatted string
 #---------------------------------------------------------------------------
-def ConvertSize(bytes):
-   size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
-   s = 0
-
-   if (bytes > 0):
-     i = int(floor(log(bytes,1024)))
-     p = pow(1024,i)
-     s = round(bytes/p,2)
-
-   if (s > 0):
-     return '%s %s' % (s,size_name[i])
-   else:
-     return '0B'
+def Gbytes(bytes):
+  try:
+    bytes = int(bytes)
+  except:
+    print("Failed to convert bytes string to integer in Gbytes()")
+    exit(1)
+   
+  if (bytes > 0):
+    return bytes/1024/1024/1024
+  else:
+    return bytes
 #---------------------------------------------------------------------------
-# End ConvertSize
+# End Gbytes
 #---------------------------------------------------------------------------
 
 # --------------------------------------
@@ -476,8 +474,8 @@ if (__name__ == '__main__'):
     if (Csv):
       print('"Database","Total Size","Total Storage"')
     else:
-      print("Database                  Total Size   Total Storage")
-      print("-------------------- --------------- ---------------")
+      print("Database              Total Size (G) Total Storage (G)")
+      print("-------------------- --------------- -----------------")
     for DbKey in sorted(DbDict.keys()):
       TotalSizeBytes    = 0
       TotalStorageBytes = 0
@@ -489,12 +487,12 @@ if (__name__ == '__main__'):
           if (Csv):
             print('"%s","%15s","%15s"' % (DbKey, TotalSizeBytes, TotalStorageBytes))
           else:
-            print('%-20s %15s %15s' % (DbKey, ConvertSize(TotalSizeBytes), ConvertSize(TotalStorageBytes)))
+            print('%-20s %15s %17s' % (DbKey, Gbytes(TotalSizeBytes), Gbytes(TotalStorageBytes)))
       else:
         if (Csv):
           print('"%s","%s","%s"' % (DbKey, TotalSizeBytes, TotalStorageBytes))
         else:
-          print('%-20s %15s %15s' % (DbKey, ConvertSize(TotalSizeBytes), ConvertSize(TotalStorageBytes)))
+          print('%-20s %15s %17s' % (DbKey, Gbytes(TotalSizeBytes), Gbytes(TotalStorageBytes)))
 
   # Print Diskgroup Report
   # -----------------------
@@ -506,8 +504,8 @@ if (__name__ == '__main__'):
     if (Csv):
       print('"Diskgroup","Database","Total Size","Total Storage"')
     else:
-      print('Diskgroup            Database                  Total Size   Total Storage')
-      print('-------------------- -------------------- --------------- ---------------')
+      print("Diskgroup            Database              Total Size (G) Total Storage (G)")
+      print("-------------------- -------------------- --------------- -----------------")
     for DgKey in sorted(DgDict.keys()):
       for DbKey in sorted(DgDict[DgKey].keys()):
         if (DbFilter != ''):
@@ -517,14 +515,14 @@ if (__name__ == '__main__'):
             if (Csv):
               print('"%s","%s","%s","%s"' % (DgKey, DbKey, TotalSizeBytes, TotalStorageBytes))
             else:
-              print('%-20s %-20s %15s %15s' % (DgKey, DbKey, ConvertSize(TotalSizeBytes), ConvertSize(TotalStorageBytes)))
+              print('%-20s %-20s %15s %17s' % (DgKey, DbKey, Gbytes(TotalSizeBytes), Gbytes(TotalStorageBytes)))
         else:
           TotalSizeBytes     = DgDict[DgKey][DbKey]['TotSizBytes']
           TotalStorageBytes  = DgDict[DgKey][DbKey]['TotStoBytes']
           if (Csv):
             print('"%s","%s","%s","%s"' % (DgKey, DbKey, TotalSizeBytes, TotalStorageBytes))
           else:
-            print('%-20s %-20s %15s %15s' % (DgKey, DbKey, ConvertSize(TotalSizeBytes), ConvertSize(TotalStorageBytes)))
+            print('%-20s %-20s %15s %17s' % (DgKey, DbKey, Gbytes(TotalSizeBytes), Gbytes(TotalStorageBytes)))
 
   # Print File Type Report
   # -----------------------
@@ -536,8 +534,8 @@ if (__name__ == '__main__'):
     if (Csv):
       print('"File Type","Total Size","Total Storage"')
     else:
-      print("File Type                      Total Size   Total Storage")
-      print("------------------------- --------------- ---------------")
+      print("File Type                  Total Size (G) Total Storage (G)")
+      print("------------------------- --------------- -----------------")
     for TypeKey in sorted(TypeDict.keys()):
       TotalSizeBytes    = 0
       TotalStorageBytes = 0
@@ -555,14 +553,14 @@ if (__name__ == '__main__'):
         if (Csv):
           print('"%s","%s","%s"' % (TypeKey, TotalSizeBytes, TotalStorageBytes))
         else:
-          print('%-25s %15s %15s' % (TypeKey, ConvertSize(TotalSizeBytes), ConvertSize(TotalStorageBytes)))
+          print('%-25s %15s %17s' % (TypeKey, Gbytes(TotalSizeBytes), Gbytes(TotalStorageBytes)))
 
     print('')
     if (Csv):
       print('"File Type","Diskgroup","Total Size","Total Storage"')
     else:
-      print("File Type                 Diskgroup                 Total Size   Total Storage")
-      print("------------------------- -------------------- --------------- ---------------")
+      print("File Type                 Diskgroup             Total Size (G) Total Storage (G)")
+      print("------------------------- -------------------- --------------- -----------------")
     for TypeKey in sorted(TypeDict.keys()):
       for DgKey in sorted(TypeDict[TypeKey].keys()):
         TotalSizeBytes    = 0
@@ -580,7 +578,7 @@ if (__name__ == '__main__'):
           if (Csv):
             print('"%s","%s","%s","%s"' % (TypeKey, DgKey, TotalSizeBytes, TotalStorageBytes))
           else:
-            print('%-25s %-20s %15s %15s' % (TypeKey, DgKey, ConvertSize(TotalSizeBytes), ConvertSize(TotalStorageBytes)))
+            print('%-25s %-20s %15s %17s' % (TypeKey, DgKey, Gbytes(TotalSizeBytes), Gbytes(TotalStorageBytes)))
 
   exit(0)
 # --------------------------------------
