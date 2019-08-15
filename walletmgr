@@ -1,0 +1,358 @@
+#!/bin/env python
+
+#--------------------------------------------------------------------------------------------------#
+# Name:   walletmgr                                                                                #
+# Author: Randy Johnson                                                                            #
+# Descr:  wrapper for mkstore, Oracle"s wallet management command.                                 #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- --------------------------------------------------------------- #
+# 08/13/2019 0.10 Randy Johnson    Initial write.                                                  #
+# 08/14/2019 0.20 Randy Johnson    Added if system() not in ('Windows', 'win32') ...               #
+# 08/14/2019 0.30 Randy Johnson    Replaced str.encode(password) + "\n" with password += '\n'      #
+#                                  Added cache logic.                                              #
+# 08/15/2019 0.40 Randy Johnson    Added logic to encrypt/decrypt the cache: encode() decode()     #
+#                                  encode_creds(), decode_creds()                                  #
+#                                  Added better error handling for invalid output from mkstore.    #
+#                                  Added better error handling for incorrect password.             #
+#--------------------------------------------------------------------------------------------------#
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from datetime     import datetime
+from getpass      import getpass
+from optparse     import OptionParser
+from os           import environ
+from os           import pathsep
+from os.path      import isfile
+from os.path      import join as pathjoin
+from re           import compile
+from re           import match
+from re           import search
+from os.path      import basename
+from signal       import signal
+from subprocess   import PIPE
+from subprocess   import Popen
+from subprocess   import STDOUT
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from platform     import system
+
+if (version_info[0] >= 3):
+  import pickle
+  from base64 import b64decode
+  from base64 import b64encode
+else:
+  import cPickle as pickle
+
+# For handling termination in stdout pipe; ex: when you want to pipe
+# the output to another program (like tail, less, ...
+if system() not in ('Windows', 'win32'):
+  from signal import SIGPIPE, SIG_DFL
+
+# -------------------------------------------------
+# ---- Function and Class Definitions ------------
+# -------------------------------------------------
+# ---------------------------------------------------------------------------
+# Def:  get_wallet_info()
+# Desc: mkstore -wrl {wallet_dir} -list and returns information from the
+#       wallet
+# Args: wallet    - wallet directory name
+#       password  - wallet password
+#       Parm      - mkstore parameter to execute
+# Retn: output    - everything mkstore prints to stdout|stderr after the
+#                   password accepted.
+# ---------------------------------------------------------------------------
+def get_wallet_info(wallet, password, Parm):
+  output  = []
+  cmdline = ["mkstore", "-wrl", wallet, Parm]
+  
+  try:
+    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+  except:
+    print("Error calling mkstore: %s" ' '.join(cmdline))
+    exit(1)
+
+  # Read all the initial output (including "Enter wallet password:")
+  line = proc.stdout.readline().decode('ascii').strip()
+  if line[0:32] != "Oracle Secret Store Tool Release":
+    print("Error returned from mkstore: %s" % line)
+    exit(1)
+  while True:
+    line = proc.stdout.readline().decode('ascii').strip()
+    if not line:
+      break
+
+  # Write the password to mkstore's stdin then read everything you get back after that.
+  proc.stdin.write(password)
+  proc.stdin.flush()
+  while True:
+    line = proc.stdout.readline().strip()
+    if line == "oracle.security.crypto.core.CipherException: Invalid padding string (or incorrect password)":
+      print("Incorrect wallet password: %s" % line)
+      exit(1)
+    if not line:
+      break
+    else:
+      # save the output...
+      output.append(line)
+  proc.stdin.close()
+  proc.terminate()
+  proc.wait()
+
+  return output
+# ---------------------------------------------------------------------------
+# End get_wallet_info()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def:  get_cred_entry()
+# Desc: runs mkstore -wrl {wallet_dir} -viewentry {my_entry} and returns
+#       output...
+# Args: wallet    - wallet directory name
+#       password  - wallet password
+#       Parm      - mkstore parameter to execute
+# Retn: output    - everything mkstore prints to stdout|stderr after the
+#                   password accepted.
+# ---------------------------------------------------------------------------
+def get_cred_entry(wallet, password, entry):
+  output  = []
+  cmdline = ["mkstore", "-wrl", wallet, '-viewEntry', entry]
+  
+  try:
+    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+  except:
+    print("Error calling mkstore: %s" ' '.join(cmdline))
+    exit(1)
+
+  # Read all the initial output (including "Enter wallet password:")
+  line = proc.stdout.readline().decode('ascii').strip()
+  if line[0:32] != "Oracle Secret Store Tool Release":
+    print("Error returned from mkstore: %s" % line)
+    exit(1)
+  while True:
+    line = proc.stdout.readline().strip()
+    if not line:
+      break
+
+  # Write the password to mkstore's stdin then read everything you get back after that.
+  proc.stdin.write(password)
+  proc.stdin.flush()
+  while True:
+    line = proc.stdout.readline().strip()
+    if line == "oracle.security.crypto.core.CipherException: Invalid padding string (or incorrect password)":
+      print("Incorrect wallet password: %s" % line)
+      exit(1)
+    if not line:
+      break
+    else:
+      # save the output...
+      output.append(line)
+  proc.stdin.close()
+  proc.terminate()
+  proc.wait()
+
+  return output
+# ---------------------------------------------------------------------------
+# End get_cred_entry()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def:  encode()
+# Desc: encodes plain text
+# Args: text      - plain text
+# Retn:           - encoded text
+# ---------------------------------------------------------------------------
+def encode(text):
+  if (version_info[0] >= 3):
+    # return text.base64.b64encode(text)
+    return b64encode(text.encode('ascii')).decode("utf-8")
+  else:
+    return text.encode('base64','strict')[:-1]
+# ---------------------------------------------------------------------------
+# End encode()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def:  decode()
+# Desc: decodes plain text
+# Args: text - plain text
+# Retn:      - decoded text
+# ---------------------------------------------------------------------------
+def decode(text):
+  if (version_info[0] >= 3):
+    return b64decode(text.encode('utf-8')).decode('utf-8')
+  else:
+    return text.decode('base64','strict')
+# ---------------------------------------------------------------------------
+# End decode()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def:  decode_creds()
+# Desc: decodes credentials read from cache file.
+# Args: enc_creds - encoded credentials (dictionary) read from cache.
+# Retn: creds     - decoded credentials (dictionary)
+# ---------------------------------------------------------------------------
+def decode_creds(enc_creds):
+  creds = {}
+
+  for enc_key in sorted(enc_creds):
+    key = decode(enc_key)
+    if key not in creds:
+      creds[key] = {}
+    for enc_opt in enc_creds[enc_key]:
+      creds[key][decode(enc_opt)] = decode(enc_creds[enc_key][enc_opt])
+
+  return creds
+# ---------------------------------------------------------------------------
+# End decode_creds()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def:  encode_creds()
+# Desc: encodes credentials.
+# Args: creds     - plain text credentials (dictionary).
+# Retn: enc_creds - encoded credentials (dictionary).
+# ---------------------------------------------------------------------------
+def encode_creds(creds):
+  enc_creds = {}
+
+  for key in sorted(creds):
+    enc_key = encode(key)
+    if enc_key not in enc_creds:
+      enc_creds[enc_key] = {}
+    for opt in creds[key]:
+      enc_creds[enc_key][encode(opt)] = encode(creds[key][opt])
+
+  return enc_creds
+# ---------------------------------------------------------------------------
+# End encode_creds()
+# ---------------------------------------------------------------------------
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == "__main__"):
+  Cmd            = basename(argv[0]).split(".")[0]
+  cmd_descr      = "Wallet Manager"
+  versn          = "0.40"
+  versn_date     = "Thu Aug 15 14:15:18 CDT 2019"
+  dev_state      = "Development"
+  banner         = cmd_descr + ": Release " + versn + " "  + dev_state + ". Last updated: " + versn_date
+  password       = 'xxxxxxxxxx\n'
+  now            = datetime.now()
+  wallet         = "/opt/oracle/product/18c/dbhome_1/network/admin/wallet"
+  pattern        = r'(^\D+)(\.)(\D+)(\.)(\D+)(\.)(\D+)(\d+)$'
+  cache          = False
+  creds          = {}
+  creds_cache    = {}
+  enc_key        = ''
+  enc_password   = ''
+  cache_file     = Cmd + '.cache'
+
+  # Set the location and file name for the cache file...
+  if system() in ('Windows', 'win32'):
+    cache_file = pathjoin('C:', 'TEMP', cache_file)
+  else:
+    cache_file = pathjoin('/', 'tmp', cache_file)
+
+  usage  =  "%s [options]"  % Cmd
+  usage += "\n\n%s"         % cmd_descr
+  usage += "\n------------------------------------------------------------------------------"
+  usage += "\nWrapper for Oracle's mkstore comamnd."
+  arg_parser = OptionParser(usage)
+
+  arg_parser.add_option("-c",  dest="cache", action="store_true", default=False, help="load wallet from cache")
+  arg_parser.add_option("--v", dest="versn", action="store_true", default=False, help="print version info.")
+
+  # Parse command line arguments
+  options, args = arg_parser.parse_args()
+
+  cache = options.cache
+  versn = options.versn
+
+  if versn:
+    print("\n%s" % banner)
+    exit(0)
+
+  password = getpass("Enter wallet password: ") + "\n"
+
+  if cache:
+    if isfile(cache_file):
+      try:
+        cf = open(cache_file,'rb')
+      except:
+         print('Cannot open the cache file for read: %s' % cache_file)
+         exit(1)
+      try:
+        cache_contents = pickle.load(cf)
+      except:
+         print('Cannot parse the cache file: %s' % cache_file)
+         exit(1)
+    else:
+      print('No cache file found: %s' % cache_file)
+      exit(1)
+
+    # Load the cache file
+    # --------------------------
+    [encoded_password, enc_creds] = cache_contents
+    cf.close()
+
+    # Decode cache
+    # --------------------------
+    pw = decode(encoded_password)
+    if pw != password:
+      print("Invalid password.\n")
+      exit(1)
+    else:
+      creds = decode_creds(enc_creds)
+  else:
+    wallet_out = get_wallet_info(wallet, password, '-list')
+    for entry in wallet_out[2:]:
+      found = search(pattern, entry)
+      if found:
+        #s = found.start()
+        #e = found.end()
+        #print('')
+        #print('    Found: %s'    % (found.re.pattern))
+        #print('       in: %s'    % (found.string))
+        #print(' Position: %d-%d' % (s,e))
+        #print('')
+        try:
+          key = found.groups()[-1].strip()
+        except:
+          print("Cannot convert string to int: %s" % int(found.groups()[-1]))
+          print("  Full string: %s" % entry)
+          exit(1)
+        if key not in creds:
+          creds[key] = {}
+      entry_out = get_cred_entry(wallet, password, entry)
+      for item in entry_out[1:]:
+        if 'oracle.security.client.connect_string' in item.split('=')[0].strip():
+          creds[key]['Connect String'] = item.split('=')[1].strip()
+        elif 'oracle.security.client.username' in item.split('=')[0].strip():
+          creds[key]['User Name'] = item.split('=')[1].strip()
+        elif 'oracle.security.client.password' in item.split('=')[0].strip():
+          creds[key]['Password'] = item.split('=')[1].strip()
+
+  print("")
+  for key in sorted(creds):
+    print("Cred ID: %-4s Conn: %-20s User: %-20s Pass: %-s" % (key, creds[key]['Connect String'], creds[key]['User Name'], creds[key]['Password']))
+
+  # Write the cache to disk...
+  enc_password = encode(password)
+  enc_creds = encode_creds(creds)
+  cache_contents = [enc_password, enc_creds]
+  try:
+    cf = open(cache_file,'wb')
+  except:
+     print('Cannot open the cache file for write: %s' % cache_file)
+  pickle.dump(cache_contents, cf)
+  cf.close()
+
+  exit(0)
+
