@@ -38,7 +38,6 @@
 #                                  Added a code to check for existance of key in report_passwords. #
 #                                  Now if credential id's provided on the command line don't exist #
 #                                  we will just quietly ignore them. Should we throw a warning?    #
-# 08/19/2019 1.00 Randy Johnson    Final review complete. Moving to production status.             #
 #--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -127,6 +126,42 @@ def read_input(prompt):
     value = raw_input(prompt)
   return value
 # ---------------------------------------------------------------------------
+# End is_file_rw()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def:  get_pipe(cmdline)
+# Desc: Deals with the Python v2 and v3 differences of subprocess as well as 
+#       Windows (non-posdix) support
+# Args: cmdline - The command to be passed into the subprocess
+# Retn: proc  - the PIPE
+# ---------------------------------------------------------------------------
+def get_pipe(cmdline):
+  if(version_info[0] >= 3):
+    if system() in ('Windows', 'win32'):
+      my_proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='utf8')
+    else:
+      my_proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='utf8')
+  else:
+    if system() in ('Windows', 'win32'):
+      my_proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    else:
+      my_proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+  
+  return my_proc
+# ---------------------------------------------------------------------------
+# Def:  get_line()
+# Desc: Deals with the Python v2 and v3 differences of subprocess
+# Args: cmdline - The command to be passed into the subprocess
+# Retn: proc  - the PIPE
+# ---------------------------------------------------------------------------
+def get_line(proc):
+  if(version_info[0] >= 3):
+    line = proc.stdout.readline().strip()
+  else:
+    line = proc.stdout.readline().decode('ascii').strip()
+  return line
+# ---------------------------------------------------------------------------
 # End read_input()
 # ---------------------------------------------------------------------------
 
@@ -143,22 +178,18 @@ def wallet_list(wallet, password):
   creds    = {}
   rexpat   = r'^([a-z|A-Z]+.[a-z|A-Z]+.[a-z|A-Z]+.\D+)(\d+).*$'   # searching for 'oracle.security.client.{connect_string|username|password}nnn'
   cmdline  = ["mkstore", "-wrl", wallet, '-list']
-
-  try:
-    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-  except:
-    print("Error calling mkstore: %s" % ' '.join(cmdline))
-    exit(1)
+  
+  proc = get_pipe(cmdline)
 
   # Read all the initial output (including "Enter wallet password:")
-  line = proc.stdout.readline().decode('ascii').strip()
+  line = get_line(proc)
   if "Oracle Secret Store Tool" not in line:
     print("Error returned from mkstore: %s" % line)
     exit(1)
   else:
     # drain the rest of proc.stdout...
     while True:
-      line = proc.stdout.readline().decode('ascii').strip()
+      line = get_line(proc)
       if not line:
         break
 
@@ -166,7 +197,8 @@ def wallet_list(wallet, password):
   proc.stdin.write(password +'\n')
   proc.stdin.flush()
   while True:
-    line = proc.stdout.readline().strip()
+#    line = proc.stdout.readline().strip()
+    line = get_line(proc) 
     # Check for password problem -- oracle.security.crypto.core.CipherException: Invalid padding string (or incorrect password)
     if 'Exception' in line or 'PKI-' in line:
       print("Error returned from mkstore: %s" % line)
@@ -219,21 +251,17 @@ def wallet_list_credential(wallet, password):
   rexpat   = r'^(\d+): (\w+) (\w+).*$'  # {nnn}: test_system{nnn} system
   cmdline  = ["mkstore", "-wrl", wallet, '-listCredential']
 
-  try:
-    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-  except:
-    print("Error calling mkstore: %s" % ' '.join(cmdline))
-    exit(1)
+  proc = get_pipe(cmdline)
 
   # Read all the initial output (including "Enter wallet password:")
-  line = proc.stdout.readline().decode('ascii').strip()
+  line = get_line(proc)
   if "Oracle Secret Store Tool" not in line:
     print("Error returned from mkstore: %s" % line)
     exit(1)
   else:
     # drain the rest of proc.stdout...
     while True:
-      line = proc.stdout.readline().decode('ascii').strip()
+      line = get_line(proc)
       if not line:
         break
 
@@ -294,20 +322,20 @@ def cred_details(wallet, password, entry):
   cmdline = ["mkstore", "-wrl", wallet, '-viewEntry', entry]
 
   try:
-    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    proc = get_pipe(cmdline)
   except:
     print("Error calling mkstore: %s" % ' '.join(cmdline))
     exit(1)
 
   # Read all the initial output (including "Enter wallet password:")
-  line = proc.stdout.readline().decode('ascii').strip()
+  line = get_line(proc)
   if "Oracle Secret Store Tool" not in line:
     print("Error returned from mkstore: %s" % line)
     exit(1)
   else:
     # drain the rest of proc.stdout...
     while True:
-      line = proc.stdout.readline().decode('ascii').strip()
+      line = get_line(proc)
       if not line:
         break
 
@@ -353,22 +381,17 @@ def cred_details(wallet, password, entry):
 def change_password(wallet, password, connstr, username, chgpass):
   output  = []
   cmdline = ["mkstore", "-wrl", wallet, '-modifyCredential', connstr, username, chgpass]
-
-  try:
-    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-  except:
-    print("Error calling mkstore: %s" % ' '.join(cmdline))
-    exit(1)
+  proc = get_pipe(cmdline)
 
   # Read all the initial output (including "Enter wallet password:")
-  line = proc.stdout.readline().decode('ascii').strip()
+  line = get_line(proc)
   if "Oracle Secret Store Tool" not in line:
     print("Error returned from mkstore: %s" % line)
     exit(1)
   else:
     # drain the rest of proc.stdout...
     while True:
-      line = proc.stdout.readline().decode('ascii').strip()
+      line = get_line(proc)
       if not line:
         break
 
@@ -376,7 +399,7 @@ def change_password(wallet, password, connstr, username, chgpass):
   proc.stdin.write(password +'\n')
   proc.stdin.flush()
   while True:
-    line = proc.stdout.readline().strip()
+    line = get_line(proc)
     if 'Exception' in line or 'PKI-' in line:
       print("Error returned from mkstore: %s" % line)
       exit(1)
@@ -410,21 +433,17 @@ def add_credential(wallet, password, connstr, username, passwd):
   output  = []
   cmdline = ["mkstore", "-wrl", wallet, '-createCredential', connstr, username, passwd]
 
-  try:
-    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-  except:
-    print("Error calling mkstore: %s" % ' '.join(cmdline))
-    exit(1)
+  proc = get_pipe(cmdline)
 
   # Read all the initial output (including "Enter wallet password:")
-  line = proc.stdout.readline().decode('ascii').strip()
+  line = get_line(proc)
   if "Oracle Secret Store Tool" not in line:
     print("Error returned from mkstore: %s" % line)
     exit(1)
   else:
     # drain the rest of proc.stdout...
     while True:
-      line = proc.stdout.readline().decode('ascii').strip()
+      line = get_line(proc)
       if not line:
         break
 
@@ -432,7 +451,7 @@ def add_credential(wallet, password, connstr, username, passwd):
   proc.stdin.write(password +'\n')
   proc.stdin.flush()
   while True:
-    line = proc.stdout.readline().strip()
+    line = get_line(proc)
     if 'Exception' in line or 'PKI-' in line:
       print("Error returned from mkstore: %s" % line)
       exit(1)
@@ -441,6 +460,8 @@ def add_credential(wallet, password, connstr, username, passwd):
     else:
       # save the output...
       output.append(line)
+      print('Password added successfully')
+      #TODO add call to list credential
   proc.stdin.close()
   proc.terminate()
   proc.wait()
@@ -475,21 +496,17 @@ def delete_credentials(wallet, password, creds, delkeys):
   for connstr in tns:
     output = []
     cmdline = ["mkstore", "-wrl", wallet, '-deleteCredential', connstr]
-    try:
-      proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    except:
-      print("Error calling mkstore: %s" % ' '.join(cmdline))
-      exit(1)
+    proc = get_pipe(cmdline)
 
     # Read all the initial output (including "Enter wallet password:")
-    line = proc.stdout.readline().decode('ascii').strip()
+    line = get_line(proc)
     if "Oracle Secret Store Tool" not in line:
       print("Error returned from mkstore: %s" % line)
       exit(1)
     else:
       # drain the rest of proc.stdout...
       while True:
-        line = proc.stdout.readline().decode('ascii').strip()
+        line = get_line(proc)
         if not line:
           break
 
@@ -497,7 +514,7 @@ def delete_credentials(wallet, password, creds, delkeys):
     proc.stdin.write(password +'\n')
     proc.stdin.flush()
     while True:
-      line = proc.stdout.readline().strip()
+      line = get_line(proc)
       if 'Exception' in line or 'PKI-' in line:
         print("Error returned from mkstore: %s" % line)
         exit(1)
@@ -604,8 +621,8 @@ if (__name__ == "__main__"):
   cmd_name       = basename(argv[0]).split(".")[0]
   cmd_descr      = "Wallet Manager"
   versn          = "0.80"
-  versn_date     = "Sun Aug 19 10:07:46 CDT 2019"
-  dev_state      = "Production"
+  versn_date     = "Sun Aug 18 21:08:46 CDT 2019"
+  dev_state      = "Development"
   banner         = cmd_descr + ": Release " + versn + " "  + dev_state + ". Last updated: " + versn_date
   now            = datetime.now()
   manifest       = ['cwallet.sso','ewallet.p12']
@@ -643,6 +660,7 @@ if (__name__ == "__main__"):
 
   arg_parser = OptionParser(usage)
 
+  arg_parser.add_option("-l",  dest="listcred",   action="store_true", default=False,           help="list credential(s)")
   arg_parser.add_option("-a",  dest="addcred",    action="store_true", default=False,           help="add a new credential")
   arg_parser.add_option("-c",  dest="chgpass",                         default='',    type=str, help="change password for credentials listed by index")
   arg_parser.add_option("-d",  dest="delcred",   action="store_true",  default=False,           help="delete credentials (confirmation required)")
@@ -655,6 +673,7 @@ if (__name__ == "__main__"):
   # Parse command line arguments
   options, args = arg_parser.parse_args()
 
+  listcred  = options.listcred
   addcred   = options.addcred
   delcred   = options.delcred
   chgpass   = options.chgpass
@@ -740,7 +759,8 @@ if (__name__ == "__main__"):
   attrs = wallet_list(wallet, password)
 
   # print a report of key, connect string, user name
-  report_credentials(creds)
+  if listcred:
+    report_credentials(creds)
 
   # Adda new credential...
   if addcred:
@@ -853,4 +873,3 @@ if (__name__ == "__main__"):
   #report_credendial_attrs(attrs)
   
   exit(0)
-
