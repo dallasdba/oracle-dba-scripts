@@ -3,7 +3,7 @@
 #--------------------------------------------------------------------------------------------------#
 # Name:   dggen                                                                                    #
 # Author: Randy Johnson                                                                            #
-# Descr:  Generates a Step-Byt-Step Guide for Configuring a Data Guard Standby Database.           #
+# Descr:  Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.            #
 #              This includes the following:                                                        #
 #                1) RMAN Duplicate from Active Database                                            #
 #                2) Configuration of listener.ora and tnsnames.ora files                           #

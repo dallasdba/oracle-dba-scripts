@@ -342,7 +342,7 @@ def cred_details(wallet, password, entry):
 
 # ---------------------------------------------------------------------------
 # Def:  change_password(wallet, password, connstr, username, chgpass)
-# Desc: run mkstore -wrl {wallet_dir} -modifyCredential N102 scott 
+# Desc: run mkstore -wrl {wallet_dir} -modifyCredential N102 scott
 #       chgpassword and return information from the wallet
 # Args: wallet    - wallet directory name
 #       password  - wallet password
@@ -555,7 +555,7 @@ def report_passwords(attrs, keylist):
 
 # ---------------------------------------------------------------------------
 # Def:  report_credentials()
-# Desc: Generate a report containing credential id, connect string, and 
+# Desc: Generate a report containing credential id, connect string, and
 #       user name.
 # Args: creds - This is a dictionary structure keye'd on the credential id
 #               and containing the connect string and user name.
@@ -572,7 +572,7 @@ def report_credentials(creds):
 
 # ---------------------------------------------------------------------------
 # Def:  report_credendial_attrs()
-# Desc: Generate a report containing the internal attributes for each 
+# Desc: Generate a report containing the internal attributes for each
 #       credential. For example:
 #         oracle.security.client.connect_string1
 #         oracle.security.client.connect_string2
@@ -613,8 +613,8 @@ if (__name__ == "__main__"):
   delkeys        = []
   passkeys       = []
   keylist        = []
-  home_dir       = pathsplit(pathsplit(argv[0])[0])[0] 
-  
+  home_dir       = pathsplit(pathsplit(argv[0])[0])[0]
+
   usage  =  "%s [options]"  % cmd_name
   usage += "\n\n%s"         % cmd_descr
   usage += "\n------------------------------------------------------------------------------"
@@ -695,7 +695,13 @@ if (__name__ == "__main__"):
       wallet = pathjoin(environ['ORACLE_HOME'], 'network', 'admin', 'wallet')
     else:
       wallet = pathjoin(home_dir, 'wallet')
-  
+
+  # Create a new wallet...
+  if newwallet:
+    print("\nTo create a new wallet, run the following command and enter your wallet password when prompted:")
+    print("\n   mkstore -wrl %s -create" % wallet)
+    exit()
+
   # Get the wallet password from keyboard....
   #password = 'Mischief9911#'
   password = getpass("\nEnter wallet password: ")
@@ -703,12 +709,6 @@ if (__name__ == "__main__"):
     print("\nWallet password required: %s" % password)
     exit(1)
 
-  # Create a new wallet...
-  if newwallet:
-    print("\nTo create a new wallet, run the following command and enter your wallet password when prompted:")
-    print("\n   mkstore -wrl %s -create" % wallet)
-    exit()
-            
   # Validate wallet...
   if isdir(wallet):
     perms = is_file_rwx(wallet)
@@ -724,7 +724,7 @@ if (__name__ == "__main__"):
         exit(1)
     for item in manifest:
       perms = is_file_rw(pathjoin(wallet, item))
-      if not perms: 
+      if not perms:
         print("\nPermissions for file must be read+write: %s" % pathjoin(wallet,item))
         exit(1)
   else:
@@ -733,7 +733,7 @@ if (__name__ == "__main__"):
     if not isdir(wallet):
       print("\nInvalid wallet: %s" % wallet)
       exit(1)
-  
+
   # Extract basic info that is used for most things.
   # --------------------------------------------------------
   creds = wallet_list_credential(wallet, password)
@@ -849,8 +849,8 @@ if (__name__ == "__main__"):
     if keylist == []:
       keylist = sorted(creds)
     report_passwords(attrs, keylist)
-  
+
   #report_credendial_attrs(attrs)
-  
+
   exit(0)
 
