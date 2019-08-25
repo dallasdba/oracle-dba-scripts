@@ -6,9 +6,6 @@
 # Descr:  wrapper for mkstore, Oracle"s wallet management command.                                 #
 # History:                                                                                         #
 #                                                                                                  #
-# Wish List:                                                                                       #
-#  - Add functionality to create the wallet.                                                       #
-#                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- --------------------------------------------------------------- #
 # 08/13/2019 0.10 Randy Johnson    Initial write.                                                  #
@@ -39,6 +36,17 @@
 #                                  Now if credential id's provided on the command line don't exist #
 #                                  we will just quietly ignore them. Should we throw a warning?    #
 # 08/19/2019 1.00 Randy Johnson    Final review complete. Moving to production status.             #
+# 08/22/2019 1.10 Randy Johnson    Changed -n option to boolean from string. Moved the -n code up  #
+#                                  above the prompt for password because a wallet password is not  #
+#                                  required for this option.                                       #
+# 08/24/2019 1.20 Andy Klock       Added -l option. Added compatability for Windows.               #
+# 08/25/2019 1.30 Randy Johnson    Added find_keys() function that searches connect strings in the #
+#                                  credentials for wildcarded strings on the command line and      #
+#                                  returns the associated credential id's that match. This logic   #
+#                                  is used for the default output (list credentials), delete       #
+#                                  credential(s) and change password(s). If no search string is    #
+#                                  specified the default of ALL credentials is assumed. Added      #
+#                                  execute_wallet_cmd() to simplify and reduce repetitive code.    #
 #--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -131,34 +139,83 @@ def read_input(prompt):
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Def:  wallet_list()
-# Desc: run mkstore -wrl {wallet_dir} -list and return information from the
-#       wallet
-# Args: wallet    - wallet directory name
-#       password  - wallet password
-# Retn: creds     - dictionary of index, connect string, username
+# Def:  get_pipe(cmdline)
+# Desc: Deals with the Python v2 and v3 differences of subprocess as well as
+#       Windows (non-posdix) support
+# Args: cmdline - The command to be passed into the subprocess
+# Retn: proc  - the PIPE
 # ---------------------------------------------------------------------------
-def wallet_list(wallet, password):
-  output   = []
-  creds    = {}
-  rexpat   = r'^([a-z|A-Z]+.[a-z|A-Z]+.[a-z|A-Z]+.\D+)(\d+).*$'   # searching for 'oracle.security.client.{connect_string|username|password}nnn'
-  cmdline  = ["mkstore", "-wrl", wallet, '-list']
+def get_pipe(cmdline):
+  if(version_info[0] >= 3):
+    if system() in ('Windows', 'win32'):
+      my_proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
+    else:
+      my_proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
+  else:
+    if system() in ('Windows', 'win32'):
+      my_proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    else:
+      my_proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
 
+  return my_proc
+# ---------------------------------------------------------------------------
+# End get_pipe()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def:  execute_wallet_cmd()
+# Desc: run mkstore -wrl {wallet_dir} -{parm} and return a list of output.
+# Args: wallet - wallet directory name
+#       password - wallet password
+# Retn: final_output - list of output from mkstore command.
+# ---------------------------------------------------------------------------
+def execute_wallet_cmd(wallet, password, parms):
+  output  = []
+  rexpat  = r'^(\d+): (\w+) (\w+).*$'  # {nnn}: test_system{nnn} system
+  cmdline = ["mkstore", "-wrl", wallet] + parms
+
+  def get_line(proc):
+    line = proc.stdout.readline().encode('ascii').strip()
+    return line
+
+  #try:
+  #  if(version_info[0] >= 3):
+  #    if system() in ('Windows', 'win32'):
+  #      proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
+  #    else:
+  #      proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
+  #  else:
+  #    if system() in ('Windows', 'win32'):
+  #      proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+  #    else:
+  #      proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+  #except:
+  #  print("Error calling mkstore: %s" % ' '.join(cmdline))
+  #  exit(1)
+  #
   try:
-    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    if(version_info[0] >= 3):
+      if system() in ('Windows', 'win32'):
+        proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
+      else:
+        proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
+    else:
+      if system() in ('Windows', 'win32'):
+        proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+      else:
+        proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
   except:
     print("Error calling mkstore: %s" % ' '.join(cmdline))
     exit(1)
 
-  # Read all the initial output (including "Enter wallet password:")
-  line = proc.stdout.readline().decode('ascii').strip()
+  line = get_line(proc)
   if "Oracle Secret Store Tool" not in line:
     print("Error returned from mkstore: %s" % line)
     exit(1)
   else:
     # drain the rest of proc.stdout...
     while True:
-      line = proc.stdout.readline().decode('ascii').strip()
+      line = get_line(proc)
       if not line:
         break
 
@@ -166,7 +223,7 @@ def wallet_list(wallet, password):
   proc.stdin.write(password +'\n')
   proc.stdin.flush()
   while True:
-    line = proc.stdout.readline().strip()
+    line = get_line(proc)
     # Check for password problem -- oracle.security.crypto.core.CipherException: Invalid padding string (or incorrect password)
     if 'Exception' in line or 'PKI-' in line:
       print("Error returned from mkstore: %s" % line)
@@ -180,14 +237,34 @@ def wallet_list(wallet, password):
   proc.terminate()
   proc.wait()
 
+  return output
+# ---------------------------------------------------------------------------
+# End execute_wallet_cmd()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def:  wallet_list()
+# Desc: run mkstore -wrl {wallet_dir} -list and return information from the
+#       wallet
+# Args: wallet    - wallet directory name
+#       password  - wallet password
+# Retn: creds     - dictionary of index, connect string, username
+# ---------------------------------------------------------------------------
+def wallet_list(wallet, password):
+  output   = []
+  creds    = {}
+  rexpat   = r'^([a-z|A-Z]+.[a-z|A-Z]+.[a-z|A-Z]+.\D+)(\d+).*$'   # searching for 'oracle.security.client.{connect_string|username|password}nnn'
+
+  output = execute_wallet_cmd(wallet, password, ['-list'])
+
   # Now we'll get the results of the query...
-  for line in output[2:]:
+  for line in output:
     found = search(rexpat, line)
     if found:
       try:
-        credstr  = ''.join(found.groups())
-        credtype = found.groups()[0].split('.')[3]
-        idx      = found.groups()[1]
+       credstr  = ''.join(found.groups())
+       credtype = found.groups()[0].split('.')[3]
+       idx      = found.groups()[1]
       except:
         print("Unexpected results from -list: %s" % found.groups())
         exit(1)
@@ -214,49 +291,11 @@ def wallet_list(wallet, password):
 # Retn: creds     - dictionary of index, connect string, username
 # ---------------------------------------------------------------------------
 def wallet_list_credential(wallet, password):
-  output   = []
-  creds    = {}
-  rexpat   = r'^(\d+): (\w+) (\w+).*$'  # {nnn}: test_system{nnn} system
-  cmdline  = ["mkstore", "-wrl", wallet, '-listCredential']
+  creds  = {}
+  rexpat = r'^(\d+): (\w+) (\w+).*$'  # {nnn}: test_system{nnn} system
 
-  try:
-    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-  except:
-    print("Error calling mkstore: %s" % ' '.join(cmdline))
-    exit(1)
-
-  # Read all the initial output (including "Enter wallet password:")
-  line = proc.stdout.readline().decode('ascii').strip()
-  if "Oracle Secret Store Tool" not in line:
-    print("Error returned from mkstore: %s" % line)
-    exit(1)
-  else:
-    # drain the rest of proc.stdout...
-    while True:
-      line = proc.stdout.readline().decode('ascii').strip()
-      if not line:
-        break
-
-  # Write the password to mkstore's stdin then read everything you get back...
-  proc.stdin.write(password +'\n')
-  proc.stdin.flush()
-  while True:
-    line = proc.stdout.readline().strip()
-    # Check for password problem -- oracle.security.crypto.core.CipherException: Invalid padding string (or incorrect password)
-    if 'Exception' in line or 'PKI-' in line:
-      print("Error returned from mkstore: %s" % line)
-      exit(1)
-    if not line:
-      break
-    else:
-      # save the output...
-      output.append(line)
-  proc.stdin.close()
-  proc.terminate()
-  proc.wait()
-
-  # Now we'll get the results of the query...
-  for line in output[2:]:
+  output = execute_wallet_cmd(wallet, password, ['-listCredential'])
+  for line in output:
     found = search(rexpat, line)
     if found:
       try:
@@ -290,105 +329,34 @@ def wallet_list_credential(wallet, password):
 #                   password accepted.
 # ---------------------------------------------------------------------------
 def cred_details(wallet, password, entry):
-  output  = []
-  cmdline = ["mkstore", "-wrl", wallet, '-viewEntry', entry]
-
-  try:
-    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-  except:
-    print("Error calling mkstore: %s" % ' '.join(cmdline))
-    exit(1)
-
-  # Read all the initial output (including "Enter wallet password:")
-  line = proc.stdout.readline().decode('ascii').strip()
-  if "Oracle Secret Store Tool" not in line:
-    print("Error returned from mkstore: %s" % line)
-    exit(1)
-  else:
-    # drain the rest of proc.stdout...
-    while True:
-      line = proc.stdout.readline().decode('ascii').strip()
-      if not line:
-        break
-
-  # Write the password to mkstore's stdin then read everything you get back after that.
-  proc.stdin.write(password +'\n')
-  proc.stdin.flush()
-  while True:
-    line = proc.stdout.readline().strip()
-    if 'Exception' in line or 'PKI-' in line:
-      print("Error returned from mkstore: %s" % line)
-      exit(1)
-    if not line:
-      break
-    else:
-      # save the output...
-      output.append(line)
-  proc.stdin.close()
-  proc.terminate()
-  proc.wait()
-
   value = ''
+
+  output = execute_wallet_cmd(wallet, password, ['-viewEntry', entry])
   try:
     value = output[1].split('=')[1].strip()
   except:
     print("Cannot parse value returned by -viewEvent: %s" % output[1])
     exit(1)
-
   return value
 # ---------------------------------------------------------------------------
 # End cred_details()
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Def:  change_password(wallet, password, connstr, username, chgpass)
+# Def:  change_password(wallet, password, creds, keys, newpass)
 # Desc: run mkstore -wrl {wallet_dir} -modifyCredential N102 scott
-#       chgpassword and return information from the wallet
+#       newpassword and return information from the wallet
 # Args: wallet    - wallet directory name
 #       password  - wallet password
 #       Parm      - mkstore parameter to execute
 # Retn: output    - everything mkstore prints to stdout|stderr after the
 #                   password accepted.
 # ---------------------------------------------------------------------------
-def change_password(wallet, password, connstr, username, chgpass):
-  output  = []
-  cmdline = ["mkstore", "-wrl", wallet, '-modifyCredential', connstr, username, chgpass]
-
-  try:
-    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-  except:
-    print("Error calling mkstore: %s" % ' '.join(cmdline))
-    exit(1)
-
-  # Read all the initial output (including "Enter wallet password:")
-  line = proc.stdout.readline().decode('ascii').strip()
-  if "Oracle Secret Store Tool" not in line:
-    print("Error returned from mkstore: %s" % line)
-    exit(1)
-  else:
-    # drain the rest of proc.stdout...
-    while True:
-      line = proc.stdout.readline().decode('ascii').strip()
-      if not line:
-        break
-
-  # Write the password to mkstore's stdin then read everything you get back after that.
-  proc.stdin.write(password +'\n')
-  proc.stdin.flush()
-  while True:
-    line = proc.stdout.readline().strip()
-    if 'Exception' in line or 'PKI-' in line:
-      print("Error returned from mkstore: %s" % line)
-      exit(1)
-    if not line:
-      break
-    else:
-      # save the output...
-      output.append(line)
-  proc.stdin.close()
-  proc.terminate()
-  proc.wait()
-
+def change_password(wallet, password, creds, keys, newpass):
+  for key in keys:
+    connstr = creds[key]['Connect String']
+    username = creds[key]['User Name']
+    output = execute_wallet_cmd(wallet, password, ['-modifyCredential', connstr, username, newpass])
   return output
 # ---------------------------------------------------------------------------
 # End change_password()
@@ -407,44 +375,7 @@ def change_password(wallet, password, connstr, username, chgpass):
 #                   password accepted.
 # ---------------------------------------------------------------------------
 def add_credential(wallet, password, connstr, username, passwd):
-  output  = []
-  cmdline = ["mkstore", "-wrl", wallet, '-createCredential', connstr, username, passwd]
-
-  try:
-    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-  except:
-    print("Error calling mkstore: %s" % ' '.join(cmdline))
-    exit(1)
-
-  # Read all the initial output (including "Enter wallet password:")
-  line = proc.stdout.readline().decode('ascii').strip()
-  if "Oracle Secret Store Tool" not in line:
-    print("Error returned from mkstore: %s" % line)
-    exit(1)
-  else:
-    # drain the rest of proc.stdout...
-    while True:
-      line = proc.stdout.readline().decode('ascii').strip()
-      if not line:
-        break
-
-  # Write the password to mkstore's stdin then read everything you get back after that.
-  proc.stdin.write(password +'\n')
-  proc.stdin.flush()
-  while True:
-    line = proc.stdout.readline().strip()
-    if 'Exception' in line or 'PKI-' in line:
-      print("Error returned from mkstore: %s" % line)
-      exit(1)
-    if not line:
-      break
-    else:
-      # save the output...
-      output.append(line)
-  proc.stdin.close()
-  proc.terminate()
-  proc.wait()
-
+  output = execute_wallet_cmd(wallet, password, ['-createCredential', connstr, username, passwd])
   return output
 # ---------------------------------------------------------------------------
 # End add_credential()
@@ -462,57 +393,63 @@ def add_credential(wallet, password, connstr, username, passwd):
 # Retn: output    - everything mkstore prints to stdout|stderr after the
 #                   password accepted.
 # ---------------------------------------------------------------------------
-def delete_credentials(wallet, password, creds, delkeys):
+def delete_credentials(wallet, password, creds, keys):
   output  = []
   tns     = []
 
-  for key in sorted(delkeys):
+  for key in sorted(keys):
     if key in creds:
       tns.append(creds[key]['Connect String'])
     else:
       print("\nKey not found in wallet and will be ignored: %s" % key)
 
   for connstr in tns:
-    output = []
     cmdline = ["mkstore", "-wrl", wallet, '-deleteCredential', connstr]
-    try:
-      proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    except:
-      print("Error calling mkstore: %s" % ' '.join(cmdline))
-      exit(1)
-
-    # Read all the initial output (including "Enter wallet password:")
-    line = proc.stdout.readline().decode('ascii').strip()
-    if "Oracle Secret Store Tool" not in line:
-      print("Error returned from mkstore: %s" % line)
-      exit(1)
-    else:
-      # drain the rest of proc.stdout...
-      while True:
-        line = proc.stdout.readline().decode('ascii').strip()
-        if not line:
-          break
-
-    # Write the password to mkstore's stdin then read everything you get back after that.
-    proc.stdin.write(password +'\n')
-    proc.stdin.flush()
-    while True:
-      line = proc.stdout.readline().strip()
-      if 'Exception' in line or 'PKI-' in line:
-        print("Error returned from mkstore: %s" % line)
-        exit(1)
-      if not line:
-        break
-      else:
-        # save the output...
-        output.append(line)
-    proc.stdin.close()
-    proc.terminate()
-    proc.wait()
+    output = execute_wallet_cmd(wallet, password, ['-deleteCredential', connstr])
 
   return output
 # ---------------------------------------------------------------------------
 # End delete_credentials()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def:  find_keys(creds)
+# Desc: Searches for a string in Connect String and returns credential id
+#       (key)
+# Args: creds - This is a dictionary structure keyed on the credential id
+# Retn: list
+# ---------------------------------------------------------------------------
+def find_keys(creds):
+  keys        = []
+  search_list = []
+
+  if args != []:
+    search_list = ','.join(args)
+    search_list = [search_string.strip() for search_string in search_list.split(',')]
+
+  if search_list == []:
+    keys = sorted(creds)
+  else:
+    # Build regular expression...
+    rexpat = search_string.replace('*', '.*')
+    #if rexpat[-2:] != '.*':
+    #  rexpat = rexpat + '.*'
+    #if rexpat[0:2] != '.*':
+    #  rexpat = r'.*' + rexpat
+    rexpat = r'(' + rexpat + ')'
+    print(rexpat)
+
+    for key in sorted(creds):
+      found = search(rexpat, creds[key]["Connect String"],IGNORECASE)
+      if found:
+        keys.append(key)
+
+    # remove duplicates...
+    keys = sorted(list(set().union(keys, keys)))
+
+  return keys
+# ---------------------------------------------------------------------------
+# End find_keys()
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -530,22 +467,15 @@ def delete_credentials(wallet, password, creds, delkeys):
 #                 oracle.security.client.username1
 #                 oracle.security.client.username2
 #                 ...
-#       keylist  - list structure containing the credential ids to report.
+#       keys  - list structure containing the credential ids to report.
 # Retn: <none>
 # ---------------------------------------------------------------------------
-def report_passwords(attrs, keylist):
-  #print("\nCredential Details...")
+def report_passwords(attrs, keys):
+
   print("\n%-4s %-20s %-20s %-30s" % ('ID', 'Connect String', 'User Name','Password'))
   print("%-4s %-20s %-20s %-30s" % ('----', '--------------------','--------------------','------------------------------'))
 
-  for i,key in enumerate(passkeys):
-    try:
-      passkeys[i] = int(key)
-    except:
-      print("\nKeys must be an integer. Removing from list: %s" % key)
-      passkeys.remove(key)
-
-  for key in sorted(keylist):
+  for key in sorted(keys):
     if key in attrs:
       value = cred_details(wallet, password, attrs[key]['password'])
       print("%-4s %-20s %-20s %-30s" % (key,creds[key]['Connect String'],creds[key]['User Name'],value))
@@ -561,11 +491,13 @@ def report_passwords(attrs, keylist):
 #               and containing the connect string and user name.
 # Retn: <none>
 # ---------------------------------------------------------------------------
-def report_credentials(creds):
+def report_credentials(creds, keys):
+
   print("\n%-4s %-20s %-30s" % ('ID', 'Connect String', 'User Name'))
   print("%-4s %-20s %-30s" % ('----', '--------------------','--------------------'))
-  for key in sorted(creds):
+  for key in keys:
     print("%-4s %-20s %-20s" % (key, creds[key]['Connect String'], creds[key]['User Name']))
+
 # ---------------------------------------------------------------------------
 # End report_credentials()
 # ---------------------------------------------------------------------------
@@ -603,16 +535,15 @@ def report_credendial_attrs(attrs):
 if (__name__ == "__main__"):
   cmd_name       = basename(argv[0]).split(".")[0]
   cmd_descr      = "Wallet Manager"
-  versn          = "0.80"
-  versn_date     = "Sun Aug 19 10:07:46 CDT 2019"
+  versn          = "1.30"
+  versn_date     = "Sat Aug 24 20:05:54 CDT 2019"
   dev_state      = "Production"
   banner         = cmd_descr + ": Release " + versn + " "  + dev_state + ". Last updated: " + versn_date
   now            = datetime.now()
   manifest       = ['cwallet.sso','ewallet.p12']
   creds          = {}
-  delkeys        = []
   passkeys       = []
-  keylist        = []
+  keys           = []
   home_dir       = pathsplit(pathsplit(argv[0])[0])[0]
 
   usage  =  "%s [options]"  % cmd_name
@@ -620,6 +551,11 @@ if (__name__ == "__main__"):
   usage += "\n------------------------------------------------------------------------------"
   usage += "\nWrapper for Oracle's mkstore comamnd."
   usage += "\n\nExamples:"
+  usage += "\nReport credentials..."
+  usage += "\n%s" % cmd_name
+  usage += "\n%s *test*" % cmd_name
+  usage += "\n%s test" % cmd_name
+  usage += "\n"
   usage += "\nAdd new credential..."
   usage += "\n%s -a mydb system welcome1" % cmd_name
   usage += "\n"
@@ -644,9 +580,9 @@ if (__name__ == "__main__"):
   arg_parser = OptionParser(usage)
 
   arg_parser.add_option("-a",  dest="addcred",    action="store_true", default=False,           help="add a new credential")
-  arg_parser.add_option("-c",  dest="chgpass",                         default='',    type=str, help="change password for credentials listed by index")
+  arg_parser.add_option("-c",  dest="newpass",                         default='',    type=str, help="change password for credentials listed by index")
   arg_parser.add_option("-d",  dest="delcred",   action="store_true",  default=False,           help="delete credentials (confirmation required)")
-  arg_parser.add_option("-n",  dest="newwallet",                       default='',    type=str, help="create a new wallet")
+  arg_parser.add_option("-n",  dest="newwallet",  action="store_true", default=False,           help="create a new wallet")
   arg_parser.add_option("-p",  dest="listpass",   action="store_true", default=False,           help="report passwords")
   arg_parser.add_option("-s",  dest="silent",     action="store_true", default=False,           help="silent (no prompts, no confirmations)")
   arg_parser.add_option("-w",  dest="wallet",                          default='',    type=str, help="wallet (directory containing the credentials)")
@@ -657,7 +593,7 @@ if (__name__ == "__main__"):
 
   addcred   = options.addcred
   delcred   = options.delcred
-  chgpass   = options.chgpass
+  newpass   = options.newpass
   listpass  = options.listpass
   newwallet = options.newwallet
   silent    = options.silent
@@ -670,16 +606,16 @@ if (__name__ == "__main__"):
 
   # -a -c and -d options are mutually exclusive
   # ---------------------------------------------
-  if addcred and (chgpass or delcred or newwallet):
+  if addcred and (newpass or delcred or newwallet):
     print("The -a option cannot be used with -c -d -n options.")
     exit(0)
-  elif chgpass and (addcred or delcred or newwallet):
+  elif newpass and (addcred or delcred or newwallet):
     print("The -c option cannot be used with -a -d -n options.")
     exit(0)
-  elif delcred and (addcred or chgpass or newwallet):
+  elif delcred and (addcred or newpass or newwallet):
     print("The -d option cannot be used with -a -c -n options.")
     exit(0)
-  elif newwallet and (addcred or chgpass or delcred):
+  elif newwallet and (addcred or newpass or delcred):
     print("The -c option cannot be used with -a -c -d options.")
     exit(0)
   elif newwallet and silent:
@@ -698,12 +634,16 @@ if (__name__ == "__main__"):
 
   # Create a new wallet...
   if newwallet:
+    if len(args) >= 1:
+      wallet = args[0]
+    else:
+      wallet = 'wallet'
     print("\nTo create a new wallet, run the following command and enter your wallet password when prompted:")
     print("\n   mkstore -wrl %s -create" % wallet)
     exit()
 
   # Get the wallet password from keyboard....
-  #password = 'Mischief9911#'
+  ###! password = 'Flaffel9911'
   password = getpass("\nEnter wallet password: ")
   if password.strip() == '':
     print("\nWallet password required: %s" % password)
@@ -738,9 +678,7 @@ if (__name__ == "__main__"):
   # --------------------------------------------------------
   creds = wallet_list_credential(wallet, password)
   attrs = wallet_list(wallet, password)
-
-  # print a report of key, connect string, user name
-  report_credentials(creds)
+  keys = find_keys(creds)
 
   # Adda new credential...
   if addcred:
@@ -756,7 +694,7 @@ if (__name__ == "__main__"):
       connstr,username,passwd = args
       if not silent:
         print("\nAdd new credential defined as follows:")
-        print("\n   Connect String: %s" % connstr)
+        print("\n  Connect String: %s" % connstr)
         print("       User Name: %s" % username)
         print("        Password: %s" % passwd)
         response = read_input("Continue? (y/N)")
@@ -767,90 +705,45 @@ if (__name__ == "__main__"):
         print("\nAdd credential cancelled.")
         exit()
 
-  # Report full credentials including password for keys provided.
-  if listpass:
-    if args != []:
-      keylist = ','.join(args)
-      keylist = [ key.strip() for key in keylist.split(',')]
-    for i,key in enumerate(keylist):
-      try:
-        keylist[i] = int(key)
-      except:
-        print("\nKeys must be an integer. Removing from list: %s" % key)
-        keylist.remove(key)
+  # print a report of key, connect string, user name
+  report_credentials(creds, keys)
 
   # Delete credential(s) specified by their numeric key.
   if delcred:
-    if args != []:
-      delkeys = ','.join(args)
-      delkeys = [ key.strip() for key in delkeys.split(',')]
-    for i,key in enumerate(delkeys):
-      try:
-        delkeys[i] = int(key)
-      except:
-        print("\nKeys must be an integer. Removing from list: %s" % key)
-        delkeys.remove(key)
-
-    if delkeys != []:
-      if not silent:
-        print("\nThe following credentials are flagged for deletion: %s" % sorted(delkeys))
-        response = read_input("Continue? (y/N)")
-      if silent or response.upper()[0] == 'Y':
-        output = delete_credentials(wallet, password, creds, delkeys)
-        exit()
-      else:
-        print("\nDelete credentials cancelled.")
-        exit()
+    if silent:
+      output = delete_credentials(wallet, password, creds, keys)
+      exit()
     else:
-      if not silent:
-        response = read_input("Enter the key(s) of the credentials to delete")
-        if response is '':
-          exit()
-        else:
-          if ' ' in response:
-            response = response.replace(' ',',')
-          delkeys = [ int(key.strip()) for key in response.split(',')]
-        print("\nYou've selected %s for deletion: " % sorted(delkeys))
-        response = read_input("Continue (y/N)")
-      if silent or response.upper()[0] == 'Y':
-        output = delete_credentials(wallet, password, creds, delkeys)
+      print("\nThe following credentials are flagged for deletion: %s" % keys)
+      response = read_input("Continue? (y/N)")
+      if response.upper()[0] == 'Y':
+        output = delete_credentials(wallet, password, creds, keys)
         exit()
       else:
         print("\nDelete credentials cancelled.")
         exit()
 
   # Change password for credential(s) specified by their numeric key.
-  if chgpass != '':
-    passkeys = [key.strip() for key in args[0].split(',')]
-    for i,key in enumerate(passkeys):
-      try:
-        passkeys[i] = int(key)
-      except:
-        print("\nKeys must be an integer. Removing from list: %s" % key)
-        passkeys.remove(key)
-
-    print("\nChanging password for the following credentials: %s" % sorted(passkeys))
-    if not silent:
-      response = read_input("Continue (y/N)")
-    if silent or response.upper()[0] == 'Y':
-      for key in passkeys:
-        if key not in creds:
-          print("Skipping key not found in wallet: %s" % key)
-        else:
-          connstr  = creds[key]['Connect String']
-          username = creds[key]['User Name']
-          out = change_password(wallet, password, connstr, username, chgpass)
+  if newpass != '':
+    if silent:
+      out = change_password(wallet, password, creds, keys, newpass)
+      exit()
+    else:
+      print("\nChanging password for the following credentials: %s" % keys)
+      response = read_input("Continue? (y/N)")
+      if response.upper()[0] == 'Y':
+        out = change_password(wallet, password, creds, keys, newpass)
 
       # Report New Passwords...
       attrs = wallet_list(wallet, password)
-      report_passwords(attrs, passkeys)
+      report_passwords(attrs, keys)
 
+  # Report full credentials including password for keys provided.
   if listpass:
-    if keylist == []:
-      keylist = sorted(creds)
-    report_passwords(attrs, keylist)
+    attrs = wallet_list(wallet, password)
+    report_passwords(attrs, keys)
 
-  #report_credendial_attrs(attrs)
+  ###~ report_credendial_attrs(attrs)
 
   exit(0)
 
