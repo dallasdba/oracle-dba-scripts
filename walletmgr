@@ -49,7 +49,7 @@
 #                                  execute_wallet_cmd() to simplify and reduce repetitive code.    #
 # 08/25/2019 1.31 Randy Johnson    Fixed find_keys(). Was only returning results from last arg[].  #
 #                                  Moved find_keys() after block that adds a new credential.       #
-#                                  Removed the report_password() function and moved that lpogic    #
+# 08/26/2019 1.40 Randy Johnson    Removed the report_password() function and moved that lpogic    #
 #                                  into the report_credentials() function. Added include_password  #
 #                                  (boolean) into the parameters for report_credentials to switch  #
 #                                  between standard credentials report and the password report.    #
@@ -520,8 +520,8 @@ def report_credendial_attrs(attrs):
 if (__name__ == "__main__"):
   cmd_name       = basename(argv[0]).split(".")[0]
   cmd_descr      = "Wallet Manager"
-  versn          = "1.30"
-  versn_date     = "Sat Aug 24 20:05:54 CDT 2019"
+  versn          = "1.40"
+  versn_date     = "Mon Aug 26 12:49:36 EDT 2019"
   dev_state      = "Production"
   banner         = cmd_descr + ": Release " + versn + " "  + dev_state + ". Last updated: " + versn_date
   now            = datetime.now()
@@ -531,7 +531,7 @@ if (__name__ == "__main__"):
   keys           = []
   home_dir       = pathsplit(pathsplit(argv[0])[0])[0]
 
-  usage  =  "%s [options]"  % cmd_name
+  usage  =  "%s [options] [params]"  % cmd_name
   usage += "\n\n%s"         % cmd_descr
   usage += "\n------------------------------------------------------------------------------"
   usage += "\nWrapper for Oracle's mkstore comamnd."
@@ -650,11 +650,10 @@ if (__name__ == "__main__"):
     exit()
 
   # Get the wallet password from keyboard....
-  password = 'Flaffel9911'
-  #password = getpass("\nEnter wallet password: ")
-  #if password.strip() == '':
-  #  print("\nWallet password required: %s" % password)
-  #  exit(1)
+  password = getpass("\nEnter wallet password: ")
+  if password.strip() == '':
+    print("\nWallet password required: %s" % password)
+    exit(1)
 
   # Validate wallet...
   if isdir(wallet):
