@@ -47,6 +47,12 @@
 #                                  credential(s) and change password(s). If no search string is    #
 #                                  specified the default of ALL credentials is assumed. Added      #
 #                                  execute_wallet_cmd() to simplify and reduce repetitive code.    #
+# 08/25/2019 1.31 Randy Johnson    Fixed find_keys(). Was only returning results from last arg[].  #
+#                                  Moved find_keys() after block that adds a new credential.       #
+#                                  Removed the report_password() function and moved that lpogic    #
+#                                  into the report_credentials() function. Added include_password  #
+#                                  (boolean) into the parameters for report_credentials to switch  #
+#                                  between standard credentials report and the password report.    #
 #--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -148,9 +154,9 @@ def read_input(prompt):
 def get_pipe(cmdline):
   if(version_info[0] >= 3):
     if system() in ('Windows', 'win32'):
-      my_proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
+      my_proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='utf8')
     else:
-      my_proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
+      my_proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='utf8')
   else:
     if system() in ('Windows', 'win32'):
       my_proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
@@ -430,19 +436,20 @@ def find_keys(creds):
   if search_list == []:
     keys = sorted(creds)
   else:
-    # Build regular expression...
-    rexpat = search_string.replace('*', '.*')
-    #if rexpat[-2:] != '.*':
-    #  rexpat = rexpat + '.*'
-    #if rexpat[0:2] != '.*':
-    #  rexpat = r'.*' + rexpat
-    rexpat = r'(' + rexpat + ')'
-    print(rexpat)
+    for ss in search_list:
+      # Build regular expression...
+      rexpat = ss.replace('*', '.*')
+      ###! if rexpat[-2:] != '.*':
+      ###!   rexpat = rexpat + '.*'
+      ###! if rexpat[0:2] != '.*':
+      ###!   rexpat = r'.*' + rexpat
+      rexpat = r'(' + rexpat + ')'
+      ###! print(rexpat)
 
-    for key in sorted(creds):
-      found = search(rexpat, creds[key]["Connect String"],IGNORECASE)
-      if found:
-        keys.append(key)
+      for key in sorted(creds):
+        found = search(rexpat, creds[key]["Connect String"],IGNORECASE)
+        if found:
+          keys.append(key)
 
     # remove duplicates...
     keys = sorted(list(set().union(keys, keys)))
@@ -453,37 +460,6 @@ def find_keys(creds):
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Def:  report_passwords()
-# Desc: Generate a report containing credential id, connect string, user
-#       name and password.
-# Args: attrs - This is the long, fully qualified attributes containing
-#               information stored for each credential. For example:
-#                 oracle.security.client.connect_string1
-#                 oracle.security.client.connect_string2
-#                 ...
-#                 oracle.security.client.password1
-#                 oracle.security.client.password2
-#                 ...
-#                 oracle.security.client.username1
-#                 oracle.security.client.username2
-#                 ...
-#       keys  - list structure containing the credential ids to report.
-# Retn: <none>
-# ---------------------------------------------------------------------------
-def report_passwords(attrs, keys):
-
-  print("\n%-4s %-20s %-20s %-30s" % ('ID', 'Connect String', 'User Name','Password'))
-  print("%-4s %-20s %-20s %-30s" % ('----', '--------------------','--------------------','------------------------------'))
-
-  for key in sorted(keys):
-    if key in attrs:
-      value = cred_details(wallet, password, attrs[key]['password'])
-      print("%-4s %-20s %-20s %-30s" % (key,creds[key]['Connect String'],creds[key]['User Name'],value))
-# ---------------------------------------------------------------------------
-# End report_passwords()
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # Def:  report_credentials()
 # Desc: Generate a report containing credential id, connect string, and
 #       user name.
@@ -491,12 +467,21 @@ def report_passwords(attrs, keys):
 #               and containing the connect string and user name.
 # Retn: <none>
 # ---------------------------------------------------------------------------
-def report_credentials(creds, keys):
+def report_credentials(creds, keys, include_password=False):
 
-  print("\n%-4s %-20s %-30s" % ('ID', 'Connect String', 'User Name'))
-  print("%-4s %-20s %-30s" % ('----', '--------------------','--------------------'))
-  for key in keys:
-    print("%-4s %-20s %-20s" % (key, creds[key]['Connect String'], creds[key]['User Name']))
+  if include_password:
+    attrs = wallet_list(wallet, password)
+    print("\n%-4s %-20s %-20s %-30s" % ('ID', 'Connect String', 'User Name','Password'))
+    print("%-4s %-20s %-20s %-30s" % ('----', '--------------------','--------------------','------------------------------'))  
+    for key in sorted(keys):
+      if key in attrs:
+        value = cred_details(wallet, password, attrs[key]['password'])
+        print("%-4s %-20s %-20s %-30s" % (key,creds[key]['Connect String'],creds[key]['User Name'],value))
+  else:
+    print("\n%-4s %-20s %-30s" % ('ID', 'Connect String', 'User Name'))
+    print("%-4s %-20s %-30s" % ('----', '--------------------','--------------------'))
+    for key in keys:
+      print("%-4s %-20s %-20s" % (key, creds[key]['Connect String'], creds[key]['User Name']))
 
 # ---------------------------------------------------------------------------
 # End report_credentials()
@@ -550,29 +535,50 @@ if (__name__ == "__main__"):
   usage += "\n\n%s"         % cmd_descr
   usage += "\n------------------------------------------------------------------------------"
   usage += "\nWrapper for Oracle's mkstore comamnd."
-  usage += "\n\nExamples:"
+  usage += "\n"
   usage += "\nReport credentials..."
-  usage += "\n%s" % cmd_name
-  usage += "\n%s *test*" % cmd_name
-  usage += "\n%s test" % cmd_name
+  usage += "\n> %s" % cmd_name
+  usage += "\n"
+  usage += "\nID   Connect String       User Name"
+  usage += "\n---- -------------------- --------------------"
+  usage += "\n1    finprd               system"
+  usage += "\n2    hrprd                system"
+  usage += "\n3    findev               system"
+  usage += "\n4    hrdev                system"
+  usage += "\n5    biprd                system"
+  usage += "\n6    bidev                system"
+  usage += "\n"
+  usage += "\n> %s *dev" % cmd_name
+  usage += "\nID   Connect String       User Name"
+  usage += "\n---- -------------------- --------------------"
+  usage += "\n3    findev               system"
+  usage += "\n4    hrdev                system"
+  usage += "\n6    bidev                system"
   usage += "\n"
   usage += "\nAdd new credential..."
-  usage += "\n%s -a mydb system welcome1" % cmd_name
+  usage += "\n%s -a mydb system welcome1"      % cmd_name
+  usage += "\n%s -a mydb system welcome1 -s"   % cmd_name
   usage += "\n"
   usage += "\nChange passwords..."
-  usage += "\n%s -c welcome99 1"          % cmd_name
-  usage += "\n%s -c welcome99 1,2,5"      % cmd_name
-  usage += "\n%s -c welcome99 1,2,5 -s"   % cmd_name
+  usage += "\n%s -c welcome99 findev"          % cmd_name
+  usage += "\n%s -c welcome99 findev,hrdev"    % cmd_name
+  usage += "\n%s -c welcome99 '*dev'"          % cmd_name
+  usage += "\n%s -c welcome99 \*dev"           % cmd_name
+  usage += "\n%s -c welcome99 bi\*,hr\* -s"    % cmd_name
   usage += "\n"
   usage += "\nDelete credentials..."
-  usage += "\n%s -d 1"                    % cmd_name
-  usage += "\n%s -d 1,2,5"                % cmd_name
-  usage += "\n%s -d 1,2,5 -s"             % cmd_name
+  usage += "\n%s -d findev"                    % cmd_name
+  usage += "\n%s -d findev,hrdev"              % cmd_name
+  usage += "\n%s -d '*dev'"                    % cmd_name
+  usage += "\n%s -d \*dev"                     % cmd_name
+  usage += "\n%s -d bi\*,hr\* -s"              % cmd_name
   usage += "\n"
   usage += "\nList credential passwords..."
-  usage += "\n%s -p 1"                    % cmd_name
-  usage += "\n%s -p 1,2,5"                % cmd_name
-  usage += "\n%s -p 1,2,5 -s"             % cmd_name
+  usage += "\n%s -p findev"                    % cmd_name
+  usage += "\n%s -p findev,hrdev"              % cmd_name
+  usage += "\n%s -p '*dev'"                    % cmd_name
+  usage += "\n%s -p \*dev"                     % cmd_name
+  usage += "\n%s -p bi\*,hr\* -s"              % cmd_name
   usage += "\n"
   usage += "\nSpecify a wallet..."
   usage += "\n%s -w /u01/oracle/product/18c/dbhome_1/network/admin/wallet" % cmd_name
@@ -581,7 +587,7 @@ if (__name__ == "__main__"):
 
   arg_parser.add_option("-a",  dest="addcred",    action="store_true", default=False,           help="add a new credential")
   arg_parser.add_option("-c",  dest="newpass",                         default='',    type=str, help="change password for credentials listed by index")
-  arg_parser.add_option("-d",  dest="delcred",   action="store_true",  default=False,           help="delete credentials (confirmation required)")
+  arg_parser.add_option("-d",  dest="delcred",    action="store_true", default=False,           help="delete credentials (confirmation required)")
   arg_parser.add_option("-n",  dest="newwallet",  action="store_true", default=False,           help="create a new wallet")
   arg_parser.add_option("-p",  dest="listpass",   action="store_true", default=False,           help="report passwords")
   arg_parser.add_option("-s",  dest="silent",     action="store_true", default=False,           help="silent (no prompts, no confirmations)")
@@ -621,9 +627,10 @@ if (__name__ == "__main__"):
   elif newwallet and silent:
     print("The -n option cannot be used with -s option.")
     exit(0)
+  if newpass:
+    listpass = True
 
   # Get the wallet variable...
-  # wallet = "/opt/oracle/product/18c/dbhome_1/network/admin/wallet"            # <------<<<< delete this line in final draft.
   if not wallet:
     if 'ORACLE_WALLET' in environ:
       wallet = environ['ORACLE_WALLET']
@@ -643,11 +650,11 @@ if (__name__ == "__main__"):
     exit()
 
   # Get the wallet password from keyboard....
-  ###! password = 'Flaffel9911'
-  password = getpass("\nEnter wallet password: ")
-  if password.strip() == '':
-    print("\nWallet password required: %s" % password)
-    exit(1)
+  password = 'Flaffel9911'
+  #password = getpass("\nEnter wallet password: ")
+  #if password.strip() == '':
+  #  print("\nWallet password required: %s" % password)
+  #  exit(1)
 
   # Validate wallet...
   if isdir(wallet):
@@ -678,7 +685,6 @@ if (__name__ == "__main__"):
   # --------------------------------------------------------
   creds = wallet_list_credential(wallet, password)
   attrs = wallet_list(wallet, password)
-  keys = find_keys(creds)
 
   # Adda new credential...
   if addcred:
@@ -706,7 +712,8 @@ if (__name__ == "__main__"):
         exit()
 
   # print a report of key, connect string, user name
-  report_credentials(creds, keys)
+  keys = find_keys(creds)
+  report_credentials(creds, keys, listpass)
 
   # Delete credential(s) specified by their numeric key.
   if delcred:
@@ -735,15 +742,6 @@ if (__name__ == "__main__"):
         out = change_password(wallet, password, creds, keys, newpass)
 
       # Report New Passwords...
-      attrs = wallet_list(wallet, password)
-      report_passwords(attrs, keys)
-
-  # Report full credentials including password for keys provided.
-  if listpass:
-    attrs = wallet_list(wallet, password)
-    report_passwords(attrs, keys)
-
-  ###~ report_credendial_attrs(attrs)
-
+      report_credentials(creds, keys, listpass)
   exit(0)
 
