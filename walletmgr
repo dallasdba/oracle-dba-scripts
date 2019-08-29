@@ -53,6 +53,8 @@
 #                                  into the report_credentials() function. Added include_password  #
 #                                  (boolean) into the parameters for report_credentials to switch  #
 #                                  between standard credentials report and the password report.    #
+# 08/29/2014 1.41 Randy Johnson    Modified the regex search to look for exact match unless * is   #
+#                                  used. Changed keys to credkeys to avoid reserved word.          #
 #--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -63,23 +65,18 @@ from optparse     import OptionParser
 from os           import access
 from os           import environ
 from os           import listdir
-from os           import pathsep
 from os           import W_OK
 from os           import R_OK
 from os           import X_OK
 from os.path      import isdir
-from os.path      import isfile
 from os.path      import join as pathjoin
 from os.path      import split as pathsplit
-from re           import compile
 from re           import search
 from re           import IGNORECASE
 from os.path      import basename
 from signal       import signal
-from shutil       import rmtree
 from subprocess   import PIPE
 from subprocess   import Popen
-from subprocess   import STDOUT
 from sys          import argv
 from sys          import exit
 from sys          import version_info
@@ -136,39 +133,13 @@ def read_input(prompt):
   prompt = "\n%s: " % prompt
 
   if(version_info[0] >= 3):
-    value = input(prompt)
+    return input(prompt)
   else:
-    value = raw_input(prompt)
-  return value
+    return raw_input(prompt)
 # ---------------------------------------------------------------------------
 # End read_input()
 # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Def:  get_pipe(cmdline)
-# Desc: Deals with the Python v2 and v3 differences of subprocess as well as
-#       Windows (non-posdix) support
-# Args: cmdline - The command to be passed into the subprocess
-# Retn: proc  - the PIPE
-# ---------------------------------------------------------------------------
-def get_pipe(cmdline):
-  if(version_info[0] >= 3):
-    if system() in ('Windows', 'win32'):
-      my_proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='utf8')
-    else:
-      my_proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='utf8')
-  else:
-    if system() in ('Windows', 'win32'):
-      my_proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    else:
-      my_proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-
-  return my_proc
-# ---------------------------------------------------------------------------
-# End get_pipe()
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # Def:  execute_wallet_cmd()
 # Desc: run mkstore -wrl {wallet_dir} -{parm} and return a list of output.
 # Args: wallet - wallet directory name
@@ -181,33 +152,19 @@ def execute_wallet_cmd(wallet, password, parms):
   cmdline = ["mkstore", "-wrl", wallet] + parms
 
   def get_line(proc):
-    line = proc.stdout.readline().encode('ascii').strip()
+    #line = proc.stdout.readline().encode('ascii').strip()
+    line = proc.stdout.readline().strip()
     return line
 
-  #try:
-  #  if(version_info[0] >= 3):
-  #    if system() in ('Windows', 'win32'):
-  #      proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
-  #    else:
-  #      proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
-  #  else:
-  #    if system() in ('Windows', 'win32'):
-  #      proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-  #    else:
-  #      proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-  #except:
-  #  print("Error calling mkstore: %s" % ' '.join(cmdline))
-  #  exit(1)
-  #
   try:
     if(version_info[0] >= 3):
       if system() in ('Windows', 'win32'):
-        proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
+        proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii', shell=True)
       else:
         proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE, encoding='ascii')
     else:
       if system() in ('Windows', 'win32'):
-        proc = Popen(cmdline, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
       else:
         proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=PIPE)
   except:
@@ -283,6 +240,7 @@ def wallet_list(wallet, password):
       if idx not in creds:
         creds[idx] = {}
       creds[idx][credtype] = credstr
+  
   return creds
 # ---------------------------------------------------------------------------
 # End wallet_list()
@@ -319,6 +277,7 @@ def wallet_list_credential(wallet, password):
         creds[idx] = {}
       creds[idx]['Connect String'] = connstr
       creds[idx]['User Name']      = username
+  
   return creds
 # ---------------------------------------------------------------------------
 # End wallet_list_credential()
@@ -343,13 +302,14 @@ def cred_details(wallet, password, entry):
   except:
     print("Cannot parse value returned by -viewEvent: %s" % output[1])
     exit(1)
+  
   return value
 # ---------------------------------------------------------------------------
 # End cred_details()
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Def:  change_password(wallet, password, creds, keys, newpass)
+# Def:  change_password(wallet, password, creds, credkeys, newpass)
 # Desc: run mkstore -wrl {wallet_dir} -modifyCredential N102 scott
 #       newpassword and return information from the wallet
 # Args: wallet    - wallet directory name
@@ -358,11 +318,14 @@ def cred_details(wallet, password, entry):
 # Retn: output    - everything mkstore prints to stdout|stderr after the
 #                   password accepted.
 # ---------------------------------------------------------------------------
-def change_password(wallet, password, creds, keys, newpass):
-  for key in keys:
+def change_password(wallet, password, creds, credkeys, newpass):
+  output = []
+  
+  for key in credkeys:
     connstr = creds[key]['Connect String']
     username = creds[key]['User Name']
-    output = execute_wallet_cmd(wallet, password, ['-modifyCredential', connstr, username, newpass])
+    output.append(execute_wallet_cmd(wallet, password, ['-modifyCredential', connstr, username, newpass]))
+  
   return output
 # ---------------------------------------------------------------------------
 # End change_password()
@@ -381,8 +344,8 @@ def change_password(wallet, password, creds, keys, newpass):
 #                   password accepted.
 # ---------------------------------------------------------------------------
 def add_credential(wallet, password, connstr, username, passwd):
-  output = execute_wallet_cmd(wallet, password, ['-createCredential', connstr, username, passwd])
-  return output
+  return execute_wallet_cmd(wallet, password, ['-createCredential', connstr, username, passwd])
+
 # ---------------------------------------------------------------------------
 # End add_credential()
 # ---------------------------------------------------------------------------
@@ -399,11 +362,11 @@ def add_credential(wallet, password, connstr, username, passwd):
 # Retn: output    - everything mkstore prints to stdout|stderr after the
 #                   password accepted.
 # ---------------------------------------------------------------------------
-def delete_credentials(wallet, password, creds, keys):
+def delete_credentials(wallet, password, creds, credkeys):
   output  = []
   tns     = []
 
-  for key in sorted(keys):
+  for key in sorted(credkeys):
     if key in creds:
       tns.append(creds[key]['Connect String'])
     else:
@@ -411,7 +374,7 @@ def delete_credentials(wallet, password, creds, keys):
 
   for connstr in tns:
     cmdline = ["mkstore", "-wrl", wallet, '-deleteCredential', connstr]
-    output = execute_wallet_cmd(wallet, password, ['-deleteCredential', connstr])
+    output.append(execute_wallet_cmd(wallet, password, ['-deleteCredential', connstr]))
 
   return output
 # ---------------------------------------------------------------------------
@@ -419,14 +382,14 @@ def delete_credentials(wallet, password, creds, keys):
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Def:  find_keys(creds)
+# Def:  find_credkeys(creds)
 # Desc: Searches for a string in Connect String and returns credential id
 #       (key)
 # Args: creds - This is a dictionary structure keyed on the credential id
 # Retn: list
 # ---------------------------------------------------------------------------
-def find_keys(creds):
-  keys        = []
+def find_credkeys(creds):
+  credkeys    = []
   search_list = []
 
   if args != []:
@@ -434,29 +397,26 @@ def find_keys(creds):
     search_list = [search_string.strip() for search_string in search_list.split(',')]
 
   if search_list == []:
-    keys = sorted(creds)
+    credkeys = sorted(creds)
   else:
     for ss in search_list:
+      if ss == '*':
+        return sorted(creds)
       # Build regular expression...
       rexpat = ss.replace('*', '.*')
-      ###! if rexpat[-2:] != '.*':
-      ###!   rexpat = rexpat + '.*'
-      ###! if rexpat[0:2] != '.*':
-      ###!   rexpat = r'.*' + rexpat
-      rexpat = r'(' + rexpat + ')'
-      ###! print(rexpat)
+      rexpat = r'(^' + rexpat + '$)'
 
       for key in sorted(creds):
         found = search(rexpat, creds[key]["Connect String"],IGNORECASE)
         if found:
-          keys.append(key)
+          credkeys.append(key)
 
     # remove duplicates...
-    keys = sorted(list(set().union(keys, keys)))
+    return sorted(list(set().union(credkeys, credkeys)))
 
-  return keys
+  return credkeys
 # ---------------------------------------------------------------------------
-# End find_keys()
+# End find_credkeys()
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -467,23 +427,22 @@ def find_keys(creds):
 #               and containing the connect string and user name.
 # Retn: <none>
 # ---------------------------------------------------------------------------
-def report_credentials(creds, keys, include_password=False):
+def report_credentials(creds, credkeys, include_password=False):
 
   if include_password:
     attrs = wallet_list(wallet, password)
     print("\n%-4s %-20s %-20s %-30s" % ('ID', 'Connect String', 'User Name','Password'))
     print("%-4s %-20s %-20s %-30s" % ('----', '--------------------','--------------------','------------------------------'))  
-    for key in sorted(keys):
+    for key in sorted(credkeys):
       if key in attrs:
         value = cred_details(wallet, password, attrs[key]['password'])
         print("%-4s %-20s %-20s %-30s" % (key,creds[key]['Connect String'],creds[key]['User Name'],value))
   else:
     print("\n%-4s %-20s %-30s" % ('ID', 'Connect String', 'User Name'))
     print("%-4s %-20s %-30s" % ('----', '--------------------','--------------------'))
-    for key in keys:
+    for key in credkeys:
       print("%-4s %-20s %-20s" % (key, creds[key]['Connect String'], creds[key]['User Name']))
-
-# ---------------------------------------------------------------------------
+ ---------------------------------------------------------------------------
 # End report_credentials()
 # ---------------------------------------------------------------------------
 
@@ -501,7 +460,7 @@ def report_credentials(creds, keys, include_password=False):
 #         oracle.security.client.username2
 #         ...
 # Args: creds - This is a dictionary structure keye'd on the credential id
-#               and containing the long keys for each credential entry.
+#               and containing the long credkeys for each credential entry.
 # Retn: <none>
 # ---------------------------------------------------------------------------
 def report_credendial_attrs(attrs):
@@ -520,15 +479,14 @@ def report_credendial_attrs(attrs):
 if (__name__ == "__main__"):
   cmd_name       = basename(argv[0]).split(".")[0]
   cmd_descr      = "Wallet Manager"
-  versn          = "1.40"
-  versn_date     = "Mon Aug 26 12:49:36 EDT 2019"
+  versn          = "1.41"
+  versn_date     = "Thu Aug 29 13:02:36 CDT 2019"
   dev_state      = "Production"
   banner         = cmd_descr + ": Release " + versn + " "  + dev_state + ". Last updated: " + versn_date
   now            = datetime.now()
   manifest       = ['cwallet.sso','ewallet.p12']
   creds          = {}
-  passkeys       = []
-  keys           = []
+  credkeys       = []
   home_dir       = pathsplit(pathsplit(argv[0])[0])[0]
 
   usage  =  "%s [options] [params]"  % cmd_name
@@ -711,19 +669,19 @@ if (__name__ == "__main__"):
         exit()
 
   # print a report of key, connect string, user name
-  keys = find_keys(creds)
-  report_credentials(creds, keys, listpass)
+  credkeys = find_credkeys(creds)
+  report_credentials(creds, credkeys, listpass)
 
   # Delete credential(s) specified by their numeric key.
   if delcred:
     if silent:
-      output = delete_credentials(wallet, password, creds, keys)
+      output = delete_credentials(wallet, password, creds, credkeys)
       exit()
     else:
-      print("\nThe following credentials are flagged for deletion: %s" % keys)
+      print("\nThe following credentials are flagged for deletion: %s" % credkeys)
       response = read_input("Continue? (y/N)")
       if response.upper()[0] == 'Y':
-        output = delete_credentials(wallet, password, creds, keys)
+        output = delete_credentials(wallet, password, creds, credkeys)
         exit()
       else:
         print("\nDelete credentials cancelled.")
@@ -732,15 +690,15 @@ if (__name__ == "__main__"):
   # Change password for credential(s) specified by their numeric key.
   if newpass != '':
     if silent:
-      out = change_password(wallet, password, creds, keys, newpass)
+      out = change_password(wallet, password, creds, credkeys, newpass)
       exit()
     else:
-      print("\nChanging password for the following credentials: %s" % keys)
+      print("\nChanging password for the following credentials: %s" % credkeys)
       response = read_input("Continue? (y/N)")
       if response.upper()[0] == 'Y':
-        out = change_password(wallet, password, creds, keys, newpass)
+        out = change_password(wallet, password, creds, credkeys, newpass)
 
       # Report New Passwords...
-      report_credentials(creds, keys, listpass)
+      report_credentials(creds, credkeys, listpass)
   exit(0)
 
