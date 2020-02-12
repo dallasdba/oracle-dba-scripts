@@ -1,22 +1,45 @@
 #!/bin/env python
 
-#--------------------------------------------------------------------------------------------------#
-# Name:   dggen                                                                                    #
-# Author: Randy Johnson                                                                            #
-# Descr:  Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.            #
-#              This includes the following:                                                        #
-#                1) RMAN Duplicate from Active Database                                            #
-#                2) Configuration of listener.ora and tnsnames.ora files                           #
-#                3) Server Control commands to register the standby database (RAC only)            #
-#                4) Instance parameters for DG                                                     #
-#                5) Data Guard Broker Commands for creating the configuration                      #
-#                6) Switchover commands and other useful commands for testing the configuration    #
-#                7) Generate a shell script for starting/stopping the DG Observer                  #
-#                                                                                                  #
-# Wish List:                                                                                       #
-#  - Add configurable Listener Name                                                                #
-#  - Parameterize DBNAME for mass build of mutiple config files.                                   #
-#--------------------------------------------------------------------------------------------------#
+##################################################################################################
+# Name:        dggen                                                                             #
+# Author:      Randy Johnson                                                                     #
+# Description: Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.     #
+#                                                                                                #
+#              This includes the following:                                                      #
+#                1) RMAN Duplicate from Active Database                                          #
+#                2) Configuration of listener.ora and tnsnames.ora files                         #
+#                3) Server Control commands to register the standby database (RAC only)          #
+#                4) Instance parameters for DG                                                   #
+#                5) Data Guard Broker Commands for creating the configuration                    #
+#                6) Switchover commands and other useful commands for testing the configuration  #
+#                7) Generate a shell script for starting/stopping the DG Observer                #
+#                                                                                                #
+# Wish List:                                                                                     #
+#  - Add configurable Listener Name                                                              #
+#  - Parameterize DBNAME for mass build of mutiple config files.                                 #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 03/20/2017 1.00 Randy Johnson    Initial write.                                                #
+# 08/22/2017 1.10 Randy Johnson    Moved initialization for TempPfile and BackupPfile to after   #
+#                                  config file has been processed since there is a dependency on #
+#                                  DbName.                                                       #
+# 08/06/2017 1.20 Randy Johnson    Several fixes as result of QA tests.                          #
+# 08/29/2017 1.21 Randy Johnson    Added textual helps on the summary re. Standby Online Redo    #
+#                                  Logs.                                                         #
+# 09/22/2017 1.22 Randy Johnson    Added description to Usage.                                   #
+# 09/28/2017 1.32 Randy Johnson    Added command line options for DbName (DBN) and               #
+#                                  PrimaryDbUniqueName (PUN).                                    #
+# 01/09/2018 1.33 Randy Johnson    Moved alter database force logging up to just before          #
+#                                  duplication of primary.                                       #
+# 01/09/2018 1.34 Randy Johnson    Added --privilege sysasm to asmcmd commands.                  #
+#                                  Removed hard dependency on the dbmap file.                    # 
+# 01/18/2020 1.35 Randy Johnson    Modified to support single instance primary/standby.          #
+# 02/12/2020 1.36 Randy Johnson    Modifications to support Python 3.2+                          #
+##################################################################################################
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -35,11 +58,14 @@ from sys          import exit
 from sys          import version_info
 from datetime     import datetime
 
-
-if (version_info[0] >= 3):
-  from configparser import SafeConfigParser
-else:
+# Version Specific Imports
+python_version = version_info[0] + (version_info[1] * .1)
+if python_version < 3.0 :
   from ConfigParser import SafeConfigParser
+elif python_version < 3.2:
+  from configparser import SafeConfigParser
+elif python_version >= 3.2:
+  from configparser import ConfigParser as SafeConfigParser
 
 # ---------------------------------------------------------------------------
 # Def : IsReadable()
@@ -260,9 +286,9 @@ def CreateSampleConfig(ConfigFile):
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd                   = basename(argv[0]).split('.')[0]
-  CmdDesc               = 'Generate Dataguard Configuration II'
-  Version               = '1.34'
-  VersionDate           = 'Fri Jul 19 10:12:14 CDT 2019'
+  CmdDesc               = 'Generate Dataguard Configuration'
+  Version               = '1.36'
+  VersionDate           = 'Wed Feb 12 15:51:15 CST 2020'
   DevState              = 'Production'
   Banner                = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   DbaEtc                = pathsplit(argv[0])[0]
@@ -291,7 +317,7 @@ if (__name__ == '__main__'):
   ArgParser.add_option('-d',  dest="DBN",                               default='',    type=str, help="Database name")
   ArgParser.add_option('-f',  dest="ConfigFile",                        default='',    type=str, help="Configuration File")
   ArgParser.add_option('-u',  dest="PUN",                               default='',    type=str, help="Primary database unique name")
-  ArgParser.add_option('--v', dest='Version',      action='store_true', default=False,           help="print version info.")
+  ArgParser.add_option('-v',  dest='Version',      action='store_true', default=False,           help="print version info.")
 
   # Parse command line arguments
   Options, args = ArgParser.parse_args()
@@ -353,7 +379,7 @@ if (__name__ == '__main__'):
     try:
       Dbmap = ConfigDict['GLOBAL']['DATABASE_MAP_FILE']
     except:
-      pass
+      Dbmap = ''
     
     try:
       SysPassword = ConfigDict['GLOBAL']['SYS_PASSWORD']
@@ -564,27 +590,33 @@ if (__name__ == '__main__'):
   TempPfile   = "/tmp/init" + DbName + ".sby"
   BackupPfile = "/tmp/init" + DbName + ".bak"
 
-  for NodeId in range(1,len(PrimaryNodeNames)+1):
-    if (NodeId < 9):
-      Node = '0' + str(NodeId)
-    else:
-      Node = str(NodeId)
-    PrimaryNodeDict[NodeId] = {
-      'Name' : PrimaryNodeNames[NodeId-1],
-      'Inst' : DbName + str(NodeId),
-      'Vip'  : PrimaryVipNames[NodeId-1]
+  if len(PrimaryNodeNames) == 1:
+    PrimaryNodeDict[1] = {
+      'Name' : PrimaryNodeNames[0],
+      'Inst' : DbName,
+      'Vip'  : PrimaryVipNames[0]
     }
+  else:
+    for NodeId in range(1,len(PrimaryNodeNames)+1):
+      PrimaryNodeDict[NodeId] = {
+        'Name' : PrimaryNodeNames[NodeId-1],
+        'Inst' : DbName + str(NodeId),
+        'Vip'  : PrimaryVipNames[NodeId-1]
+      }
 
-  for NodeId in range(1,len(StandbyNodeNames)+1):
-    if (NodeId < 9):
-      Node = '0' + str(NodeId)
-    else:
-      Node = str(NodeId)
-    StandbyNodeDict[NodeId] = {
-      'Name' : StandbyNodeNames[NodeId-1],
-      'Inst' : DbName + str(NodeId),
-      'Vip'  : StandbyVipNames[NodeId-1]
+  if len(StandbyNodeNames) == 1:
+    StandbyNodeDict[1] = {
+      'Name' : StandbyNodeNames[0],
+      'Inst' : DbName,
+      'Vip'  : StandbyNodeNames[0]
     }
+  else:
+    for NodeId in range(1,len(StandbyNodeNames)+1):
+      StandbyNodeDict[NodeId] = {
+        'Name' : StandbyNodeNames[NodeId-1],
+        'Inst' : DbName + str(NodeId),
+        'Vip'  : StandbyVipNames[NodeId-1]
+      }
 
   if (StandbyAuditFileDest != PrimaryAuditFileDest):
     print("ERROR: The Standby audit_file_dest must be the same as the Primary's audit_file_dest")
