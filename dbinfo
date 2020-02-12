@@ -1,10 +1,29 @@
 #!/bin/env python
 
-#--------------------------------------------------------------------------------------------------#
-# Name:   dbinfo                                                                                   #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report key database information.                                                         #
-#--------------------------------------------------------------------------------------------------#
+##################################################################################################
+#  Name:        dbinfo                                                                           #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Report key database information.                                                 #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 12/13/2012 1.00 Randy Johnson    This is a rewrite of the original dbinfo script. This one     #
+#                                  uses the Oracle.py Python library instead of locally defined  #
+#                                  functions. It requires Oracle.py to run.                      #
+# 04/24/2013 1.10 Randy Johnson    Added 'from re import match, search' back in.                 #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
+# 08/18/2015 2.10 Randy Johnson    Bug fixes for handling -a, uninitialized ORACLE_SID, and      #
+#                                  Oracle SID passed on the command line.                        #
+# 02/15/2017 2.10 Randy Johnson    Added a few items such as NLS language properties, added      #
+#                                  columnar report format.                                       #
+# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                           #
+# 02/13/2018 2.12 Randy Johnson    Added db_keep_cache_size.                                     #
+# 11/18/2019 2.13 Randy Johnson    Added IsCdb().                                                #
+# 01/16/2020 2.14 Randy Johnson    Added PDB Info.                                               #
+##################################################################################################
+
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -24,6 +43,8 @@ from sys        import exit
 from sys        import stdout
 from subprocess import Popen
 from subprocess import PIPE
+from signal     import SIGPIPE
+from signal     import SIG_DFL
 from subprocess import STDOUT
 from Oracle     import GetDbState
 from Oracle     import RunSqlplus
@@ -34,13 +55,45 @@ from Oracle     import SetOracleEnv
 # --------------------------------------
 # ---- Function Definitions ------------
 # --------------------------------------
+#---------------------------------------------------------------------------
+# Def : IsCdb()
+# Desc: Calls sqlplus and determines whether or not a database is a
+#       Container database (multi-tenant).
+# Args: Oracle SID
+# Retn: True/False
+#---------------------------------------------------------------------------
+def IsCdb():
+  Cdb = False
+
+  Sql  = "SET LINES 80\n"
+  Sql += "DESC V$DATABASE\n"
+  Sql += "EXIT"
+
+  # Fetch parameters from the database
+  (rc,Stdout,ErrorList) = RunSqlplus(Sql, True)
+
+  if (rc != 0):
+    PrintError(Sql, Stdout, ErrorList)
+    exit(1)
+  else:
+    for line in Stdout.split('\n'):
+      if (line.find('CDB ') == 1):
+        Cdb = True
+        break
+
+  return(Cdb)
+#---------------------------------------------------------------------------
+# End IsCdb()
+#---------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------
 # Def : CollectInfo()
 # Desc: Calls sqlplus and runs queries to collect database information from
 #       the database.
 # Args: Oracle SID, ParmList
 # Retn: RawInfo
 #---------------------------------------------------------------------------
-def CollectInfo(Sid):
+def CollectInfo(Sid, Cdb):
   RawInfo    = {}
   ParmString = ''
   ParmQry    = ''
@@ -135,6 +188,27 @@ def CollectInfo(Sid):
   Sql += "  FROM product_component_version\n"
   Sql += " WHERE product LIKE 'Oracle Database %';\n"
 
+  # Database Type (CDB?)
+  if Cdb:
+    Sql += "\n"
+    Sql += "SELECT " + SqlHeader + "\n"
+    Sql += "       '" + Sid + "' || '" + Colsep + "' ||\n"
+    Sql += "       'cdb' ||'" + Colsep + "' ||\n"
+    Sql += "       cdb\n"
+    Sql += "  FROM v$database;\n"
+    ## PDB's
+    Sql += "\n"
+    Sql += "  SELECT " + SqlHeader + "\n"
+    Sql += "         '" + Sid + "' || '" + Colsep + "' ||\n"
+    Sql += "         'pdb' || '" + Colsep + "' ||\n"
+    Sql += "         con_id || '" + Colsep + "' ||\n"
+    Sql += "         name || '" + Colsep + "' ||\n"
+    Sql += "         open_mode || '" + Colsep + "' ||\n"
+    Sql += "         restricted || '" + Colsep + "' ||\n"
+    Sql += "         TO_CHAR(open_time, 'mm/dd/yyyy') open_time\n"
+    Sql += "    FROM sys.v$pdbs\n"
+    Sql += "ORDER BY con_id;\n"
+
   # Storage for data files
   Sql += "\n"
   Sql += "SELECT " + SqlHeader + "\n"
@@ -150,7 +224,6 @@ def CollectInfo(Sid):
   Sql += "       'tempfile_bytes'||'" + Colsep + "' ||\n"
   Sql += "       sum(bytes)\n"
   Sql += "  FROM dba_temp_files;\n"
-
 
   # Storage for redo logs
   Sql += "\n"
@@ -300,19 +373,31 @@ def CollectInfo(Sid):
   else:
     RawInfo['_extract_status'] = 'success'
     for line in Stdout.split('\n'):
-      if (line.count(Colsep) == 2):
-        (Sid, Parm, Value) = line.split(Colsep)
+      line = line.strip()
+      if line.count(Colsep) >=2:
+        AllValues = line.split(Colsep)
+        Sid    = AllValues[0]
+        Parm   = AllValues[1]
         if (Sid == environ['ORACLE_SID']):
-          RawInfo[Parm] = Value
-
-  ###~ for key in sorted(RawInfo):
-  ###~   print("%-40s %s" % (key,RawInfo[key]))
-
+          if Parm == 'pdb':
+            ConId  = AllValues[2]
+            Values = AllValues[3:]
+            if len(ConId) == 1:
+              ConId = '0' + ConId
+            Parm = Parm + '-' + ConId
+            RawInfo[Parm] = Values
+          else:
+            RawInfo[Parm] = AllValues[2]
+      
+  #for key in sorted(RawInfo):
+  #  print("%-40s %s" % (key,RawInfo[key]))
+  #exit()
   return(RawInfo)
 #---------------------------------------------------------------------------
 # End CollectInfo()
 #---------------------------------------------------------------------------
 
+#---------------------------------------------------------------------------
 # Def : TransformInfo()
 # Desc: Assigns values retrieved from the database to global variables.
 # Args: RawInfo{}
@@ -383,6 +468,9 @@ def TransformInfo(RawInfo):
 
   try:    DbInfo['db_version']                     = RawInfo['db_version']
   except: DbInfo['db_version']                     = 'unknown'
+
+  try:    DbInfo['cdb']                            = RawInfo['cdb']
+  except: DbInfo['cdb']                            = 'NO'
 
   try:    DbInfo['default_permanent_tablespace']   = RawInfo['default_permanent_tablespace']
   except: DbInfo['default_permanent_tablespace']   = 'unknown'
@@ -486,6 +574,10 @@ def TransformInfo(RawInfo):
   try:    DbInfo['total_storage_bytes']            = FormatNumber(RawInfo['total_storage_bytes'])
   except: DbInfo['total_storage_bytes']            = 'unknown'
 
+  for Parm in RawInfo:
+    if Parm.startswith('pdb-'):
+      DbInfo[Parm]                                 = RawInfo[Parm]
+
   if (DbInfo['memory_max_target'] != 'unkown' and DbInfo['memory_target'] != 'unknown' and DbInfo['sga_target'] != 'unknown'):
     if (DbInfo['memory_max_target'] > 0 and DbInfo['memory_target'] > 0):
       DbInfo['memory_management'] = 'AMM'
@@ -507,6 +599,7 @@ def TransformInfo(RawInfo):
 # End TransformInfo()
 #---------------------------------------------------------------------------
 
+#---------------------------------------------------------------------------
 # Def : StandardReport()
 # Desc: Prints a detailed report of database configuration information.
 # Args: RawInfo
@@ -527,6 +620,26 @@ def StandardReport(RawInfo):
     Report +='\n %-28s  %-29s' % ('db_block_size',                DbInfo['db_block_size'])
     Report +='\n %-28s  %-29s' % ('db_id',                        DbInfo['db_id'])
     Report +='\n %-28s  %-29s' % ('db_version',                   DbInfo['db_version'])
+    Report +='\n %-28s  %-29s' % ('cdb',                          DbInfo['cdb'])
+    for Parm in sorted(DbInfo):
+      if Parm.startswith('pdb-'):
+        Name       = DbInfo[Parm][0]
+        OpenMode   = DbInfo[Parm][1]
+        Restricted = DbInfo[Parm][2]
+        OpenTime   = DbInfo[Parm][3]
+        if OpenMode == 'READ WRITE':
+          OpenMode = 'Open RW'
+        elif OpenMode == 'READ ONLY':
+          OpenMode = 'Open RO'
+        elif OpenMode == 'MOUNTED':
+          OpenMode = 'Mounted'
+        elif OpenMode == 'MIGRATE':
+          OpenMode = 'Migrate'
+        if Restricted == 'YES':
+          Restricted = 'Restricted'
+        elif Restricted == 'NO':
+          Restricted = 'Unrestricted'
+        Report +='\n %-28s  %-12s %-7s %-12s %-30s' % (Parm, Name+',', OpenMode+',', Restricted+',', 'Opened: '+OpenTime)
     Report +='\n %-28s  %-29s' % ('compatible',                   DbInfo['compatible'])
     Report +='\n %-28s  %-29s' % ('cluster_database',             DbInfo['cluster_database'])
     Report +='\n %-28s  %-29s' % ('cluster_database_instances',   DbInfo['cluster_database_instances'])
@@ -604,6 +717,7 @@ def StandardReport(RawInfo):
 #---------------------------------------------------------------------------
 
 
+#---------------------------------------------------------------------------
 # Def : KeyValReport()
 # Desc: Prints a detailed report of database configuration information.
 # Args: RawInfo
@@ -623,11 +737,13 @@ def KeyValReport(RawInfo):
     Report +='\n %-s=%-s' % ('db_block_size',                DbInfo['db_block_size'])
     Report +='\n %-s=%-s' % ('db_id',                        DbInfo['db_id'])
     Report +='\n %-s=%-s' % ('db_version',                   DbInfo['db_version'])
+    Report +='\n %-s=%-s' % ('cdb',                          DbInfo['cdb'])
     Report +='\n %-s=%-s' % ('compatible',                   DbInfo['compatible'])
     Report +='\n %-s=%-s' % ('cluster_database',             DbInfo['cluster_database'])
     Report +='\n %-s=%-s' % ('cluster_database_instances',   DbInfo['cluster_database_instances'])
     Report +='\n %-s=%-s' % ('current_scn',                  DbInfo['current_scn'])
     Report +='\n %-s=%-s' % ('db_open_mode',                 DbInfo['db_open_mode'])
+    Report +='\n %-s=%-s' % ('pdbs',                         DbInfo['pdbs'])
     Report +='\n %-s=%-s' % ('force_logging',                DbInfo['force_logging'])
     Report +='\n %-s=%-s' % ('last_open_incarnation#',       DbInfo['last_open_incarnation#'])
     Report +='\n %-s=%-s' % ('log_mode',                     DbInfo['log_mode'])
@@ -678,7 +794,7 @@ def KeyValReport(RawInfo):
 # End KeyValReport()
 #---------------------------------------------------------------------------
 
-
+#---------------------------------------------------------------------------
 # Def : FormatNumber()
 # Desc: Simple function to format numbers with commas to separate thousands.
 # Args: s    = numeric_string
@@ -729,9 +845,9 @@ def FormatNumber( s, tSep=',', dSep='.'):
 # --------------------------------------
 if (__name__ == '__main__'):      # if this is true, then this script is *not* being imported by another Python script.
   Cmd            = basename(argv[0]).split('.')[0]
-  CmdDesc        = 'Database Information'
-  Version        = '2.13'
-  VersionDate    = 'Fri Jul 19 10:12:14 CDT 2019'
+  CmdDesc        = 'Database Info.'
+  Version        = '2.14'
+  VersionDate    = 'Thu Jan 16 18:53:40 CST 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ' Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   OratabFile     = '/etc/oratab'
@@ -741,16 +857,14 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
   SidList        = []
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
 
-  Usage  =  '%s [options]'  % Cmd
-  Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage  = '\n\n-------------------------------------------------------------------------------'
   Usage += '\nReport key database information.'
   ArgParser = OptionParser(Usage)
 
-  ArgParser.add_option("-a",  dest="All",     action="store_true", default=False, help="info for all running databases.")
-  ArgParser.add_option("-k",  dest="KeyVal",  action="store_true", default=False, help="Key=Value Format")
-  ArgParser.add_option('--s', dest='Show',    action='store_true', default=False, help="print SQL query.")
-  ArgParser.add_option("--v", dest="ShowVer", action="store_true", default=False, help="print version info.")
+  ArgParser.add_option("-a",  action="store_true", dest="All",       default=False, help="info for all running databases.")
+  ArgParser.add_option("-k",  action="store_true", dest="KeyVal",    default=False, help="Key=Value Format")
+  ArgParser.add_option('--s', action='store_true', dest='Show',      default=False, help="print SQL query.")
+  ArgParser.add_option("--v", action="store_true", dest="ShowVer",   default=False, help="print version info.")
 
   Options, args = ArgParser.parse_args()
   argc = len(args)
@@ -822,9 +936,11 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
       print("\nSkipping this database...")
       continue
 
+    Cdb = IsCdb()
+
     # Login to the database and run the queries to collect metrics.
     # -------------------------------------------------------------
-    RawInfo = CollectInfo(OracleSid)
+    RawInfo = CollectInfo(OracleSid, Cdb)
 
     # Generate Report
     # ------------------------------------------------------------
