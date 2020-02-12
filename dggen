@@ -1,21 +1,48 @@
 #!/bin/env python
 
-#--------------------------------------------------------------------------------------------------#
-# Name:   dggen                                                                                    #
-# Author: Randy Johnson                                                                            #
-# Descr:  Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.            #
-#              This includes the following:                                                        #
-#                1) RMAN Duplicate from Active Database                                            #
-#                2) Configuration of listener.ora and tnsnames.ora files                           #
-#                3) Server Control commands to register the standby database (RAC only)            #
-#                4) Instance parameters for DG                                                     #
-#                5) Data Guard Broker Commands for creating the configuration                      #
-#                6) Switchover commands and other useful commands for testing the configuration    #
-#                7) Generate a shell script for starting/stopping the DG Observer                  #
-#                                                                                                  #
-# Wish List:                                                                                       #
-#  - Add configurable Listener Name                                                                #
-#--------------------------------------------------------------------------------------------------#
+##################################################################################################
+# Name:        dggen                                                                             #
+# Author:      Randy Johnson                                                                     #
+# Description: Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.     #
+#              This script supports RAC as well as single instance primary/standby               #
+#              configurations. Testing was performed on Exadata V2, X2 and Oracle v11g - 12c.    #
+#                                                                                                #
+#              This includes the following:                                                      #
+#                1) RMAN Duplicate from Active Database                                          #
+#                2) Configuration of listener.ora and tnsnames.ora files                         #
+#                3) Server Control commands to register the standby database (RAC only)          #
+#                4) Instance parameters for DG                                                   #
+#                5) Data Guard Broker Commands for creating the configuration                    #
+#                6) Switchover commands and other useful commands for testing the configuration  #
+#                7) Generate a shell script for starting/stopping the DG Observer                #
+#                                                                                                #
+# Wish List:                                                                                     #
+#  - Add configurable Listener Name                                                              #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 03/20/2017 1.00 Randy Johnson    Initial write.                                                #
+# 08/22/2017 1.10 Randy Johnson    Moved initialization for TempPfile and BackupPfile to after   #
+#                                  config file has been processed since there is a dependency on #
+#                                  DbName.                                                       #
+# 08/06/2017 1.20 Randy Johnson    Several fixes as result of QA tests.                          #
+# 08/29/2017 1.21 Randy Johnson    Added textual helps on the summary re. Standby Online Redo    #
+#                                  Logs.                                                         #
+# 01/09/2018 1.22 Randy Johnson    Moved alter database force logging up to just before          #
+#                                  duplication of primary.                                       #
+#                                  Added --privilege sysasm to asmcmd commands.                  #
+#                                  Removed hard dependency on the dbmap.                         #
+# 01/20/2020 1.23 Randy Johnson    Modified to support single instance primary/standby.          #
+#                                  Added handling for *.key=val, SID.key=val, key=val            #
+#                                  Added cluster_database=false. Added explicit instance names   #
+#                                  and asm instance names to better support asymetric            #
+#                                  configurations. Thoroughly tested on enkdb01-enkdb04.         #
+# 01/23/2020 1.24 Randy Johnson    Added *.db_unique_name = StandbyDbUniqueName to temporary     #
+#                                  init.ora file.                                                #
+##################################################################################################
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -34,9 +61,11 @@ from sys          import exit
 from sys          import version_info
 from datetime     import datetime
 
-
-if (version_info[0] >= 3):
-  from configparser import SafeConfigParser
+if version_info[0] >= 3:
+  if version_info[1] > 1:
+    from configparser import ConfigParser as SafeConfigParser
+  else:
+    from configparser import SafeConfigParser
 else:
   from ConfigParser import SafeConfigParser
 
@@ -48,7 +77,7 @@ else:
 #       0 file failed isfile or read check.
 # ---------------------------------------------------------------------------
 def IsReadable(Filepath):
-  if (isfile(Filepath) and access(Filepath, ReadOk)):
+  if isfile(Filepath) and access(Filepath, ReadOk):
     return True
   else:
     return False
@@ -83,7 +112,7 @@ def LoadConfig(ConfigFile):
     for Option in sorted(Parms.options(Section)):
       Option = Option.upper()
       Value = Parms.get(Section, Option)
-      if(Key not in ConfigDict):
+      if Key not in ConfigDict:
         ConfigDict[Key] = {}
       ConfigDict[Key][Option.upper()] = Value
 
@@ -96,11 +125,11 @@ def LoadConfig(ConfigFile):
 # --------------------------------------
 # ---- Main Program --------------------
 # --------------------------------------
-if (__name__ == '__main__'):
+if __name__ == '__main__':
   Cmd                   = basename(argv[0]).split('.')[0]
   CmdDesc               = 'Generate Dataguard Configuration'
   Version               = '1.24'
-  VersionDate           = 'Fri Jul 19 10:12:14 CDT 2019'
+  VersionDate           = 'Thu Jan 23 09:53:20 CST 2020'
   DevState              = 'Production'
   Banner                = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   ArgParser             = OptionParser()
@@ -126,13 +155,14 @@ if (__name__ == '__main__'):
   # Primary Defaults
   # ------------------------------------------------------
   PrimaryNodeCount          = 2
-  PrimaryNodeNames          = 'enkdb03','enkdb04'
-  PrimaryVipNames           = 'enk03-vip','enk04-vip'
-  PrimaryDomain             = 'enkitec.com'
-  PrimaryScan               = 'enkscan'
+  PrimaryNodeNames          = 'primary1',     'primary2'
+  PrimaryVipNames           = 'primary1-vip', 'primary2-vip'
+  PrimaryAsmNames           = 'ASM1',       'ASM2'
+  PrimaryInstNames          = 'MYDB1',      'MYDB2'
+  PrimaryDomain             = 'myco.primary.com'
+  PrimaryScan               = 'myco-primary-scan'
   PrimaryPort               = '1521'
   PrimaryServiceName        = 'MYDB_PRI'
-  PrimaryRedoSize           = '4G'
   PrimaryDbUniqueName       = 'MYDB_PRI'
   PrimaryDataDg             = '+DATA'
   PrimaryRecoDg             = '+RECO'
@@ -146,10 +176,12 @@ if (__name__ == '__main__'):
   # Standby Defaults
   # ------------------------------------------------------
   StandbyNodeCount          = 2
-  StandbyNodeNames          = 'enkx3db01','enkx3db02'
-  StandbyVipNames           = 'enkx301-vip','enkx302-vip'
-  StandbyDomain             = 'enkitec.com'
-  StandbyScan               = 'enkx3-scan'
+  StandbyNodeNames          = 'standby1',     'standby2'
+  StandbyVipNames           = 'standby1-vip', 'standby2-vip'
+  StandbyAsmNames           = 'ASM1',         'ASM2'
+  StandbyInstNames          = 'MYDB1',        'MYDB2'
+  StandbyDomain             = 'myco.standby.com'
+  StandbyScan               = 'myco-standby-scan'
   StandbyPort               = '1521'
   StandbyServiceName        = 'MYDB_SBY'
   StandbyDbUniqueName       = 'MYDB_SBY'
@@ -163,23 +195,9 @@ if (__name__ == '__main__'):
   StandbyOracleHome         = '/u01/app/oracle/product/12.1.0.2/dbhome_1'
   StandbyGridHome           = '/u01/app/12.1.0.2/grid'
 
-  Usage  =  '%s [options]'  % Cmd
-  Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
-  Usage += '\nGenerate a command-by-command guide for configuring a Data Guard physical'
-  Usage += '\nstandby database. Includes the following:'
-  Usage += '\n  1) RMAN Duplicate from Active Database'
-  Usage += '\n  2) Configuration of listener.ora and tnsnames.ora files'
-  Usage += '\n  3) Server Control commands to register the standby database (RAC only)'
-  Usage += '\n  4) Instance parameters for DG'
-  Usage += '\n  5) Data Guard Broker Commands for creating the configuration'
-  Usage += '\n  6) Switchover commands and other useful commands for testing the configuration'
-  #Usage += '\n  7) Generate a shell script for starting/stopping the DG Observer'
-  ArgParser = OptionParser(Usage)
-
   ArgParser.add_option('-c',  dest='CreateConfig', action='store_true', default=False,           help="Create a sample configuration file.")
   ArgParser.add_option('-f',  dest="ConfigFile",                        default='',    type=str, help="Configuration File")
-  ArgParser.add_option('--v', dest='Version',      action='store_true', default=False,           help="print version info.")
+  ArgParser.add_option('-v',  dest='Version',      action='store_true', default=False,           help="print version info.")
 
   # Parse command line arguments
   Options, args = ArgParser.parse_args()
@@ -190,7 +208,7 @@ if (__name__ == '__main__'):
   ConfigFile    = Options.ConfigFile
   ShowVer       = Options.Version
 
-  if (ShowVer):
+  if ShowVer:
     print('\n%s' % Banner)
     exit()
 
@@ -201,17 +219,17 @@ if (__name__ == '__main__'):
 
   # Set default config file name...
   # ----------------------------------
-  if (ConfigFile == ''):
+  if ConfigFile == '':
     ConfigFile = pathjoin(DbaEtc, Cmd + '.cfg')
 
-  if (CreateConfig == True):
+  if CreateConfig == True:
     Response = 'Y'
-    if (isfile(ConfigFile)):
-      if(version_info[0] >= 3):
+    if isfile(ConfigFile):
+      if version_info[0] >= 3:
         Response = input('\nOverwrite existing file? (y/N) : ')
       else:
         Response = raw_input('\nOverwrite existing file? (y/N) : ')
-    if (Response.upper() != 'Y'):
+    if Response.upper() != 'Y':
       exit(0)
     else:
       try:
@@ -226,7 +244,7 @@ if (__name__ == '__main__'):
       cf.write('database_name         = %s\n' % DbName)
       cf.write('database_version      = %s\n' % str(DbVersion))
       cf.write('oratab_file           = %s\n' % Oratab)
-      if (Dbmap != ''):
+      if Dbmap != '':
         cf.write('database_map_file     = %s\n' % Dbmap)
       cf.write('sys_password          = %s\n' % SysPassword)
       cf.write('rman_channels         = %s\n' % str(Channels))
@@ -239,6 +257,8 @@ if (__name__ == '__main__'):
       cf.write('\n[PRIMARY]\n')
       cf.write('node_names            = %s\n' % ', '.join(PrimaryNodeNames))
       cf.write('vip_names             = %s\n' % ', '.join(PrimaryVipNames))
+      cf.write('asm_names             = %s\n' % ', '.join(PrimaryAsmNames))
+      cf.write('inst_names            = %s\n' % ', '.join(PrimaryInstNames))
       cf.write('domain                = %s\n' % PrimaryDomain)
       cf.write('scan                  = %s\n' % PrimaryScan)
       cf.write('port                  = %s\n' % PrimaryPort)
@@ -258,6 +278,8 @@ if (__name__ == '__main__'):
       cf.write('\n[STANDBY]\n')
       cf.write('node_names            = %s\n' % ', '.join(StandbyNodeNames))
       cf.write('vip_names             = %s\n' % ', '.join(StandbyVipNames))
+      cf.write('asm_names             = %s\n' % ', '.join(StandbyAsmNames))
+      cf.write('inst_names            = %s\n' % ', '.join(StandbyInstNames))
       cf.write('domain                = %s\n' % StandbyDomain)
       cf.write('scan                  = %s\n' % StandbyScan)
       cf.write('port                  = %s\n' % StandbyPort)
@@ -278,7 +300,7 @@ if (__name__ == '__main__'):
       exit(0)
 
   # Load the configuration file
-  if (not IsReadable(ConfigFile)):
+  if not IsReadable(ConfigFile):
       print('\nCannot open parameter file for read: %s' % ConfigFile)
   else:
     # Load up the config file
@@ -291,34 +313,42 @@ if (__name__ == '__main__'):
       DbName = ConfigDict['GLOBAL']['DATABASE_NAME']
     except:
       pass
+
     try:
       DbVersion = int(ConfigDict['GLOBAL']['DATABASE_VERSION'])
     except:
       pass
+
     try:
       Oratab = ConfigDict['GLOBAL']['ORATAB_FILE']
     except:
       pass
+
     try:
       Dbmap = ConfigDict['GLOBAL']['DATABASE_MAP_FILE']
     except:
       pass
+ 
     try:
       SysPassword = ConfigDict['GLOBAL']['SYS_PASSWORD']
     except:
       pass
+
     try:
       Channels = int(ConfigDict['GLOBAL']['RMAN_CHANNELS'])
     except:
       pass
+
     try:
       SrlSize = ConfigDict['GLOBAL']['SRL_SIZE']
     except:
       pass
+
     try:
       SrlCount = int(ConfigDict['GLOBAL']['SRL_COUNT'])
     except:
       pass
+
     try:
       SrlGroupStart = int(ConfigDict['GLOBAL']['SRL_START'])
     except:
@@ -329,68 +359,99 @@ if (__name__ == '__main__'):
     try:
       PrimaryNodeNames = ConfigDict['PRIMARY']['NODE_NAMES']
     except:
-      pass
-    if (PrimaryNodeNames.find(',') >= 0):
+      PrimaryNodeNames = ''
+    if PrimaryNodeNames.find(',') >= 0:
       PrimaryNodeNames = ''.join(PrimaryNodeNames.split()).split(',')
     else:
        PrimaryNodeNames = PrimaryNodeNames.split()
-    PrimaryNodeCount = len(PrimaryNodeNames)
+
     try:
       PrimaryVipNames = ConfigDict['PRIMARY']['VIP_NAMES']
     except:
-      pass
-    if (PrimaryVipNames.find(',') >= 0):
+      PrimaryVipNames = ''
+    if PrimaryVipNames.find(',') >= 0:
       PrimaryVipNames = ''.join(PrimaryVipNames.split()).split(',')
     else:
        PrimaryVipNames = PrimaryVipNames.split()
+
+    try:
+      PrimaryAsmNames = ConfigDict['PRIMARY']['ASM_NAMES']
+    except:
+      PrimaryAsmNames = ''
+    if PrimaryAsmNames.find(',') >= 0:
+      PrimaryAsmNames = ''.join(PrimaryAsmNames.split()).split(',')
+    else:
+       PrimaryAsmNames = PrimaryAsmNames.split()
+
+    try:
+      PrimaryInstNames = ConfigDict['PRIMARY']['INST_NAMES']
+    except:
+      PrimaryInstNames = ''
+    if PrimaryInstNames.find(',') >= 0:
+      PrimaryInstNames = ''.join(PrimaryInstNames.split()).split(',')
+    else:
+       PrimaryInstNames = PrimaryInstNames.split()
+
     try:
       PrimaryDomain = ConfigDict['PRIMARY']['DOMAIN']
     except:
       pass
+
     try:
       PrimaryScan = ConfigDict['PRIMARY']['SCAN']
     except:
       pass
+
     try:
       PrimaryPort = ConfigDict['PRIMARY']['PORT']
     except:
       pass
+
     try:
       PrimaryServiceName = ConfigDict['PRIMARY']['SERVICE_NAME']
     except:
       pass
+
     try:
       PrimaryDbUniqueName = ConfigDict['PRIMARY']['DB_UNIQUE_NAME']
     except:
       pass
+
     try:
       PrimaryDataDg = ConfigDict['PRIMARY']['DATA_DISKGROUP']
     except:
       pass
+
     try:
       PrimaryRecoDg = ConfigDict['PRIMARY']['RECOVERY_DISK_GROUP']
     except:
       pass
+
     try:
       PrimaryDbRecoveryDestSize = ConfigDict['PRIMARY']['RECOVERY_DEST_SIZE']
     except:
       pass
+
     try:
       PrimaryLogArchiveMaxProc = ConfigDict['PRIMARY']['LOG_ARCHIVE_MAX_PROC']
     except:
       pass
+
     try:
       PrimaryOracleBase = ConfigDict['PRIMARY']['ORACLE_BASE']
     except:
       pass
+
     try:
       PrimaryOracleHome = ConfigDict['PRIMARY']['ORACLE_HOME']
     except:
       pass
+
     try:
       PrimaryGridHome = ConfigDict['PRIMARY']['GRID_HOME']
     except:
       pass
+
     try:
       PrimaryAuditFileDest = ConfigDict['PRIMARY']['AUDIT_FILE_DEST']
     except:
@@ -401,72 +462,105 @@ if (__name__ == '__main__'):
     try:
       StandbyNodeNames = ConfigDict['STANDBY']['NODE_NAMES']
     except:
-      pass
-    if (StandbyNodeNames.find(',') >= 0):
+      StandbyNodeNames = ''
+    if StandbyNodeNames.find(',') >= 0:
       StandbyNodeNames = ''.join(StandbyNodeNames.split()).split(',')
     else:
        StandbyNodeNames = StandbyNodeNames.split()
     StandbyNodeCount = len(StandbyNodeNames)
+
     try:
       StandbyVipNames = ConfigDict['STANDBY']['VIP_NAMES']
     except:
-      pass
-    if (StandbyVipNames.find(',') >= 0):
+      StandbyVipNames = ''
+    if StandbyVipNames.find(',') >= 0:
       StandbyVipNames = ''.join(StandbyVipNames.split()).split(',')
     else:
        StandbyVipNames = StandbyVipNames.split()
+
+    try:
+      StandbyAsmNames = ConfigDict['STANDBY']['ASM_NAMES']
+    except:
+      StandbyAsmNames = ''
+    if StandbyAsmNames.find(',') >= 0:
+      StandbyAsmNames = ''.join(StandbyAsmNames.split()).split(',')
+    else:
+       StandbyAsmNames = StandbyAsmNames.split()
+
+    try:
+      StandbyInstNames = ConfigDict['STANDBY']['INST_NAMES']
+    except:
+      StandbyInstNames = ''
+    if StandbyInstNames.find(',') >= 0:
+      StandbyInstNames = ''.join(StandbyInstNames.split()).split(',')
+    else:
+       StandbyInstNames = StandbyInstNames.split()
+
     try:
       StandbyDomain = ConfigDict['STANDBY']['DOMAIN']
     except:
       pass
+
     try:
       StandbyScan = ConfigDict['STANDBY']['SCAN']
     except:
       pass
+
     try:
       StandbyPort = ConfigDict['STANDBY']['PORT']
     except:
       pass
+
     try:
       StandbyServiceName = ConfigDict['STANDBY']['SERVICE_NAME']
     except:
       pass
+
     try:
       StandbyDbUniqueName = ConfigDict['STANDBY']['DB_UNIQUE_NAME']
     except:
       pass
+
     try:
       StandbyDataDg = ConfigDict['STANDBY']['DATA_DISKGROUP']
     except:
       pass
+
     try:
       StandbyRecoDg = ConfigDict['STANDBY']['RECOVERY_DISK_GROUP']
     except:
       pass
+
     try:
       StandbyDbRecoveryDestSize = ConfigDict['STANDBY']['RECOVERY_DEST_SIZE']
     except:
       pass
+
     try:
       StandbyLogArchiveMaxProc = ConfigDict['STANDBY']['LOG_ARCHIVE_MAX_PROC']
     except:
       pass
+
     try:
       StandbyUseLargePages = ConfigDict['STANDBY']['USE_LARGE_PAGES']
     except:
-      pass
+      StandbyUseLargePages = ''
+
     try:
       StandbyOracleBase = ConfigDict['STANDBY']['ORACLE_BASE']
     except:
       pass
+
     try:
       StandbyOracleHome = ConfigDict['STANDBY']['ORACLE_HOME']
     except:
       pass
+
     try:
       StandbyGridHome = ConfigDict['STANDBY']['GRID_HOME']
     except:
       pass
+
     try:
       StandbyAuditFileDest = ConfigDict['STANDBY']['AUDIT_FILE_DEST']
     except:
@@ -475,60 +569,94 @@ if (__name__ == '__main__'):
   TempPfile   = "/tmp/init" + DbName + ".sby"
   BackupPfile = "/tmp/init" + DbName + ".bak"
 
-  for NodeId in range(1,len(PrimaryNodeNames)+1):
-    if (NodeId < 9):
-      Node = '0' + str(NodeId)
-    else:
-      Node = str(NodeId)
-    PrimaryNodeDict[NodeId] = {
-      'Name' : PrimaryNodeNames[NodeId-1],
-      'Inst' : DbName + str(NodeId),
-      'Vip'  : PrimaryVipNames[NodeId-1]
-    }
+  if not (len(PrimaryNodeNames) == len(PrimaryVipNames) == len(PrimaryAsmNames) == len(PrimaryInstNames)):
+    print(len(PrimaryNodeNames), len(PrimaryVipNames), len(PrimaryAsmNames), len(PrimaryInstNames))
+    print("Primary Node, Vip, Asm, and Instance counts must be equal. Check your configuration to")
+    print("ensure these names are evenly assigned.")
+    print("\n  Primary Node Names : %s" % (PrimaryNodeNames))
+    print("  Primary Vip Names  : %s" % (PrimaryVipNames))
+    print("  Primary ASM Names  : %s" % (PrimaryAsmNames))
+    print("  Primary Inst Names : %s" % (PrimaryInstNames))
+    exit(1)
 
-  for NodeId in range(1,len(StandbyNodeNames)+1):
-    if (NodeId < 9):
-      Node = '0' + str(NodeId)
-    else:
-      Node = str(NodeId)
-    StandbyNodeDict[NodeId] = {
-      'Name' : StandbyNodeNames[NodeId-1],
-      'Inst' : DbName + str(NodeId),
-      'Vip'  : StandbyVipNames[NodeId-1]
-    }
+  if not (len(StandbyNodeNames) == len(StandbyVipNames) == len(StandbyAsmNames) == len(StandbyInstNames)):
+    print("Standby Node, Vip, Asm, and Instance counts must be equal. Check your configuration to")
+    print("ensure these names are evenly assigned.")
+    print("\n  Standy Node Names :  %s" % (StandbyNodeNames))
+    print("  Standy Vip Names  :  %s" % (StandbyVipNames))
+    print("  Standy ASM Names  :  %s" % (StandbyAsmNames))
+    print("  Standy Inst Names :  %s" % (StandbyInstNames))
+    exit(1)
 
-  if (StandbyAuditFileDest != PrimaryAuditFileDest):
+  for NodeId, NodeName in enumerate(PrimaryNodeNames):
+    NodeId += 1
+    if NodeId not in PrimaryNodeDict:
+      PrimaryNodeDict[NodeId] = {}  
+    PrimaryNodeDict[NodeId]['Name'] = NodeName
+
+  for NodeId, VipName in enumerate(PrimaryVipNames):
+    NodeId += 1
+    PrimaryNodeDict[NodeId]['Vip'] = VipName
+
+  for NodeId, AsmName in enumerate(PrimaryAsmNames):
+    NodeId += 1
+    PrimaryNodeDict[NodeId]['Asm'] = AsmName
+
+  for NodeId, InstName in enumerate(PrimaryInstNames):
+    NodeId += 1
+    PrimaryNodeDict[NodeId]['Inst'] = InstName
+
+  for NodeId, NodeName in enumerate(StandbyNodeNames):
+    NodeId += 1
+    if NodeId not in StandbyNodeDict:
+      StandbyNodeDict[NodeId] = {}  
+    StandbyNodeDict[NodeId]['Name'] = NodeName
+
+  for NodeId, VipName in enumerate(StandbyVipNames):
+    NodeId += 1
+    StandbyNodeDict[NodeId]['Vip'] = VipName
+
+  for NodeId, AsmName in enumerate(StandbyAsmNames):
+    NodeId += 1
+    StandbyNodeDict[NodeId]['Asm'] = AsmName
+
+  for NodeId, InstName in enumerate(StandbyInstNames):
+    NodeId += 1
+    StandbyNodeDict[NodeId]['Inst'] = InstName
+
+  if StandbyAuditFileDest != PrimaryAuditFileDest:
     print("ERROR: The Standby audit_file_dest must be the same as the Primary's audit_file_dest")
     print("       Check the audit_file_dest of the primary database and set audit_file_dest to match.")
     print("\nPrimary Audit Dest: %s" % PrimaryAuditFileDest)
     print("Standby Audit Dest: %s" % StandbyAuditFileDest)
     exit(1)
 
-
   print('\n============================================================================================================================')
   print('%s: Release %s %28s%49s' % (CmdDesc, Version, VersionDate, Now))
   print('============================================================================================================================')
   print(' Global Settings')
-  if (ConfigDict == {}):
+  if ConfigDict == {}:
     print('   Configuration File                       : %s' % 'None')
   else:
     print('   Configuration File                       : %s' % ConfigFile)
   print('   Database Name                            : %s' % DbName)
   print('   Database Version                         : %s' % DbVersion)
   print('   Oratab File                              : %s' % Oratab)
-  if (Dbmap != ''):
+  if Dbmap != '':
     print('   Database Map File                        : %s' % Dbmap)
   print('   Sys Password                             : %s' % SysPassword)
   print('   RMAN Channels                            : %s' % Channels)
   print('   Standby Online Redolog Size              : %-10s  <- %s' % (SrlSize, 'Must be precisely the same size as online redo logs.'))
   print('   Standby Online Redolog Count             : %-10s  <- %s' % (SrlCount, 'Must be the number of online redo log groups + 1'))
   print('   Standby Online Redolog Starting Sequence : %-10s  <- %s' % (SrlGroupStart, 'Must not conflict with any existing online redo log group ID\'s'))
-
+  
   print("")
   print(' Primary Settings')
   print('   Node Count                               : %s' % PrimaryNodeCount)
   print('   Node Names                               : %s' % ', '.join(PrimaryNodeNames))
-  print('   Node VIP Names                           : %s' % ', '.join(PrimaryVipNames))
+  print('   VIP Names                                : %s' % ', '.join(PrimaryVipNames))
+  print('   ASM Names                                : %s' % ', '.join(PrimaryAsmNames))
+  print('   Instance Names                           : %s' % ', '.join(PrimaryInstNames))
   print('   Domain                                   : %s' % PrimaryDomain)
   print('   SCAN                                     : %s' % PrimaryScan)
   print('   Listener Port                            : %s' % PrimaryPort)
@@ -543,12 +671,13 @@ if (__name__ == '__main__'):
   print('   Oracle Home                              : %s' % PrimaryOracleHome)
   print('   Grid Infrastructure Home                 : %s' % PrimaryGridHome)
 
-
   print("")
   print(' Standby Settings')
   print('   Node Count                               : %s' % StandbyNodeCount)
   print('   Node Names                               : %s' % ', '.join(StandbyNodeNames))
-  print('   Node VIP Names                           : %s' % ', '.join(StandbyVipNames))
+  print('   VIP Names                                : %s' % ', '.join(StandbyVipNames))
+  print('   ASM Names                                : %s' % ', '.join(StandbyAsmNames))
+  print('   Instance Names                           : %s' % ', '.join(StandbyInstNames))
   print('   Domain                                   : %s' % StandbyDomain)
   print('   SCAN                                     : %s' % StandbyScan)
   print('   Listener Port                            : %s' % StandbyPort)
@@ -578,8 +707,8 @@ if (__name__ == '__main__'):
     print("[STANDBY] " + StandbyNodeDict[NodeId]['Name'])
     print("---------------------------------------------------------------------------------------------------------------")
     print('echo "' + StandbyNodeDict[NodeId]['Inst'] + ':' + StandbyOracleHome + ':N"' + ' >> ' + Oratab)
-
-  if (Dbmap != ''):
+  
+  if Dbmap != '':
     print("\n\n=========================================================================================================================")
     print("Dbmap - Update the " + Dbmap + " file on all nodes Primary and Standby")
     print("=========================================================================================================================")
@@ -588,17 +717,17 @@ if (__name__ == '__main__'):
       print("[PRIMARY] " + PrimaryNodeDict[NodeId]['Name'])
       print("---------------------------------------------------------------------------------------------------------------")
       print('echo "' + PrimaryNodeDict[NodeId]['Inst'] + '       : ' + PrimaryDbUniqueName + '" >> ' + Dbmap)
-
+    
     for NodeId in StandbyNodeDict:
       print("\n---------------------------------------------------------------------------------------------------------------")
-      print("[PRIMARY] " + StandbyNodeDict[NodeId]['Name'])
+      print("[STANDBY] " + StandbyNodeDict[NodeId]['Name'])
       print("---------------------------------------------------------------------------------------------------------------")
       print('echo "' + StandbyNodeDict[NodeId]['Inst'] + '       : ' + StandbyDbUniqueName + '" >> ' + Dbmap)
-
+  
   print("\n\n=========================================================================================================================")
   print("Network - Static Listener Settings")
   print("=========================================================================================================================")
-
+  
   for NodeId in PrimaryNodeDict:
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[PRIMARY] " + PrimaryNodeDict[NodeId]['Name'] + " " + PrimaryGridHome + "/network/admin/listener.ora")
@@ -614,7 +743,7 @@ if (__name__ == '__main__'):
     print("      (ORACLE_HOME   = " + PrimaryOracleHome + ")")
     print("    )")
     print("  )")
-
+  
   for NodeId in StandbyNodeDict:
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[STANDBY] " + StandbyNodeDict[NodeId]['Name'] + " " + StandbyGridHome + "/network/admin/listener.ora")
@@ -635,27 +764,29 @@ if (__name__ == '__main__'):
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[PRIMARY] " + PrimaryNodeDict[NodeId]['Name'] + " stop/start/status the listener.")
     print("---------------------------------------------------------------------------------------------------------------")
-    print("export ORACLE_SID=+ASM" + str(NodeId))
+    print("export ORACLE_SID=" + PrimaryNodeDict[NodeId]['Asm'])
     print("export ORACLE_HOME=" + PrimaryGridHome)
     print(PrimaryGridHome + "/bin/lsnrctl stop")
     print(PrimaryGridHome + "/bin/lsnrctl start")
-    print(PrimaryGridHome + "/bin/lsnrctl stat | grep " + PrimaryDbUniqueName + '_DGMGRL')
-
+    print(PrimaryGridHome + "/bin/lsnrctl status | grep " + PrimaryDbUniqueName + '_DGMGRL')
+  
   for NodeId in StandbyNodeDict:
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[STANDBY] " + StandbyNodeDict[NodeId]['Name'] + " stop/start/status the listener.")
     print("---------------------------------------------------------------------------------------------------------------")
-    print("export ORACLE_SID=+ASM" + str(NodeId))
+    print("export ORACLE_SID=" + StandbyNodeDict[NodeId]['Asm'])
     print("export ORACLE_HOME=" + StandbyGridHome)
     print(StandbyGridHome + "/bin/lsnrctl stop")
     print(StandbyGridHome + "/bin/lsnrctl start")
-    print(StandbyGridHome + "/bin/lsnrctl stat | grep " + StandbyDbUniqueName + '_DGMGRL')
-
+    print(StandbyGridHome + "/bin/lsnrctl status | grep " + StandbyDbUniqueName + '_DGMGRL')
+  
   print("\n\n=========================================================================================================================")
-  print("Network - Temporary tnsnames.ora Settings for node 1 of primary and standby")
+  print("Network - Add Temporary tnsnames.ora Settings to node 1 of primary and standby")
   print("=========================================================================================================================")
   #print("\n# For Dataguard Connectivity")
-  print("")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY & STANDBY] " + PrimaryNodeDict[1]['Name'] + ", " + StandbyNodeDict[1]['Name'])
+  print("---------------------------------------------------------------------------------------------------------------")
   print(PrimaryDbUniqueName + " =")
   print("  (DESCRIPTION =")
   print("    # The following is used during cloning and non-Broker replication and will be replaced with Scan and VIP later.")
@@ -675,45 +806,6 @@ if (__name__ == '__main__'):
   print("  )")
 
   print("\n\n=========================================================================================================================")
-  print("Create Audit File Dest On All Standby Nodes")
-  print("=========================================================================================================================")
-  print("\n---------------------------------------------------------------------------------------------------------------")
-  print("[STANDBY] All Nodes")
-  print("---------------------------------------------------------------------------------------------------------------")
-  print("mkdir -p " + StandbyAuditFileDest)
-
-  print("\n\n=========================================================================================================================")
-  print("Create Temporary Password File On Standby (node 1 only)")
-  print("=========================================================================================================================")
-  print("\n---------------------------------------------------------------------------------------------------------------")
-  print("[STANDBY] " + StandbyNodeDict[1]['Name'])
-  print("---------------------------------------------------------------------------------------------------------------")
-  print("orapwd file=" + StandbyOracleHome + "/dbs/orapw" + StandbyNodeDict[1]['Inst'] + " password=" + SysPassword)
-
-  print("\n\n=========================================================================================================================")
-  print("Create Temporary init.ora File On Standby (node 1 only)")
-  print("=========================================================================================================================")
-  print("\n---------------------------------------------------------------------------------------------------------------")
-  print("[STANDBY] " + StandbyNodeDict[1]['Name'])
-  print("---------------------------------------------------------------------------------------------------------------")
-  print('echo "*.db_name=%s > %s' % ("'" + DbName + "'\"", TempPfile))
-  print('echo "*.shared_pool_size=2800m" >> ' + TempPfile)
-
-  print("\n\n=========================================================================================================================")
-  print("Startup the Standby Instance Nomount (node 1 only)")
-  print("=========================================================================================================================")
-  print("\n---------------------------------------------------------------------------------------------------------------")
-  print("[STANDBY] " + StandbyNodeDict[1]['Name'])
-  print("---------------------------------------------------------------------------------------------------------------")
-  print("export ORAENV_ASK=NO")
-  print("export ORACLE_SID=" + StandbyNodeDict[1]['Inst'])
-  print(". oraenv >/dev/null")
-  print("")
-  print(StandbyOracleHome + "/bin/sqlplus / as sysdba")
-  print("")
-  print("startup nomount pfile=" + TempPfile)
-
-  print("\n\n=========================================================================================================================")
   print("Create Standby Logfile Groups ON Primary Database")
   print("=========================================================================================================================")
   print("\n---------------------------------------------------------------------------------------------------------------")
@@ -730,7 +822,7 @@ if (__name__ == '__main__'):
     for MemberId in range(1, SrlCount + 1):
       print("alter database add standby logfile thread " + str(NodeId) + " group " + str(GroupId) + " '" + PrimaryRecoDg + "' size " + SrlSize + ";")
       GroupId += 1
-
+  
   print("\n\n=========================================================================================================================")
   print("Create Alias for Spfile in ASM for the Primary Database (only required if one doesn't already exist)")
   print("=========================================================================================================================")
@@ -764,14 +856,14 @@ if (__name__ == '__main__'):
   print("\n\n=========================================================================================================================")
   print("Validate init.ora File on Primary")
   print("=========================================================================================================================")
-  print("\n---------------------------------------------------------------------------------------------------------------")
-  print("[PRIMARY] All Nodes")
-  print("---------------------------------------------------------------------------------------------------------------")
   for NodeId in PrimaryNodeDict:
+    print("\n---------------------------------------------------------------------------------------------------------------")
+    print("[PRIMARY] " + PrimaryNodeDict[NodeId]['Name'])
+    print("---------------------------------------------------------------------------------------------------------------")
     print("cat " + pathjoin(PrimaryOracleHome, 'dbs', 'init' + PrimaryNodeDict[NodeId]['Inst'] + '.ora'))
 
   print("\n\n=========================================================================================================================")
-  print("Post Configuration Items")
+  print("Configure Forced Logging")
   print("=========================================================================================================================")
   print("\n---------------------------------------------------------------------------------------------------------------")
   print("[PRIMARY] " + PrimaryNodeDict[1]['Name'] + " - Enable Force Logging in the Database")
@@ -783,6 +875,46 @@ if (__name__ == '__main__'):
   print(PrimaryOracleHome + "/bin/sqlplus / as sysdba")
   print("")
   print("alter database force logging;")
+
+  print("\n\n=========================================================================================================================")
+  print("Create Audit File Dest On All Standby Nodes")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY] All Nodes")
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("mkdir -p " + StandbyAuditFileDest)
+ 
+  print("\n\n=========================================================================================================================")
+  print("Create Temporary Password File On Standby (node 1 only)")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY] " + StandbyNodeDict[1]['Name'])
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("orapwd file=" + StandbyOracleHome + "/dbs/orapw" + StandbyNodeDict[1]['Inst'] + " password=" + SysPassword)
+  
+  print("\n\n=========================================================================================================================")
+  print("Create Temporary init.ora File On Standby (node 1 only)")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY] " + StandbyNodeDict[1]['Name'])
+  print("---------------------------------------------------------------------------------------------------------------")
+  print('echo "*.db_name=%s > %s' % ("'" + DbName + "'\"", TempPfile))
+  print('echo "*.db_unique_name=%s >> %s' % ("'" + StandbyDbUniqueName + "'\"", TempPfile))
+  print('echo "*.shared_pool_size=2800m" >> ' + TempPfile)
+  
+  print("\n\n=========================================================================================================================")
+  print("Startup the Standby Instance Nomount (node 1 only)")
+  print("=========================================================================================================================")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[STANDBY] " + StandbyNodeDict[1]['Name'])
+  print("---------------------------------------------------------------------------------------------------------------")
+  print("export ORAENV_ASK=NO")
+  print("export ORACLE_SID=" + StandbyNodeDict[1]['Inst'])
+  print(". oraenv >/dev/null")
+  print("")
+  print(StandbyOracleHome + "/bin/sqlplus / as sysdba")
+  print("")
+  print("startup nomount pfile=" + TempPfile)
 
   print("\n\n=========================================================================================================================")
   print("Create the Standby Database Using RMAN 'Duplicate From Active'")
@@ -806,6 +938,8 @@ if (__name__ == '__main__'):
   print("  duplicate target database for standby from active database spfile")
   #print('  db_file_name_convert = ("+DATA","+DATA", "+RECO","+RECO")')
   #print('  log_file_name_convert = ("+DATA","+DATA", "+RECO","+RECO")')
+  if StandbyNodeCount == 1:
+    print("  set cluster_database_database=FALSE")
   print("  set db_unique_name='" + StandbyDbUniqueName + "'")
   print("  set db_create_file_dest='" + StandbyDataDg + "'")
   print("  set db_create_online_log_dest_1='" + StandbyRecoDg + "'")
@@ -815,7 +949,8 @@ if (__name__ == '__main__'):
   print("  set fal_client='" + StandbyDbUniqueName + "'")
   print("  set fal_server='" + PrimaryDbUniqueName + "'")
   print("  set log_archive_max_processes='" + StandbyLogArchiveMaxProc + "'")
-  print("  set use_large_pages='" + StandbyUseLargePages + "'")
+  if StandbyUseLargePages != '':
+    print("  set use_large_pages='" + StandbyUseLargePages + "'")
   print("  set log_archive_config='dg_config=(" + PrimaryDbUniqueName + "," + StandbyDbUniqueName + ")'")
   print("  set log_archive_dest_1='LOCATION=USE_DB_RECOVERY_FILE_DEST'")
   print("  set log_archive_dest_2='service=" + PrimaryDbUniqueName + " ASYNC LGWR valid_for=(ONLINE_LOGFILES,PRIMARY_ROLE) db_unique_name=" + PrimaryDbUniqueName + "'")
@@ -837,26 +972,29 @@ if (__name__ == '__main__'):
   print("=========================================================================================================================")
   #print("\n# For Dataguard Connectivity")
   print("")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[PRIMARY & STANDBY] " + PrimaryNodeDict[1]['Name'] + ", " + StandbyNodeDict[1]['Name'])
+  print("---------------------------------------------------------------------------------------------------------------")
   print("REMOVE --> " + PrimaryDbUniqueName + " =")
-  print("REMOVE --> (DESCRIPTION =")
-  print("REMOVE -->   # The following is used during cloning and non-Broker replication and will be replaced with Scan and VIP later.")
-  print("REMOVE -->   # ---------------------------------------------------------------------------------------------------------------")
-  print("REMOVE -->   (ADDRESS = (PROTOCOL = TCP)(HOST = " + PrimaryNodeDict[1]['Vip'] + '.' + PrimaryDomain  + ")(PORT = " + PrimaryPort + "))")
-  print("REMOVE -->   (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + PrimaryNodeDict[1]['Inst'] + "))")
-  print("REMOVE --> )")
+  print("REMOVE -->   (DESCRIPTION =")
+  print("REMOVE -->     # The following is used during cloning and non-Broker replication and will be replaced with Scan and VIP later.")
+  print("REMOVE -->     # ---------------------------------------------------------------------------------------------------------------")
+  print("REMOVE -->     (ADDRESS = (PROTOCOL = TCP)(HOST = " + PrimaryNodeDict[1]['Vip'] + '.' + PrimaryDomain  + ")(PORT = " + PrimaryPort + "))")
+  print("REMOVE -->     (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + PrimaryNodeDict[1]['Inst'] + "))")
+  print("REMOVE -->   )")
 
   #print("\n# For Dataguard Connectivity")
   print("")
   print("REMOVE --> " + StandbyDbUniqueName + " =")
-  print("REMOVE -->  (DESCRIPTION =")
-  print("REMOVE -->    # The following is used during cloning and non-Broker replication and will be replaced with Scan and VIP later.")
-  print("REMOVE -->    # ---------------------------------------------------------------------------------------------------------------")
-  print("REMOVE -->    (ADDRESS = (PROTOCOL = TCP)(HOST = " + StandbyNodeDict[1]['Vip'] + '.' + StandbyDomain  + ")(PORT = " + StandbyPort + "))")
-  print("REMOVE -->    (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + StandbyNodeDict[1]['Inst'] + "))")
-  print("REMOVE -->  )")
+  print("REMOVE -->   (DESCRIPTION =")
+  print("REMOVE -->     # The following is used during cloning and non-Broker replication and will be replaced with Scan and VIP later.")
+  print("REMOVE -->     # ---------------------------------------------------------------------------------------------------------------")
+  print("REMOVE -->     (ADDRESS = (PROTOCOL = TCP)(HOST = " + StandbyNodeDict[1]['Vip'] + '.' + StandbyDomain  + ")(PORT = " + StandbyPort + "))")
+  print("REMOVE -->     (CONNECT_DATA = (SERVER = DEDICATED) (SID = " + StandbyNodeDict[1]['Inst'] + "))")
+  print("REMOVE -->   )")
 
   print("\n\n=========================================================================================================================")
-  print("Network - Final tnsnames.ora Settings for all nodes Primary and Standby (SCAN and SERVICE_NAME instead of VIP and SID)")
+  print("Network - Final tnsnames.ora Settings for all nodes of Primary and Standby (SCAN and SERVICE_NAME instead of VIP and SID)")
   print("=========================================================================================================================")
   #print("\n# For Dataguard Connectivity")
   print("")
@@ -877,7 +1015,7 @@ if (__name__ == '__main__'):
   print("\n\n=========================================================================================================================")
   print("Cluster Services - Configure RAC Cluster Servies for Standby Database")
   print("=========================================================================================================================")
-  if (DbVersion >= 12):
+  if DbVersion >= 12:
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[STANDBY] " + StandbyNodeDict[1]['Name'] + ' - Register the Database and Service Names')
     print("---------------------------------------------------------------------------------------------------------------")
@@ -887,7 +1025,7 @@ if (__name__ == '__main__'):
     print("")
     print("srvctl add database -db " + StandbyDbUniqueName + " -dbname " + DbName + " -oraclehome " + StandbyOracleHome + " -spfile '" + StandbyDataDg + "/" + StandbyDbUniqueName + "/spfile" + DbName + ".ora' -policy automatic -diskgroup '" + StandbyDataDg[1:] + "," + StandbyRecoDg[1:] + "' -stopoption immediate")
     for NodeId in StandbyNodeDict:
-      print("srvctl add instance -db " + StandbyDbUniqueName + " -instance " + StandbyNodeDict[NodeId]['Inst'] + " -node " + StandbyNodeDict[NodeId]['Name'])
+      print("srvctl add instance -db " + StandbyDbUniqueName + " -instance " + StandbyNodeDict[NodeId]['Inst'] + " -node " + PrimaryNodeDict[NodeId]['Name'])
 
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[STANDBY] " + StandbyNodeDict[1]['Name'] + " - Suggested Services")
@@ -917,21 +1055,10 @@ if (__name__ == '__main__'):
     print("export ORAENV_ASK=NO")
     print("export ORACLE_SID=" + StandbyNodeDict[1]['Inst'])
     print(". oraenv >/dev/null")
-    print("")
+
     print("\nsrvctl add database -d " + StandbyDbUniqueName + " -n " + DbName + " -o " + StandbyOracleHome + " -p '" + StandbyDataDg + "/" + StandbyDbUniqueName + "/spfile" + DbName + ".ora' -y automatic -a '" + StandbyDataDg[1:] + "," + StandbyRecoDg[1:] + "' -t immediate")
     for NodeId in StandbyNodeDict:
       print("srvctl add instance -d " + StandbyDbUniqueName + " -i " + StandbyNodeDict[NodeId]['Inst'] + " -n " + StandbyNodeDict[NodeId]['Name'])
-
-    print("\n---------------------------------------------------------------------------------------------------------------")
-    print("[STANDBY] " + StandbyNodeDict[1]['Name'] + " - Suggested Services")
-    print("---------------------------------------------------------------------------------------------------------------")
-    InstList = []
-    for NodeId in StandbyNodeDict:
-      InstList.append(StandbyNodeDict[NodeId]['Inst'])
-    print("srvctl add service -d " + StandbyDbUniqueName + " -s " + DbName + "_BATCH  -r " + ','.join(InstList) + " -m BASIC -e SELECT -q TRUE -l PRIMARY -z 180 -w 1")
-    print("srvctl add service -d " + StandbyDbUniqueName + " -s " + DbName + "_BKP    -r " + ','.join(InstList) + " -m BASIC -e SELECT -q TRUE -l PRIMARY -z 180 -w 1")
-    print("srvctl add service -d " + StandbyDbUniqueName + " -s " + DbName + "_INTR   -r " + ','.join(InstList) + " -m BASIC -e SELECT -q TRUE -l PRIMARY -z 180 -w 1")
-    print("srvctl add service -d " + StandbyDbUniqueName + " -s " + DbName + "_USER   -r " + ','.join(InstList) + " -m BASIC -e SELECT -q TRUE -l PRIMARY -z 180 -w 1")
 
     print("\n---------------------------------------------------------------------------------------------------------------")
     print("[PRIMARY] " + PrimaryNodeDict[1]['Name'] + " - Suggested Services")
@@ -944,6 +1071,20 @@ if (__name__ == '__main__'):
     print("srvctl add service -d " + PrimaryDbUniqueName + " -s " + DbName + "_INTR   -r " + ','.join(InstList) + " -m BASIC -e SELECT -q TRUE -l PRIMARY -z 180 -w 1")
     print("srvctl add service -d " + PrimaryDbUniqueName + " -s " + DbName + "_USER   -r " + ','.join(InstList) + " -m BASIC -e SELECT -q TRUE -l PRIMARY -z 180 -w 1")
 
+    print("\n---------------------------------------------------------------------------------------------------------------")
+    print("[STANDBY] " + StandbyNodeDict[1]['Name'] + " - Suggested Services")
+    print("---------------------------------------------------------------------------------------------------------------")
+    InstList = []
+    for NodeId in StandbyNodeDict:
+      InstList.append(StandbyNodeDict[NodeId]['Inst'])
+    print("srvctl add service -d " + StandbyDbUniqueName + " -s " + DbName + "_BATCH  -r " + ','.join(InstList) + " -m BASIC -e SELECT -q TRUE -l PRIMARY -z 180 -w 1")
+    print("srvctl add service -d " + StandbyDbUniqueName + " -s " + DbName + "_BKP    -r " + ','.join(InstList) + " -m BASIC -e SELECT -q TRUE -l PRIMARY -z 180 -w 1")
+    print("srvctl add service -d " + StandbyDbUniqueName + " -s " + DbName + "_INTR   -r " + ','.join(InstList) + " -m BASIC -e SELECT -q TRUE -l PRIMARY -z 180 -w 1")
+    print("srvctl add service -d " + StandbyDbUniqueName + " -s " + DbName + "_USER   -r " + ','.join(InstList) + " -m BASIC -e SELECT -q TRUE -l PRIMARY -z 180 -w 1")
+
+  print("\n\n=========================================================================================================================")
+  print("Create Final init.ora File On Standby")
+  print("=========================================================================================================================")
   print("\n---------------------------------------------------------------------------------------------------------------")
   print("[STANDBY] " + StandbyNodeDict[1]['Name'] + " - Install Spfile into ASM")
   print("---------------------------------------------------------------------------------------------------------------")
@@ -954,15 +1095,14 @@ if (__name__ == '__main__'):
   print(". oraenv >/dev/null")
   print("")
   print(StandbyOracleHome + "/bin/sqlplus / as sysdba")
-  print("")
-  print("create pfile='" + NewPfile + "' from spfile;")
+  print("\ncreate pfile='" + NewPfile + "' from spfile;")
+  print("\nshutdown immediate")
+  print("\nstartup pfile='" + NewPfile + "'")
+  print("\ncreate spfile='" + StandbyDataDg + "/" + StandbyDbUniqueName + "/spfile" + DbName + ".ora' from pfile='" + NewPfile + "';")
 
-  print("\n\n=========================================================================================================================")
-  print("Create Final init.ora File On Standby (all nodes)")
-  print("=========================================================================================================================")
   for NodeId in StandbyNodeDict:
-    print("---------------------------------------------------------------------------------------------------------------")
-    print("[STANDBY] " + StandbyNodeDict[NodeId]['Name'])
+    print("\n---------------------------------------------------------------------------------------------------------------")
+    print("[STANDBY] " + StandbyNodeDict[NodeId]['Name'] + " - Create final init.ora file in $ORACLE_HOME/dbs")
     print("---------------------------------------------------------------------------------------------------------------")
     print('echo "SPFILE=\'' + pathjoin(StandbyDataDg, StandbyDbUniqueName, 'spfile' + DbName + '.ora\'" > ') + pathjoin(StandbyOracleHome, 'dbs', 'init' + StandbyNodeDict[NodeId]['Inst'] + '.ora'))
     print("")
@@ -979,7 +1119,8 @@ if (__name__ == '__main__'):
   print("\n---------------------------------------------------------------------------------------------------------------")
   print("[PRIMARY] " + PrimaryNodeDict[1]['Name'] + " - Copy Password File from the Primary to the Standby")
   print("---------------------------------------------------------------------------------------------------------------")
-  if (DbVersion >= 12):
+
+  if DbVersion >= 12:
     print("export ORAENV_ASK=NO")
     print("export ORACLE_SID=" + PrimaryNodeDict[1]['Inst'])
     print(". oraenv >/dev/null")
@@ -1022,7 +1163,7 @@ if (__name__ == '__main__'):
     print(". oraenv >/dev/null")
     print("")
     print(PrimaryOracleHome + "/bin/srvctl modify database -d " + PrimaryDbUniqueName + " -pwfile " + PrimaryDataDg + "/" + PrimaryDbUniqueName + "/orapw" + DbName)
-    print(PrimaryOracleHome + "/bin/srvctl stop database -d " + PrimaryDbUniqueName)
+    print(PrimaryOracleHome + "/bin/srvctl stop  database -d " + PrimaryDbUniqueName)
     print(PrimaryOracleHome + "/bin/srvctl start database -d " + PrimaryDbUniqueName)
     print("# ------------------------------")
     print("# End Optional Step.")
@@ -1051,7 +1192,7 @@ if (__name__ == '__main__'):
   print("export ORACLE_SID=" + StandbyNodeDict[1]['Inst'])
   print(". oraenv >/dev/null")
   print("")
-  print(StandbyOracleHome + "/bin/srvctl stop database -d " + StandbyDbUniqueName)
+  print(StandbyOracleHome + "/bin/srvctl stop  database -d " + StandbyDbUniqueName)
   print(StandbyOracleHome + "/bin/srvctl start database -d " + StandbyDbUniqueName + " -o mount")
 
   print("\n\n=========================================================================================================================")
@@ -1063,16 +1204,40 @@ if (__name__ == '__main__'):
   print("export ORAENV_ASK=NO")
   print("export ORACLE_SID=" + StandbyNodeDict[1]['Inst'])
   print(". oraenv >/dev/null")
-  print("")
-  print(StandbyOracleHome + "/bin/sqlplus / as sysdba")
-  print("")
-  print("create pfile='" + BackupPfile + "' from spfile;")
+  print("\n" + StandbyOracleHome + "/bin/sqlplus / as sysdba")
+  print("\ncreate pfile='" + BackupPfile + "' from spfile;")
 
   print("\n---------------------------------------------------------------------------------------------------------------")
   print("[STANDBY] " + StandbyNodeDict[1]['Name'] + " - Clear old instance parameters.")
   print("---------------------------------------------------------------------------------------------------------------")
+  print("alter system reset dg_broker_config_file1    scope=spfile;")
+  print("alter system reset dg_broker_config_file2    scope=spfile;")
+  print("alter system reset dg_broker_start           scope=spfile;")
+  print("alter system reset fal_client                scope=spfile;")
+  print("alter system reset fal_server                scope=spfile;")
+  print("alter system reset log_archive_config        scope=spfile;")
+  print("alter system reset log_archive_dest_2        scope=spfile;")
+  print("alter system reset log_archive_dest_state_2  scope=spfile;")
+  print("alter system reset remote_listener           scope=spfile;")
+  print("alter system reset remote_login_passwordfile scope=spfile;")
+  print("alter system reset standby_file_management   scope=spfile;")
+  print("alter system reset use_large_pages           scope=spfile;")
+
+  print("\nalter system reset dg_broker_config_file1    scope=spfile sid='*';")
+  print("alter system reset dg_broker_config_file2    scope=spfile sid='*';")
+  print("alter system reset dg_broker_start           scope=spfile sid='*';")
+  print("alter system reset fal_client                scope=spfile sid='*';")
+  print("alter system reset fal_server                scope=spfile sid='*';")
+  print("alter system reset log_archive_config        scope=spfile sid='*';")
+  print("alter system reset log_archive_dest_2        scope=spfile sid='*';")
+  print("alter system reset log_archive_dest_state_2  scope=spfile sid='*';")
+  print("alter system reset remote_listener           scope=spfile sid='*';")
+  print("alter system reset remote_login_passwordfile scope=spfile sid='*';")
+  print("alter system reset standby_file_management   scope=spfile sid='*';")
+  print("alter system reset use_large_pages           scope=spfile sid='*';")
+
   for NodeId in StandbyNodeDict:
-    print("-- " + StandbyNodeDict[NodeId]['Inst'])
+    print("\n-- " + StandbyNodeDict[NodeId]['Inst'])
     print("alter system reset dg_broker_config_file1    scope=spfile sid='" + StandbyNodeDict[NodeId]['Inst'] + "';")
     print("alter system reset dg_broker_config_file2    scope=spfile sid='" + StandbyNodeDict[NodeId]['Inst'] + "';")
     print("alter system reset dg_broker_start           scope=spfile sid='" + StandbyNodeDict[NodeId]['Inst'] + "';")
@@ -1109,10 +1274,8 @@ if (__name__ == '__main__'):
   print("export ORACLE_SID=" + StandbyNodeDict[1]['Inst'])
   print(". oraenv >/dev/null")
   print("")
-  print(StandbyOracleHome + "/bin/srvctl stop database -d " +  StandbyDbUniqueName)
+  print(StandbyOracleHome + "/bin/srvctl stop  database -d " +  StandbyDbUniqueName)
   print(StandbyOracleHome + "/bin/srvctl start database -d " + StandbyDbUniqueName)
-
-  print("\nVerify the New Database Parameters")
 
   print("\n---------------------------------------------------------------------------------------------------------------")
   print("[PRIMARY] " + PrimaryNodeDict[1]['Name'] + " - Make a backup of the spfile on Primary")
@@ -1128,8 +1291,34 @@ if (__name__ == '__main__'):
   print("\n---------------------------------------------------------------------------------------------------------------")
   print("[PRIMARY] " + PrimaryNodeDict[1]['Name'] + " - Clear old instance parameters.")
   print("---------------------------------------------------------------------------------------------------------------")
+  print("alter system reset dg_broker_config_file1    scope=spfile;")
+  print("alter system reset dg_broker_config_file2    scope=spfile;")
+  print("alter system reset dg_broker_start           scope=spfile;")
+  print("alter system reset fal_client                scope=spfile;")
+  print("alter system reset fal_server                scope=spfile;")
+  print("alter system reset log_archive_config        scope=spfile;")
+  print("alter system reset log_archive_dest_2        scope=spfile;")
+  print("alter system reset log_archive_dest_state_2  scope=spfile;")
+  print("alter system reset remote_listener           scope=spfile;")
+  print("alter system reset remote_login_passwordfile scope=spfile;")
+  print("alter system reset standby_file_management   scope=spfile;")
+  print("alter system reset use_large_pages           scope=spfile;")
+
+  print("\nalter system reset dg_broker_config_file1    scope=spfile sid='*';")
+  print("alter system reset dg_broker_config_file2    scope=spfile sid='*';")
+  print("alter system reset dg_broker_start           scope=spfile sid='*';")
+  print("alter system reset fal_client                scope=spfile sid='*';")
+  print("alter system reset fal_server                scope=spfile sid='*';")
+  print("alter system reset log_archive_config        scope=spfile sid='*';")
+  print("alter system reset log_archive_dest_2        scope=spfile sid='*';")
+  print("alter system reset log_archive_dest_state_2  scope=spfile sid='*';")
+  print("alter system reset remote_listener           scope=spfile sid='*';")
+  print("alter system reset remote_login_passwordfile scope=spfile sid='*';")
+  print("alter system reset standby_file_management   scope=spfile sid='*';")
+  print("alter system reset use_large_pages           scope=spfile sid='*';")
+
   for NodeId in PrimaryNodeDict:
-    print("-- " + PrimaryNodeDict[NodeId]['Inst'])
+    print("\n-- " + PrimaryNodeDict[NodeId]['Inst'])
     print("alter system reset dg_broker_config_file1    scope=spfile sid='" + PrimaryNodeDict[NodeId]['Inst'] + "';")
     print("alter system reset dg_broker_config_file2    scope=spfile sid='" + PrimaryNodeDict[NodeId]['Inst'] + "';")
     print("alter system reset dg_broker_start           scope=spfile sid='" + PrimaryNodeDict[NodeId]['Inst'] + "';")
@@ -1159,16 +1348,14 @@ if (__name__ == '__main__'):
   ###! print("alter system set use_large_pages='" + PrimaryUseLargePages + "' scope=spfile sid='*';")
 
   print("\n---------------------------------------------------------------------------------------------------------------")
-  print("[PRIMARY] Shutdown and Restart the Standby Database (from any standby node)")
+  print("[PRIMARY] Shutdown and Restart the Primary Database (from any primary node)")
   print("---------------------------------------------------------------------------------------------------------------")
   print("export ORAENV_ASK=NO")
   print("export ORACLE_SID=" + PrimaryNodeDict[1]['Inst'])
   print(". oraenv >/dev/null")
   print("")
-  print(PrimaryOracleHome + "/bin/srvctl stop database -d " +  PrimaryDbUniqueName)
+  print(PrimaryOracleHome + "/bin/srvctl stop  database -d " + PrimaryDbUniqueName)
   print(PrimaryOracleHome + "/bin/srvctl start database -d " + PrimaryDbUniqueName)
-
-  print("\nVerify the New Database Parameters")
 
   print("\n\n=========================================================================================================================")
   print("Create Standby Logfile Groups ON Standby Database")
@@ -1217,86 +1404,71 @@ if (__name__ == '__main__'):
   print("ADD DATABASE '" + StandbyDbUniqueName + "' AS CONNECT IDENTIFIER IS '" + StandbyDbUniqueName + "' MAINTAINED AS PHYSICAL;")
   print("\nENABLE CONFIGURATION;")
   print("")
-
+  
   print("show configuration verbose;")
-
+  
   print("show database verbose '" + PrimaryDbUniqueName + "';")
-
+  
   for NodeId in PrimaryNodeDict:
     print("show instance verbose '" + PrimaryNodeDict[NodeId]['Inst'] + "' on database '" + PrimaryDbUniqueName + "';")
-
+  
   print("show database verbose '" + StandbyDbUniqueName + "';")
   for NodeId in StandbyNodeDict:
     print("show instance verbose '" + StandbyNodeDict[NodeId]['Inst'] + "' on database '" + StandbyDbUniqueName + "';")
-
+  
   print("")
   print("switchover to '" + StandbyDbUniqueName + "';")
   print("switchover to '" + PrimaryDbUniqueName + "';")
 
-  ###! print("\n\n=========================================================================================================================")
-  ###! print("Post Configuration Items")
-  ###! print("=========================================================================================================================")
-  ###! print("\n---------------------------------------------------------------------------------------------------------------")
-  ###! print("[PRIMARY] " + PrimaryNodeDict[1]['Name'] + " - Enable Force Logging in the Database")
-  ###! print("---------------------------------------------------------------------------------------------------------------")
-  ###! print("export ORAENV_ASK=NO")
-  ###! print("export ORACLE_SID=" + PrimaryNodeDict[1]['Inst'])
-  ###! print(". oraenv >/dev/null")
-  ###! print("")
-  ###! print(PrimaryOracleHome + "/bin/sqlplus / as sysdba")
-  ###! print("")
-  ###! print("alter database force logging;")
-  ###! print("\n---------------------------------------------------------------------------------------------------------------")
-  ###! print('[PRIMARY & STANDBY] Other Settings from Oracle MAA "Role Transition Best Practices"')
-  ###! print("---------------------------------------------------------------------------------------------------------------")
-  if (DbVersion >= 11):
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print('[PRIMARY & STANDBY] Other Settings from Oracle MAA "Role Transition Best Practices"')
+  print("---------------------------------------------------------------------------------------------------------------")
+  if DbVersion >= 11:
     print("For 11.2.0.2 and 11.2.0.3 databases consider setting the following:")
     print("")
-    # In Oracle Database versions 11.2.0.2 through 11.2.0.3 for physical standby database configurations in an Oracle RAC environment,
+    # In Oracle Database versions 11.2.0.2 through 11.2.0.3 for physical standby database configurations in an Oracle RAC environment, 
     # set "_switchover_to_standby_option"= OPEN_ALL_IGNORE_SESSIONS. This becomes the default behavior in version 11.2.0.4.
     # This parameter will terminate all remaining primary instances at the right time during execution and ignores active sessions.
-    # You can keep all nodes of the primary open when performing "switchover to standby". In lieu of this parameter, ensure that there
-    #is only one instance active for each primary and standby database and use the WITH SESSION SHUTDOWN clause with the switchover
+    # You can keep all nodes of the primary open when performing "switchover to standby". In lieu of this parameter, ensure that there 
+    #is only one instance active for each primary and standby database and use the WITH SESSION SHUTDOWN clause with the switchover 
     # command.
     # ---------------------------------------------------------------------------------------------------------------------------------
     print("alter system set \"_switchover_to_standby_option\"=OPEN_ALL_IGNORE_SESSIONS scope=both sid='*';")
-
-    # In Oracle Database version s 11.2.0.2 through 11.2.0.3 set "_defer_eor_orl_arch_for_so"=TRUE. This becomes the default behavior
-    # in version 11.2.0.4. This parameter defers the archiving of the final End-Of_Redo (EOR) redo log files at the old primary.
-    # Performing this archival when the old primary is mounted as a standby saves time during switchover.
+    
+    # In Oracle Database version s 11.2.0.2 through 11.2.0.3 set "_defer_eor_orl_arch_for_so"=TRUE. This becomes the default behavior 
+    # in version 11.2.0.4. This parameter defers the archiving of the final End-Of_Redo (EOR) redo log files at the old primary. 
+    # Performing this archival when the old primary is mounted as a standby saves time during switchover.    
     # ---------------------------------------------------------------------------------------------------------------------------------
     print("alter system set \"_defer_eor_orl_arch_for_so\"=TRUE scope=both sid='*';")
 
   print("\n\n=========================================================================================================================")
-  print("Helpful Queries, aliases, etc.")
+  print("Helpful Aliases")
   print("=========================================================================================================================")
-  print("--------------------------------------------------------------------------------------------------------")
-  print("Aliases")
-  print("--------------------------------------------------------------------------------------------------------")
-  # Tail the Data Guard Broker Logfile
-  # ------------------------------------
+  # Tail/View the Data Guard Broker Logfile
+  # -----------------------------------------
   for NodeId in PrimaryNodeDict:
+    print("\n---------------------------------------------------------------------------------------------------------------")
+    print("[PRIMARY] " + PrimaryNodeDict[NodeId]['Name'] + " Suggested aliases")
+    print("---------------------------------------------------------------------------------------------------------------")
     print("alias tdglog='tail -f " + pathjoin(PrimaryOracleBase, 'diag', 'rdbms', PrimaryDbUniqueName.lower(), PrimaryNodeDict[NodeId]['Inst'], 'trace', "drc" + PrimaryNodeDict[NodeId]['Inst'] + ".log'"))
-  print("")
+    print("alias dglog='less "     + pathjoin(PrimaryOracleBase, 'diag', 'rdbms', PrimaryDbUniqueName.lower(), PrimaryNodeDict[NodeId]['Inst'], 'trace', "drc" + PrimaryNodeDict[NodeId]['Inst'] + ".log'"))
+
   for NodeId in StandbyNodeDict:
+    print("\n---------------------------------------------------------------------------------------------------------------")
+    print("[STANDBY] " + StandbyNodeDict[NodeId]['Name'] + " Suggested aliases")
+    print("---------------------------------------------------------------------------------------------------------------")
     print("alias tdglog='tail -f " + pathjoin(StandbyOracleBase, 'diag', 'rdbms', StandbyDbUniqueName.lower(), StandbyNodeDict[NodeId]['Inst'], 'trace', "drc" + StandbyNodeDict[NodeId]['Inst'] + ".log'"))
-  print("")
+    print("alias dglog='less "     + pathjoin(StandbyOracleBase, 'diag', 'rdbms', StandbyDbUniqueName.lower(), StandbyNodeDict[NodeId]['Inst'], 'trace', "drc" + StandbyNodeDict[NodeId]['Inst'] + ".log'"))
 
-  # View the Data Guard Broker Logfile
-  # ------------------------------------
-  for NodeId in PrimaryNodeDict:
-    print("alias dglog='less " + pathjoin(PrimaryOracleBase, 'diag', 'rdbms', PrimaryDbUniqueName.lower(), PrimaryNodeDict[NodeId]['Inst'], 'trace', "drc" + PrimaryNodeDict[NodeId]['Inst'] + ".log'"))
-  print("")
-  for NodeId in StandbyNodeDict:
-    print("alias dglog='less " + pathjoin(StandbyOracleBase, 'diag', 'rdbms', StandbyDbUniqueName.lower(), StandbyNodeDict[NodeId]['Inst'], 'trace', "drc" + StandbyNodeDict[NodeId]['Inst'] + ".log'"))
+  print("\n\n=========================================================================================================================")
+  print("Helpful SQL Queries")
+  print("=========================================================================================================================")
 
+  print("\nselect * from v$archive_gap;")
 
-  print("\n--------------------------------------------------------------------")
-  print("SQL Queries")
-  print("--------------------------------------------------------------------")
-  print("select * from v$archive_gap;")
-  print("")
-  print(" -- On the primary")
+  print("\n---------------------------------------------------------------------------------------------------------------")
+  print("[ALL NODES] -- Helpful Queries")
+  print("---------------------------------------------------------------------------------------------------------------")
   print("  SELECT thread#")
   print("        ,group#")
   print("        ,bytes/1024/1024 mbytes")
@@ -1306,7 +1478,6 @@ if (__name__ == '__main__'):
   print("    FROM v$log")
   print("ORDER BY 1,2;")
   print("")
-  print(" -- On the standby")
   print("  SELECT thread#")
   print("        ,group#")
   print("        ,bytes/1024/1024 mbytes")
@@ -1317,10 +1488,10 @@ if (__name__ == '__main__'):
   print("ORDER BY 1,2;")
   print("")
 
-print('============================================================================================================================')
-print('Process complete')
-print('============================================================================================================================')
-exit(0)
-# --------------------------------------
-# ---- End Main Program ----------------
-# --------------------------------------
+  print('============================================================================================================================')
+  print('Process complete')
+  print('============================================================================================================================')
+  exit(0)
+  # --------------------------------------
+  # ---- End Main Program ----------------
+  # --------------------------------------
