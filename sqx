@@ -16,6 +16,7 @@
 # 07/17/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Added prompts for   #
 #                                  username, password, tnsname. Added -f option.                 #
 # 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                           #
+# 02/12/2020 3.02 Randy Johnson    Simple syntax formatting changes.                             #
 ##################################################################################################
 
 # --------------------------------------
@@ -40,11 +41,11 @@ from Oracle       import ParseConnectString
 # --------------------------------------
 # ---- Main Program --------------------
 # --------------------------------------
-if (__name__ == '__main__'):
+if __name__ == '__main__':
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'SQL Execute'
-  Version        = '3.01'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '3.02'
+  VersionDate    = 'Wed Feb 12 06:37:38 CST 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -81,25 +82,25 @@ if (__name__ == '__main__'):
   Show      = Options.Show
   ShowVer   = Options.ShowVer
   
-  if (ShowVer):
+  if ShowVer:
     print('\n%s' % Banner)
     exit()
   
-  if (not InputFile):
-    if (version_info[0] >= 3):
+  if not InputFile:
+    if version_info[0] >= 3:
       InputFile = input('\nEnter script: ')
     else:
       InputFile = raw_input('\nEnter script: ')
-    if (not InputFile):
+    if not InputFile:
       print('\nScript file is required.')
       print("\n" + Usage)
       exit(1)
 
-  if (not isfile(InputFile)):
-    if (isfile(InputFile + '.sql')):
+  if not isfile(InputFile):
+    if isfile(InputFile + '.sql'):
       InputFile += '.sql'
     else:
-      if (InputFile):
+      if InputFile:
         print('\nScript not found: %s\n' % InputFile)
       else:
         print('\nScript not found.\n')
@@ -109,7 +110,7 @@ if (__name__ == '__main__'):
   hSql = open(InputFile, 'r')
   try:
     hSql = open(InputFile, 'r')
-    Sql = hSql.read() 
+    Sql  = hSql.read() 
   except:
     print('\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
     print('Cannot open script for read: %s' % InputFile)
@@ -118,34 +119,34 @@ if (__name__ == '__main__'):
 
   Sql = Sql.strip()
 
-  if(Show):
+  if Show:
     print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
     print(Sql)
     print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
     exit()
 
   # Check/setup the Oracle environment
-  if (not('ORACLE_SID' in list(environ.keys()))):
+  if not 'ORACLE_SID' in list(environ.keys()):
     print('ORACLE_SID is required.')
     exit(1)
   else:
     # Set the ORACLE_HOME just in case it isn't set already.
-    if (not('ORACLE_HOME' in list(environ.keys()))):
-      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+    if not 'ORACLE_HOME' in list(environ.keys()):
+      OracleSid, OracleHome = SetOracleEnv(environ['ORACLE_SID'])
 
   # Parse the connect string if any, prompt for username, password if needed.
-  if (len(args) > 0 and Show == False):
+  if len(args) > 0 and Show == False:
     InStr = args[0]
     ConnStr = ParseConnectString(InStr)
 
   # Execute the report
-  if (ConnStr != ''):
-    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  if ConnStr != '':
+    Stdout = RunSqlplus(Sql, ErrChk, ConnStr)
   else:
-    (Stdout) = RunSqlplus(Sql, ErrChk)
+    Stdout = RunSqlplus(Sql, ErrChk)
 
   # Print the report
-  if (Stdout != ''):
+  if Stdout != '':
     print('\n%s' % Stdout)
 
   exit(0)
