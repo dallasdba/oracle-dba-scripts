@@ -1,10 +1,19 @@
 #!/bin/env python
 
-#--------------------------------------------------------------------------------------------------#
-# Name:   asmfiles                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  ASM Storage by Diskgroup, by Database, by Type, by File                                  #
-#--------------------------------------------------------------------------------------------------#
+#------------------------------------------------------------------------------------------------#
+# Name:   asmfiles                                                                               #
+# Author: Randy Johnson                                                                          #
+# Descr:  ASM Storage by Diskgroup, by Database, by Type, by File                                #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 07/24/2008 1.00 Randy Johnson    Initial write                                                 #
+# 01/04/2020 3.44 Randy Johnson    Added change tracking to script.                              #
+# 02/12/2020 3.45 Randy Johnson    Added support for Python 3.                                   #
+##################################################################################################
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -61,9 +70,12 @@ def Gbytes(bytes):
   except:
     print("Failed to convert bytes string to integer in Gbytes()")
     exit(1)
-   
+  
+  print(round(bytes/1024/1024/1024, 2))
+  exit()
+
   if (bytes > 0):
-    return bytes/1024/1024/1024
+    return round(bytes/1024/1024/1024, 2)
   else:
     return bytes
 #---------------------------------------------------------------------------
@@ -81,8 +93,8 @@ def Gbytes(bytes):
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'ASM Space Usage'
-  Version        = '3.43'
-  VersionDate    = 'Sat Aug 10 11:46:17 CDT 2019'
+  Version        = '3.45'
+  VersionDate    = 'Wed Feb 12 15:51:15 CST 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -145,7 +157,7 @@ if (__name__ == '__main__'):
   if (ShowVer == True):
     print('\n%s' % Banner)
     exit()
-    
+
   Sql += "set feedback off\n"
   Sql += "set echo     off\n"
   Sql += "set timing   off\n"
@@ -184,63 +196,6 @@ if (__name__ == '__main__'):
   Sql += "       )\n"
   Sql += " WHERE type IS NOT NULL\n"
   Sql += " START WITH (MOD(pindex, POWER(2, 24))) = 0 CONNECT BY PRIOR rindex = pindex;"
-
-  ### # If performance becomes an issue then use this query to filter by database.
-  ### # ---------------------------------------------------------------------------
-  ### Sql += "set feedback off\n"
-  ### Sql += "set echo     off\n"
-  ### Sql += "set timing   off\n"
-  ### Sql += "set heading  off\n"
-  ### Sql += "set pagesize 0\n"
-  ### Sql += "set linesize 2000\n"
-  ### Sql += "\n"
-  ### Sql += "SELECT CONCAT('+' || rpt.diskgroup_name, rpt.filename) ||'!~!'||\n"
-  ### Sql += "       rpt.bytes                                       ||'!~!'||\n"
-  ### Sql += "       rpt.space                                       ||'!~!'||\n"
-  ### Sql += "       NVL(rpt.type, '<DIRECTORY>')                    ||'!~!'||\n"
-  ### Sql += "       rpt.creation_date                               ||'!~!'||\n"
-  ### Sql += "       rpt.creation_time                               ||'!~!'||\n"
-  ### Sql += "       rpt.modification_date                           ||'!~!'||\n"
-  ### Sql += "       rpt.modification_time                           ||'!~!'||\n"
-  ### Sql += "       rpt.diskgroup_name                              ||'!~!'||\n"
-  ### Sql += "       rpt.system_created\n"
-  ### Sql += "  FROM (SELECT dtl.diskgroup_name,\n"
-  ### Sql += "               SYS_CONNECT_BY_PATH(dtl.alias_name, '/') filename,\n"
-  ### Sql += "               dtl.bytes,\n"
-  ### Sql += "               dtl.space,\n"
-  ### Sql += "               NVL(dtl.type, '<DIRECTORY>') type,\n"
-  ### Sql += "               dtl.creation_date,\n"
-  ### Sql += "               dtl.creation_time,\n"
-  ### Sql += "               dtl.modification_date,\n"
-  ### Sql += "               dtl.modification_time,\n"
-  ### Sql += "               -- dtl.diskgroup_name,\n"
-  ### Sql += "               dtl.system_created\n"
-  ### Sql += "          FROM (SELECT g.name                                     diskgroup_name,\n"
-  ### Sql += "                       a.parent_index                             pindex,\n"
-  ### Sql += "                       a.name                                     alias_name,\n"
-  ### Sql += "                       a.reference_index                          rindex,\n"
-  ### Sql += "                       a.system_created                           system_created,\n"
-  ### Sql += "                       f.bytes                                    bytes,\n"
-  ### Sql += "                       f.space                                    space,\n"
-  ### Sql += "                       f.type                                     type,\n"
-  ### Sql += "                       TO_CHAR(f.creation_date, 'YYYY-MM-DD')     creation_date,\n"
-  ### Sql += "                       TO_CHAR(f.creation_date, 'HH24:MI:SS')     creation_time,\n"
-  ### Sql += "                       TO_CHAR(f.modification_date, 'YYYY-MM-DD') modification_date,\n"
-  ### Sql += "                       TO_CHAR(f.modification_date, 'HH24:MI:SS') modification_time\n"
-  ### Sql += "                  FROM v$asm_file  f,\n"
-  ### Sql += "                       v$asm_alias a,\n"
-  ### Sql += "                       v$asm_diskgroup g\n"
-  ### Sql += "                 WHERE (f.group_number(+) = a.group_number and f.file_number(+) = a.file_number)\n"
-  ### Sql += "                   AND g.group_number(+)  = f.group_number\n"
-  ### Sql += "               ) dtl\n"
-  ### Sql += "         WHERE type IS NOT NULL\n"
-  ### Sql += "         START WITH (MOD(pindex, POWER(2, 24))) = 0 CONNECT BY PRIOR rindex = pindex\n"
-  ### Sql += "       ) rpt\n"
-  ###
-  ### if (DbFilter != ''):
-  ###   Sql += " WHERE rpt.filename like '" + '/' + DbFilter + "/%';"
-  ### else:
-  ###   Sql += ';'
 
   Sql = Sql.strip()
 
@@ -326,7 +281,7 @@ if (__name__ == '__main__'):
         Diskgroup = fileinfo.split(Colsep)[8]
         CrtSys    = fileinfo.split(Colsep)[9]
       except:
-        print(Stdout)
+        print("Read from Stdout: %s" % fileinfo)
         print('')
         print('Invalid record format.')
         exit(1)
@@ -522,6 +477,7 @@ if (__name__ == '__main__'):
           if (Csv):
             print('"%s","%s","%s","%s"' % (DgKey, DbKey, TotalSizeBytes, TotalStorageBytes))
           else:
+            exit()
             print('%-20s %-20s %15s %17s' % (DgKey, DbKey, Gbytes(TotalSizeBytes), Gbytes(TotalStorageBytes)))
 
   # Print File Type Report
