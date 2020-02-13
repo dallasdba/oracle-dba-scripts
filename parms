@@ -19,12 +19,18 @@
 #                                  longer includes undocumented parameters.                      #
 # 08/12/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
 # 08/12/2015 3.10 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 08/25/2015 3.11 Randy Johnson    Cosmetic only. Tidied up the Sql. Flipped state from dev to   # 
-#                                  prod.                                                         # 
+# 08/25/2015 3.11 Randy Johnson    Cosmetic only. Tidied up the Sql. Flipped state from dev to   #
+#                                  prod.                                                         #
 # 09/16/2015 3.12 Randy Johnson    Fixed invalid results of IsSet (caused by change to INITCAP() #
 #                                  used for IsDef and IsMod.                                     #
 # 02/06/2015 3.13 Randy Johnson    Cosmetic change. TRUE -> True                                 #
 # 07/13/2017 3.14 Randy Johnson    Added program description to Usage.                           #
+# 11/18/2019 3.15 Randy Johnson    Added support for pluggable databases.                        #
+# 11/25/2019 3.16 Randy Johnson    Modified value to replace(value, chr(10), '!!!') to           #
+#                                  accomodate newline characters in the value column.            #
+# 11/27/2019 3.17 Randy Johnson    Mojor structural changes to better accomodate the -a option.  #
+#                                  Added exception handling for Sqlplus errors.                  #
+# 12/03/2019 3.18 Randy Johnson    Switched to ResultSet2() + other fixes.                       #
 ##################################################################################################
 
 # --------------------------------------
@@ -46,33 +52,194 @@ from signal       import signal
 from subprocess   import Popen
 from subprocess   import PIPE
 from subprocess   import STDOUT
+from Oracle       import PrintError
 from Oracle       import RunSqlplus
+from Oracle       import ResultSet2
 from Oracle       import SetOracleEnv
 from Oracle       import ParseConnectString
 
 # For handling termination in stdout pipe, ex: when you run: oerrdump | head
 signal(SIGPIPE, SIG_DFL)
 
+#---------------------------------------------------------------------------
+# Def : IsCdb()
+# Desc: Calls sqlplus and determines whether or not a database is a
+#       Container database (multi-tenant).
+# Args: Oracle SID
+# Retn: True/False
+#---------------------------------------------------------------------------
+def IsCdb():
+
+  Cdb = False
+  rc  = 0
+
+  Sql  = "SET LINES 80\n"
+  Sql += "DESC V$DATABASE\n"
+  Sql += "EXIT"
+
+  if ConnStr != '':
+    rc, Stdout, ErrorList = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    rc, Stdout, ErrorList = RunSqlplus(Sql, ErrChk)
+
+  if rc:
+    PrintError(Sql, Stdout, ErrorList)
+    exit(rc)
+  else:  
+    Stdout = Stdout.strip()
+    for line in Stdout.split('\n'):
+      if (line.find('CDB ') == 1):
+        Cdb = True
+        break
+
+  return(Cdb)
+#---------------------------------------------------------------------------
+# End IsCdb()
+#---------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------
+# Def : GenSql()
+# Desc: Calls sqlplus and determines whether or not a database is a
+#       Container database (multi-tenant).
+# Args: Oracle SID
+# Retn: True/False
+#---------------------------------------------------------------------------
+def GenSql(Cdb, ColSep):
+  ColSep = "||'" + ColSep + "'||"
+  Sql = ''
+
+  # Set Where clause filters.
+  if Hidden:
+    FilterList.append("hidden IN ('N','Y')\n")
+  else:
+    FilterList.append("hidden = 'N'\n")
+
+  if Name != '':
+    FilterList.append("UPPER(name) LIKE '%" + Name.upper() + "%'\n")
+
+  Filter = '      AND '.join(FilterList)
+
+  if Cdb:
+    # Cdb Query
+    Sql += "   SELECT " + SqlHeader + "\n"
+    Sql += "          '" + OracleSid + "'                      " + ColSep + "\n"
+    Sql += "          dbs.con_name                    " + ColSep + "\n"
+    Sql += "          name                            " + ColSep + "\n"
+    Sql += "          replace(value, chr(10), '" + Nl + "')"
+    if Metrics:
+      Sql += "  " + ColSep + "\n"
+      Sql += "          isdefault                       " + ColSep + "\n"
+      Sql += "          ismodified                      " + ColSep + "\n"
+      Sql += "          isset"
+    Sql += "\n     FROM ( SELECT con_id\n"
+    Sql += "                , name\n"
+    Sql += "                , value\n"
+    Sql += "                , isdefault\n"
+    Sql += "                , ismodified\n"
+    Sql += "                , isset\n"
+    Sql += "             FROM ( SELECT hidden\n"
+    Sql += "                         , con_id\n"
+    Sql += "                         , name\n"
+    Sql += "                         , value\n"
+    Sql += "                         , decode(upper(isdefault), 'YES', 'Yes', 'No') isdefault\n"
+    Sql += "                         , ismodified\n"
+    Sql += "                         , CASE WHEN isdefault||ismodified = 'YesNo'\n"
+    Sql += "                                THEN 'No'\n"
+    Sql += "                                ELSE 'Yes'\n"
+    Sql += "                           END isset\n"
+    Sql += "                      FROM ( SELECT DECODE(substr(i.ksppinm,1,1),'_','Y','N') hidden\n"
+    Sql += "                                  , sv.con_id con_id\n"
+    Sql += "                                  , i.ksppinm name\n"
+    Sql += "                                  , sv.ksppstvl value\n"
+    Sql += "                                  , DECODE(INITCAP(sv.ksppstdf), 'True', 'Yes', 'No') isdefault\n"
+    Sql += "                                  , DECODE(BITAND(sv.ksppstvf,7),1,'Yes',4,'Yes','No') ismodified\n"
+    Sql += "                               FROM sys.x$ksppi  i\n"
+    Sql += "                                  , sys.x$ksppsv sv\n"
+    Sql += "                              WHERE i.indx = sv.indx\n"
+    Sql += "                           )\n"
+    Sql += "                  )\n"
+    if Filter != '':
+      Sql += "            WHERE " + Filter
+    Sql += "            ORDER BY hidden\n"
+    Sql += "                , replace(name,'_','')\n"
+    Sql += "         ) parms\n"
+    Sql += "       , ( SELECT con_id con_id, name con_name from v$pdbs\n"
+    Sql += "            UNION\n"
+    Sql += "           SELECT 0 con_id, '$ROOT' con_name from dual\n"
+    Sql += "         ) dbs\n"
+    Sql += "   WHERE dbs.con_id = parms.con_id\n"
+    Sql += "ORDER BY con_name, name, value"
+  else:
+    # Non-Cdb Query
+    Sql += "   SELECT " + SqlHeader + "\n"
+    Sql += "          '" + OracleSid + "'                      " + ColSep + "\n"
+    Sql += "          ''                              " + ColSep + "\n"
+    Sql += "          name                            " + ColSep + "\n"
+    Sql += "          replace(value, chr(10), '" + Nl + "')"
+    if Metrics:
+      Sql += "  " + ColSep + "\n"
+      Sql += "          isdefault                       " + ColSep + "\n"
+      Sql += "          ismodified                      " + ColSep + "\n"
+      Sql += "          isset"
+
+    Sql += "\n     FROM ( SELECT hidden\n"
+    Sql += "                 , name\n"
+    Sql += "                 , value\n"
+    Sql += "                 , isdefault\n"
+    Sql += "                 , ismodified\n"
+    Sql += "                 , CASE WHEN isdefault||ismodified = 'TRUEFALSE'\n"
+    Sql += "                        THEN 'No'\n"
+    Sql += "                        ELSE 'Yes'\n"
+    Sql += "                   END isset\n"
+    Sql += "              FROM (SELECT DECODE(substr(i.ksppinm,1,1),'_','Y','N') hidden\n"
+    Sql += "                         , i.ksppinm name\n"
+    Sql += "                         , sv.ksppstvl value\n"
+    Sql += "                         , INITCAP(sv.ksppstdf) isdefault\n"
+    Sql += "                         , DECODE(BITAND(sv.ksppstvf,7),1,'True',4,'Yes','No') ismodified\n"
+    Sql += "                      FROM sys.x$ksppi  i\n"
+    Sql += "                         , sys.x$ksppsv sv\n"
+    Sql += "                     WHERE i.indx = sv.indx\n"
+    Sql += "                   )\n"
+    Sql += "          )\n"
+    if Filter != '':
+      Sql += "    WHERE " + Filter
+    Sql += " ORDER BY hidden\n"
+    Sql += "        , replace(name,'_','')\n"
+
+  return Sql
+#---------------------------------------------------------------------------
+# End GenSql()
+#---------------------------------------------------------------------------
+
 # --------------------------------------
 # ---- Main Program --------------------
 # --------------------------------------
-if (__name__ == '__main__'):
+if __name__ == '__main__':
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Instance Parameters'
-  Version        = '3.14'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '3.17'
+  VersionDate    = 'Tue Dec 3 14:45:16 CST 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
-  ErrChk         = False
+  ErrChk         = True
   InStr          = ''
   ConnStr        = ''
   Name           = ''
   FilterList     = []
   InstList       = []
-  Ps             = '/bin/ps' 
+  Ps             = '/bin/ps'
   rc             = 0
+  ColSep         = '~'
+  ParmsDict      = {}
+  Cdb            = False
+  Nl             = '!!!'
+  RawParms       = {}
+  OracleSid      = ''
+  OracleHome     = ''
+  rc             = 0
+  ParmSet        = None
 
   # Process command line options
   # ----------------------------------
@@ -80,11 +247,11 @@ if (__name__ == '__main__'):
   Usage += '\nReport instance parameters (including hidden parms). The -n option filters out'
   Usage += '\nall parameter names not matching "where name not like \'%filter%\'".'
   Usage += '\n\nparms [connect_string] [-a] [-m] [-n parm_filter] [-u] [--s] [--v]'
-  Usage += '\n\nIsDef : If True, the parameter is currently set to the default value. Note that'
+  Usage += '\n\nIsDef : If Yes, the parameter is currently set to the default value. Note that'
   Usage += '\n        if the parameter is set to the default value in the spfile IsDef will be'
-  Usage += '\n        False. This is technically correct but can be a little misleading.'
-  Usage += '\nIsMod : If True, value has been modified from its startup setting.'
-  Usage += '\nIsSet : If True, value has been set in the parameter file. This is True even if'
+  Usage += '\n        No. This is technically correct but can be a little misleading.'
+  Usage += '\nIsMod : If Yes, value has been modified from its startup setting.'
+  Usage += '\nIsSet : If Yes, value has been set in the parameter file. This is Yes even if'
   Usage += '\n        it is set to what would otherwise be the default value.'
 
   ArgParser = OptionParser(Usage)
@@ -107,142 +274,150 @@ if (__name__ == '__main__'):
   Show      = Options.Show
   ShowVer   = Options.ShowVer
 
-  if (ShowVer):
+  if ShowVer:
     print('\n%s' % Banner)
     exit()
 
-  if (All):
+  if All:
     # Identify pmon process for all instances and build a list of Instance Names
     Proc = Popen([Ps, '-ef'], bufsize=1, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
 
     # Stderr is just a placeholder. We redirected stderr to stdout as follows 'stderr=STDOUT'.
     (Stdout,Stderr) = Proc.communicate()
     Stdout = Stdout.strip()
-    
-    Found = compile(r' ora_pmon_\w+')  
+
+    Found = compile(r' ora_pmon_\w+')
     for line in Stdout.split('\n'):
-      if (Found.search(line)):
+      if Found.search(line):
         MatchObj = search(r' ora_pmon_\w+', line)
         Inst = MatchObj.group(0).split('_')[2]
         InstList.append(Inst)
 
-    if(InstList == []):
+    if InstList == []:
       print("\nNo running databases found on the local host.")
       exit(1)
-    
-  # Set Where clause filters.
-  if (Hidden):
-    FilterList.append("hidden IN ('N','Y')\n")
-  else:
-    FilterList.append("hidden = 'N'\n")
-
-  if (Name != ''):
-    FilterList.append("UPPER(name) LIKE '%" + Name.upper() + "%'\n")
-
-  Filter = '      AND '.join(FilterList)
-  
-  # Build the Query
-  Sql += "set pagesize 50000\n"
-  Sql += "col inst       format a50 heading 'Inst'\n"
-  Sql += "col name       format a50 heading 'Name'\n"
-  if (Metrics):
-    Sql += "col isdefault  format a5  heading 'IsDef'\n"
-    Sql += "col ismodified format a5  heading 'IsMod'\n"
-    Sql += "col isset      format a5  heading 'IsSet'\n"
-    Sql += "col value      format a60 heading 'Value'\n"
-  else:
-    Sql += "col value      format a78 heading 'Value'\n"
-  Sql += "\n"
-  Sql += "   SELECT " + SqlHeader + "\n"
-  Sql += "          name\n"
-  Sql += "        , value\n"
-  if (Metrics):
-    Sql += "        , isdefault\n"
-    Sql += "        , ismodified\n"
-    Sql += "        , isset\n"
-  Sql += "     FROM ( SELECT hidden\n"
-  Sql += "                 , name\n"
-  Sql += "                 , value\n"
-  Sql += "                 , isdefault\n"
-  Sql += "                 , ismodified\n"
-  Sql += "                 , CASE WHEN isdefault||ismodified = 'TrueFalse'\n"
-  Sql += "                        THEN 'False'\n"
-  Sql += "                        ELSE 'True'\n"
-  Sql += "                   END isset\n"
-  Sql += "              FROM (SELECT DECODE(substr(i.ksppinm,1,1),'_','Y','N') hidden\n"
-  Sql += "                         , i.ksppinm name\n"
-  Sql += "                         , sv.ksppstvl value\n"
-  Sql += "                         , INITCAP(sv.ksppstdf) isdefault\n"
-  Sql += "                         , DECODE(BITAND(sv.ksppstvf,7),1,'True',4,'True','False') ismodified\n"
-  Sql += "                      FROM sys.x$ksppi  i\n"
-  Sql += "                         , sys.x$ksppsv sv\n"
-  Sql += "                     WHERE i.indx = sv.indx\n"
-  Sql += "                   )\n"
-  Sql += "          )\n"
-  if (Filter != ''):
-    Sql += "    WHERE " + Filter
-  Sql += " ORDER BY hidden\n"
-  Sql += "        , replace(name,'_','');\n"
-
-  Sql = Sql.strip()
-  
-  if(Show):
-    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
-    print(Sql)
-    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
-    exit()
 
   # Parse the connect string if any, prompt for username, password if needed.
-  if (len(args) > 0):
+  if len(args) > 0:
     InStr = args[0]
     ConnStr = ParseConnectString(InStr)
-    if (not(ConnStr.upper().find(' AS SYSDBA') >= 0)):
+    if not ConnStr.upper().find(' AS SYSDBA') >= 0:
       ConnStr += ' AS SYSDBA'
-    
-  if(All):
+
+  if All:
+    print('')
     for Inst in InstList:
-      PrintSid = '>> ' + Inst + ' <<' 
-      print('-'*(len(PrintSid)))
-      print(PrintSid)
-      print('-'*(len(PrintSid)))
-
       (OracleSid,OracleHome) = SetOracleEnv(Inst)
+      print("Loading parameters from: %s" % OracleSid)
 
-      if (not OracleHome):
+      if not OracleHome:
         print("ORACLE_HOME not found for: %s. Verify the instance has an entry in the /etc/oratab file.\n" % Inst)
       else:
-        # Execute the report
-        if (ConnStr != ''):
-          (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
-        else:
-          (Stdout) = RunSqlplus(Sql, ErrChk)
-        
+        Cdb = IsCdb()
+        Sql = GenSql(Cdb, ColSep)
+        ParmSet = ResultSet2(Sql, ColSep)
+
+      if Show:
+        print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+        print(Sql)
+        print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+        exit()
+
+      # Execute the report
+      if ConnStr != '':
+        rc, Stdout, ErrorList = RunSqlplus(Sql, ErrChk, ConnStr)
+        (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+      else:
+        rc, Stdout, ErrorList = RunSqlplus(Sql, ErrChk)
+
+      if rc:
+        PrintError(Sql, Stdout, ErrorList)
+        exit(rc)
+      else:  
         Stdout = Stdout.strip()
-        
-        # Print the report
-        if (Stdout != ''):
-          print('%s\n' % Stdout)
+        RawParms[OracleSid] = Stdout.split('\n')
   else:
     # Check/setup the Oracle environment
-    if (not('ORACLE_SID' in list(environ.keys()))):
+    if 'ORACLE_SID' in environ:
+      OracleSid = environ['ORACLE_SID']
+    else:
       print('ORACLE_SID is required.')
       exit(1)
-    else:
-      # Set the ORACLE_HOME just in case it isn't set already.
-      if (not('ORACLE_HOME' in list(environ.keys()))):
-        (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
-   
-    # Execute the report
-    if (ConnStr != ''):
-      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
-    else:
-      (Stdout) = RunSqlplus(Sql, ErrChk)
-   
-    # Print the report
-    if (Stdout != ''):
-      print('\n%s' % Stdout)
 
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if 'ORACLE_HOME' in environ:
+      OracleHome = environ['ORACLE_HOME']
+    else:
+      OracleSid, OracleHome = SetOracleEnv(environ['ORACLE_SID'])
 
+    Cdb = IsCdb()
+    Sql = GenSql(Cdb, ColSep)
+
+    if Show:
+      print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+      print(Sql)
+      print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+      exit()
+
+    ParmSet = ResultSet2(Sql, ColSep)
+    rc = ParmSet.get_resultcode()
+    if rc:
+      ParmSet.print_errors()
+      PermSet.print_stdout()
+      exit(rc)
+    RawParms = ParmSet.get_set()
+
+  for row in sorted(RawParms):
+    if Metrics:
+      orasid, pdb, parm, value, isdefault, ismodified, isset = [row[i] for i in range(len(row))]
+    else:
+      orasid, pdb, parm, value = [row[i] for i in range(len(row))]
+    
+    if pdb == '':
+      pdb = 'N/A'
+
+    value = value.replace(Nl, '(\\n)')
+    key = pdb + ColSep + parm
+
+    if orasid not in ParmsDict:
+      ParmsDict[orasid] = {}
+    if key not in ParmsDict[orasid]:
+      ParmsDict[orasid][key] = {}
+      if Metrics:
+        ParmsDict[orasid][key] = {'value' : value, 'isdefault' : isdefault, 'ismodified' : ismodified, 'isset' : isset}
+      else:
+        ParmsDict[orasid][key] = {'value' : value}
+
+  # Format the Header
+  Header = ''
+  if ParmsDict != {}:
+    if Metrics:
+      Header  = "\n%-10s %-60s %-95s %-5s %-5s %-5s" % ('Con Name', 'Parameter Name', 'Parameter Value', 'Dflt.', 'Mod.', 'Set')
+      Header += "\n%-10s %-60s %-95s %-5s %-5s %-5s" % ('-'*10, '-'*60, '-'*90, '-'*5, '-'*5, '-'*5)
+    else:
+      Header  = "\n%-10s %-60s %-95s" % ('Con Name', 'Parameter Name', 'Parameter Value')
+      Header += "\n%-10s %-60s %-95s" % ('-'*10, '-'*60, '-'*90)
+
+  # Print the Report
+  for orasid in sorted(ParmsDict):
+    if len(ParmsDict) > 1:
+      print("\n\nOracle Sid: %s" % orasid)
+      print("%s" % ('-'*30))
+    print(Header)
+    for key in sorted(ParmsDict[orasid]):
+      pdb, parm = key.split(ColSep)
+      if Metrics:
+        value      = ParmsDict[orasid][key]['value']
+        isdefault  = ParmsDict[orasid][key]['isdefault']
+        ismodified = ParmsDict[orasid][key]['ismodified']
+        isset      = ParmsDict[orasid][key]['isset']
+      else:
+        value = ParmsDict[orasid][key]['value']
+      if Metrics:
+        print("%-10s %-60s %-95s %-5s %-5s %-5s" % (pdb, parm, value, isdefault, ismodified, isset))
+      else:
+        print("%-10s %-60s %-95s" % (pdb, parm, value))
+  
   exit(rc)
 # --------------------------------------
 # ---- End Main Program ----------------
