@@ -1,10 +1,17 @@
 #!/bin/env python
 
-#--------------------------------------------------------------------------------------------------#
-# Name:   fuzzyfiles                                                                               #
-# Author: Randy Johnson                                                                            #
-# Descr:  Checks the fuzzy state of the database datafiles.                                        #
-#--------------------------------------------------------------------------------------------------#
+##################################################################################################
+#  Name:        fuzzyfiles                                                                       #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Checks the fuzzy state of the database datafiles.                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 09/07/2017 1.00 Randy Johnson    Initial write.                                                #
+# 11/12/2017 1.01 Randy Johnson    Removed extraneous absolute_fuzzy_scn in format statement.    #
+# 11/20/3019 1.02 Randy Johnson    Added sort order to the queries. Removed 1 query.             #
+##################################################################################################
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -25,19 +32,17 @@ from Oracle     import SetOracleEnv
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0])
   CmdPrefix      = Cmd.split('.')[0]
-  CmdDesc        = 'Fuzzy Files'
-  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
-  Version        = '1.01'
+  CmdDesc        = 'Fuzzy Files (' + Cmd + ')'
+  VersionDate    = 'Wed Nov 20 06:55:07 CST 2019'
+  Version        = '1.02'
   Sql            = ''
   ErrChk         = False
   ArgParser      = OptionParser()
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ConnStr        = ''
 
-  Usage  =  '%s [options]'  % Cmd
-  Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
-  Usage += '\nReport the fuzzy state of datafiles for database recovery purposes.'
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nChecks the fuzzy state of datafiles for recovery purposes.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("--s", dest="Show",    default=False, action="store_true",           help="print SQL query.")
@@ -48,7 +53,7 @@ if (__name__ == '__main__'):
 
   if (Options.Version):
     Banner = CmdDesc + ', Release ' + Version + ' Production, ' + VersionDate
-    print('\n', Banner)
+    print('\n%s' % Banner)
     exit()
 
   Show = Options.Show
@@ -63,7 +68,7 @@ if (__name__ == '__main__'):
       (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
 
   Sql += "column file#                    format 99999999        heading 'File #'\n"
-  Sql += "column name                     format a60             heading 'File Name'\n"
+  Sql += "column name                     format a100            heading 'File Name'\n"
   Sql += "column tablespace_name          format a30             heading 'Tablespace Name'\n"
   Sql += "column fuzzy                    format a5              heading 'Fuzzy|File'\n"
   Sql += "column status                   format a7              heading 'Status'\n"
@@ -72,7 +77,7 @@ if (__name__ == '__main__'):
   Sql += "column checkpoint_change#       format a19             heading 'Datafile|Checkpoint Change #'\n"
   Sql += "column checkpoint_time          format a19             heading 'Datafile|Checkpoint Time'\n"
   Sql += "column count                    format 999,999,999,999 heading 'Fuzzy Files'\n"
-  Sql += "column fhafs absolute_fuzzy_scn format 99999999        heading 'Absolute|Fuzzy SCN'\n"
+  Sql += "column fhafs                    format 99999999        heading 'Absolute|Fuzzy SCN'\n"
   Sql += "\n"
   Sql += "  SELECT " + SqlHeader + "\n"
   Sql += "         INITCAP(fuzzy) fuzzy\n"
@@ -88,7 +93,8 @@ if (__name__ == '__main__'):
   Sql += "       , error\n"
   Sql += "       , recover\n"
   Sql += "       , checkpoint_change#\n"
-  Sql += "       , checkpoint_time;"
+  Sql += "       , checkpoint_time\n"
+  Sql += "ORDER BY checkpoint_change#;"
   Sql += "\n\n"
   Sql += "  SELECT " + SqlHeader + "\n"
   Sql += "         file#\n"
@@ -100,8 +106,9 @@ if (__name__ == '__main__'):
   Sql += "       , recover\n"
   Sql += "       , TO_CHAR(checkpoint_change#) checkpoint_change#\n"
   Sql += "       , TO_CHAR(checkpoint_time, 'yyyy-mm-dd hh24:mi:ss') checkpoint_time\n"
-  Sql += "    FROM v$datafile_header;"
-  Sql += "\n\n"
+  Sql += "    FROM v$datafile_header\n"
+  Sql += "ORDER BY checkpoint_change#;\n"
+  Sql += "\n"
   Sql += "  SELECT " + SqlHeader + "\n"
   Sql += "         hxfil file#\n"
   Sql += "       , substr(hxfnm, 1, 50) name\n"
@@ -109,7 +116,8 @@ if (__name__ == '__main__'):
   Sql += "       , fhafs Absolute_Fuzzy_SCN\n"
   Sql += "       , max(fhafs) over () Min_PIT_SCN\n"
   Sql += "    FROM x$kcvfh\n"
-  Sql += "   WHERE fhafs!=0;"
+  Sql += "   WHERE fhafs!=0\n"
+  Sql += "ORDER BY fhafs;"
 
   if(Show):
     print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
@@ -146,4 +154,3 @@ if (__name__ == '__main__'):
 # --------------------------------------
 # ---- End Main Program ----------------
 # --------------------------------------
-
