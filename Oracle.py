@@ -129,23 +129,63 @@ from time         import sleep
 # ------------------------------------------------
 # Imports that are conditional on Python Version.
 # ------------------------------------------------
-if (version_info[0] >= 3):
-  import pickle
+PythonVersion = '%s.%s' % (version_info[0],version_info[1])
+try:
+  PythonVersion = float(PythonVersion)
+except:
+  print("Cannot convert string PythonVersion from string to float: %s" % PythonVersion)
+  exit(1)
+
+if (PythonVersion >= 3.2):
+  from configparser import ConfigParser as SafeConfigParser
+elif (PythonVersion >= 3.0):
   from configparser import SafeConfigParser
   from base64       import b64decode
+  import pickle
 else:
-  import cPickle as pickle
   from ConfigParser import SafeConfigParser
-# ------------------------------------------------
+  import cPickle as pickle
 
+# ------------------------------------------------
 # For handling termination in stdout pipe; ex: when you run: oerrdump | head
 signal(SIGPIPE, SIG_DFL)
 
 
 # Set min/max compatible Python versions.
 # ----------------------------------------
-PyMaxVer = 3.4
+PyMaxVer = 3.8
 PyMinVer = 2.4
+
+#---------------------------------------------------------------------------
+# Def : IsCdb()
+# Desc: Calls sqlplus and determines whether or not a database is a
+#       Container database (multi-tenant).
+# Args: Oracle SID
+# Retn: True/False
+#---------------------------------------------------------------------------
+def IsCdb():
+  Cdb = False
+
+  Sql  = "SET LINES 80\n"
+  Sql += "DESC V$DATABASE\n"
+  Sql += "EXIT"
+
+  # Fetch parameters from the database
+  (rc,Stdout,ErrorList) = RunSqlplus(Sql, True)
+
+  if (rc != 0):
+    PrintError(Sql, Stdout, ErrorList)
+    exit(1)
+  else:
+    for line in Stdout.split('\n'):
+      if (line.find('CDB ') == 1):
+        Cdb = True
+        break
+
+  return(Cdb)
+#---------------------------------------------------------------------------
+# End IsCdb()
+#---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Clas: SqlQuery

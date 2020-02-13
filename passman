@@ -356,7 +356,7 @@ if (__name__ == '__main__'):
   Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nRetrieves, inserts, updates password entries into the password file.'
   Usage += '\n\n' + Cmd
-  Usage += ' [[-a] [-c] [-f] [-r] [-s] [-t] [-u] [-p]] [[hostname|db_unique_name username] [plain_text_password]]'
+  Usage += ' [-a] [-c] [-f] [-r] [-s] [-t] [-u] [-p] [hostname|db_name username plain_text_password]'
   Usage += '\n\nExamples:'
   Usage += '\n  Lookup a password        | ' + Cmd + ' hcmprddal sysadm'
   Usage += '\n  Transfer password file   | ' + Cmd + ' -t'

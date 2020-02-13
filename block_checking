@@ -78,8 +78,8 @@ if (__name__ == '__main__'):
     print('\n%s' % Banner)
     exit()
 
-  Sql  = "set linesize 80'\n"
-  Sql += "set pages 10'\n"
+  Sql  = "set linesize 80\n"
+  Sql += "set pages 10\n"
   Sql += "column parm   format a25 heading 'Parameter'\n"
   Sql += "column value  format a15 heading 'Value'\n"
   Sql += "\n"

@@ -31,6 +31,7 @@ from sys          import version_info
 from signal       import SIGPIPE
 from signal       import SIG_DFL
 from signal       import signal
+from Oracle       import IsCdb
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 from Oracle       import ParseConnectString
@@ -78,6 +79,8 @@ if (__name__ == '__main__'):
     print('\n%s' % Banner)
     exit()
 
+  Cdb = IsCdb()
+
   Sql += "column thread#        format 999              heading 'Thread'\n"
   Sql += "column group#         format 999              heading 'Group'\n"
   Sql += "column sequence#      format 999              heading 'Seq'\n"
@@ -90,7 +93,8 @@ if (__name__ == '__main__'):
   Sql += "column first_time     format a19              heading 'First Change Time'\n"
   Sql += "column next_change#   format 9999999999999999 heading 'Next Change Num'\n"
   Sql += "column next_time      format a19              heading 'Next Change Time'\n"
-  Sql += "column con_id         format 99999            heading 'Con ID'\n"
+  if Cdb:
+    Sql += "column con_id         format 99999            heading 'Con ID'\n"
   Sql += "\n"
   Sql += "prompt V$LOG\n"
   Sql += "\n"
@@ -107,7 +111,8 @@ if (__name__ == '__main__'):
   Sql += "       , TO_CHAR(first_time, 'yyyy-mm-dd hh24:mi:ss') first_time\n"
   Sql += "       , next_change#\n"
   Sql += "       , TO_CHAR(next_time, 'yyyy-mm-dd hh24:mi:ss') next_time\n"
-  Sql += "       , con_id\n"
+  if Cdb:
+    Sql += "       , con_id\n"
   Sql += "    FROM v$log\n"
   Sql += "ORDER BY thread#\n"
   Sql += "       , group#;\n\n\n"
@@ -125,7 +130,8 @@ if (__name__ == '__main__'):
   Sql += "column next_change#   format 9999999999999999 heading 'Next Change Num'\n"
   Sql += "column next_time      format a19              heading 'Next Change Time'\n"
   Sql += "column con_id         format 99999            heading 'Con ID'\n"
-  Sql += "column dbid           format a12              heading 'Db ID'\n"
+  if Cdb:
+    Sql += "column dbid           format a12              heading 'Db ID'\n"
   Sql += "\n"
   Sql += "prompt \n"
   Sql += "prompt \n"
@@ -144,7 +150,8 @@ if (__name__ == '__main__'):
   Sql += "       , TO_CHAR(first_time, 'yyyy-mm-dd hh24:mi:ss') first_time\n"
   Sql += "       , next_change#\n"
   Sql += "       , TO_CHAR(next_time, 'yyyy-mm-dd hh24:mi:ss') next_time\n"
-  Sql += "       , con_id\n"
+  if Cdb:
+    Sql += "       , con_id\n"
   Sql += "       , dbid\n"
   Sql += "    FROM v$standby_log\n"
   Sql += "ORDER BY thread#\n"
@@ -154,7 +161,8 @@ if (__name__ == '__main__'):
   Sql += "column type                  format a20   heading 'Type'\n"
   Sql += "column members               format 999   heading 'Members'\n"
   Sql += "column is_recovery_dest_file format a3    heading 'FRA'\n"
-  Sql += "column con_id                format 99999 heading 'Con ID'\n"
+  if Cdb:
+    Sql += "column con_id                format 99999 heading 'Con ID'\n"
   Sql += "\n"
   Sql += "prompt \n"
   Sql += "prompt \n"
@@ -166,7 +174,8 @@ if (__name__ == '__main__'):
   Sql += "       , type\n"
   Sql += "       , member\n"
   Sql += "       , is_recovery_dest_file\n"
-  Sql += "       , con_id\n"
+  if Cdb:
+    Sql += "       , con_id\n"
   Sql += "    FROM v$logfile\n"
   Sql += "ORDER BY group#;\n"
 

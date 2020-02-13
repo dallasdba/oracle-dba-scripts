@@ -54,6 +54,7 @@ from sys         import exc_info
 from sys         import exit
 from Oracle      import SetOracleEnv
 from Oracle      import GetAsmHome
+from Oracle      import PrintError
 from Oracle      import RunSqlplus
 from Oracle      import FormatNumber
 
@@ -98,9 +99,6 @@ def GetDbfsInfo(DbfsResourceName):
  
   ActionScriptContents = ActionScript.read().split('\n')
   for line in ActionScriptContents:
-    # DBNAME=DBFS
-    # DBFS_USER=dbfs
-   
     matchObj = match('DBNAME=.*', line)
     if (matchObj):
       (junk, DbfsDbname) =  matchObj.group().split('=')
@@ -232,9 +230,14 @@ if (__name__ == '__main__'):
   LobSQL  = "select 'DBFS_FREE:Lob Segment:' || min(segment_name)\n"
   LobSQL += "  from user_segments\n" 
   LobSQL += " where segment_type = 'LOBSEGMENT';\n"
-  (Sqlout) = RunSqlplus(LobSQL)
+  (rc,Stdout,ErrorList) = RunSqlplus(LobSQL, True)
 
-  for line in Sqlout.split('\n'):
+  if rc:
+    print('\nORACLE_SID: %s' % environ['ORACLE_SID'])
+    PrintError(LobSQL, Stdout, ErrorList)
+    exit(rc)
+
+  for line in Stdout.split('\n'):
     matchObj = search('DBFS_FREE:Lob Segment:.*', line)
     if (matchObj):
       (Label, ColHeader, Value) = matchObj.group().split(':')
@@ -317,7 +320,7 @@ if (__name__ == '__main__'):
   DbfsTotalMbytes = round(DbfsTotalKbytes / 1024, 2)
   DbfsTotalGbytes = round(DbfsTotalMbytes / 1024, 2)
   
-  UsedPct = (Decimal(DbfsUsedKbytes)/Decimal(DbfsTotalKbytes)) * 100
+  UsedPct = (Decimal(str(DbfsUsedKbytes))/Decimal(str(DbfsTotalKbytes))) * 100
 
   # Format the output...
   DbfsTotalBytes  = FormatNumber(DbfsTotalBytes )
@@ -335,15 +338,15 @@ if (__name__ == '__main__'):
   DbfsUsedMbytes = FormatNumber(DbfsUsedMbytes)
   DbfsUsedGbytes = FormatNumber(DbfsUsedGbytes)
   
-  print('Filesystem                Size                Used               Avail  Used%  Mounted on')
+  print('%-30s  %18s  %18s  %18s  %5s  %-18s' % ('Filesystem', 'Size', 'Used','Avilable', 'Used%', 'Mounted on'))
   if (Options.Bytes) or ((not Options.Kbytes) and (not Options.Mbytes) and (not Options.Gbytes)):
-    print('%-10s  %18s  %18s  %18s  %4.2f  %-18s'  % (DbfsStore, DbfsTotalBytes,  DbfsUsedBytes,  DbfsFreeBytes,  UsedPct, (DbfsMountpoint + '/' + DbfsVolume)))
+    print('%-30s  %18s  %18s  %18s  %4.2f  %-18s'  % (DbfsStore, DbfsTotalBytes,  DbfsUsedBytes,  DbfsFreeBytes,  UsedPct, (DbfsMountpoint + '/' + DbfsVolume)))
   if (Options.Kbytes):
-    print('%-10s  %18s  %18s  %18s  %4.2f  %-18s'  % (DbfsStore, DbfsTotalKbytes, DbfsUsedKbytes, DbfsFreeKbytes, UsedPct, (DbfsMountpoint + '/' + DbfsVolume)))
+    print('%-30s  %18s  %18s  %18s  %4.2f  %-18s'  % (DbfsStore, DbfsTotalKbytes, DbfsUsedKbytes, DbfsFreeKbytes, UsedPct, (DbfsMountpoint + '/' + DbfsVolume)))
   if (Options.Mbytes):
-    print('%-10s  %18s  %18s  %18s  %4.2f  %-18s'  % (DbfsStore, DbfsTotalMbytes, DbfsUsedMbytes, DbfsFreeMbytes, UsedPct, (DbfsMountpoint + '/' + DbfsVolume)))
+    print('%-30s  %18s  %18s  %18s  %4.2f  %-18s'  % (DbfsStore, DbfsTotalMbytes, DbfsUsedMbytes, DbfsFreeMbytes, UsedPct, (DbfsMountpoint + '/' + DbfsVolume)))
   if (Options.Gbytes):
-    print('%-10s  %18s  %18s  %18s  %4.2f  %-18s'  % (DbfsStore, DbfsTotalGbytes, DbfsUsedGbytes, DbfsFreeGbytes, UsedPct, (DbfsMountpoint + '/' + DbfsVolume)))
+    print('%-30s  %18s  %18s  %18s  %4.2f  %-18s'  % (DbfsStore, DbfsTotalGbytes, DbfsUsedGbytes, DbfsFreeGbytes, UsedPct, (DbfsMountpoint + '/' + DbfsVolume)))
     
   exit(0)
 

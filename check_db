@@ -12,6 +12,7 @@
 import traceback
 import re
 from datetime      import datetime
+from decimal       import Decimal
 from sys           import exit
 from sys           import argv
 from sys           import stdout
@@ -43,12 +44,12 @@ except:
   print("Cannot convert string PythonVersion from string to float: %s" % PythonVersion)
   exit(1)
 
-if (PythonVersion >= 3.2):
+if PythonVersion >= 3.2:
   from configparser import ConfigParser as SafeConfigParser
-elif (PythonVersion in (3.0,3.1)):
+elif PythonVersion >= 3.0:
   from configparser import ConfigParser as SafeConfigParser
 else:
-  from ConfigParser import SafeConfigParser as ConfigParser
+  from ConfigParser import SafeConfigParser
 
 # --------------------------------------
 # ---- Function Definitions ------------
@@ -264,8 +265,8 @@ def GetDbInfo(Sid, ParmList):
   ParmList.append('db_recovery_file_dest')
   ParmList.append('db_recovery_file_dest_size')
 
-  ###! ParmString = "'" + join(ParmList, '\',\'') + "'"
-  ParmString = "'" + join(ParmList, '\',\n                     \'') + "'"
+  #ParmString = "'" + join(ParmList, '\',\n                     \'') + "'"
+  ParmString = "'" +  "\',\n                     \'".join(ParmList) + "'"
   
   PreQry  = "set lines 2000"                                                + '\n'
   PreQry += "set pages 0"                                                   + '\n'
@@ -544,7 +545,8 @@ def GetLogswitchInfo(Sid):
 #---------------------------------------------------------------------------
 def CheckActualParms(Sid, ParmsList):
   ActualParms = {}
-  ParmString = "'" + join(ParmsList, '\',\'') + "'"
+  #ParmString = "'" + join(ParmsList, '\',\'') + "'"
+  ParmString = "'" + "\',\''".join(ParmsList) + "'"
 
   ParmQry  = "set lines 2000"                                                + '\n'
   ParmQry += "set pages 0"                                                   + '\n'
@@ -838,10 +840,10 @@ def ReportParms(AppType, ActualParms, RecommendedParms):
     RecommendedParmVal = RecommendedParmVal.strip().upper()
     if (RecommendedParmVal.count('-') > 0):
       RecommendedParmVal = re.sub(r'\s', '', RecommendedParmVal)
-      RecommendedParmVal = join(RecommendedParmVal.split('-'), '-')
+      RecommendedParmVal = '-'.join(RecommendedParmVal.split('-'))
     elif (RecommendedParmVal.count(',') > 0):
     	RecommendedParmVal = re.sub(r'\s', '', RecommendedParmVal)
-    	RecommendedParmVal = join(RecommendedParmVal.split(','), ',')
+    	RecommendedParmVal = ','.join(RecommendedParmVal.split(','))
 
     if(Parm in ActualParms.keys()):
       ActualParmVal = ActualParms[Parm]
@@ -927,7 +929,7 @@ def ReportFailedParms(AppType, ActualParms, RecommendedParms):
     
     elif (CommaDelimCount): # if the recommended value is a list (a,b,c) of values...
       if (not (ActualParmVal in RecommendedParmValList)):
-      	RecommendedParmVal = join(RecommendedParmValList, ',')
+      	RecommendedParmVal = ','.join(RecommendedParmValList)
       	FailureList.append([Parm, RecommendedParmVal, ActualParmVal])
     
     else: # if the recommended value requires an exact match...
@@ -991,14 +993,14 @@ def LoadFacilities(FacilitiesFile):
         line=line[0:line.find('#')]
       if (line.count(':') == 3):   # ignore lines that do not contain 3 :'s
         (Facility, Component, OldName, Description) = line.split(':')
-        FacList = [strip(Facility), strip(Component), strip(OldName), strip(Description)]
+        FacList = [Facility.strip(), Component.strip(), OldName.strip(), Description.strip()]
         if (Facility != ''):
           FacDict = {
-           'Component'   : strip(Component),
-           'OldName'      : strip(OldName),
-           'Description' : strip(Description)
+           'Component'   : Component.strip(),
+           'OldName'     : OldName.strip(),
+           'Description' : Description.strip()
           }
-          FacDD[strip(Facility)] = FacDict
+          FacDD[Facility.strip()] = FacDict
   return(FacDD)
 #---------------------------------------------------------------------------
 # End LoadFacilities()
@@ -1222,7 +1224,7 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
   
   # Configure the application type filter. AppTypes correspond to sections in the config file.
   AppTypes = []
-  for AppType in split(AppType, ','):
+  for AppType in AppType.split(','):
     if (AppType != ''):
       TypeLookup = MapToSection(AppType)
       if (TypeLookup != ''):
@@ -1231,7 +1233,7 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
         print('Application type [%s] not found in config file and will be skipped.' % AppType)
 
   if (len(AppTypes) >= 1):
-  	print(' Applications = %s' % join(AppTypes, ', '))
+  	print(' Applications = %s' % ', '.join(AppTypes))
   else:
   	print(' Applications = <none>\n')
   print
