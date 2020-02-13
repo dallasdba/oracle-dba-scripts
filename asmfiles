@@ -71,9 +71,6 @@ def Gbytes(bytes):
     print("Failed to convert bytes string to integer in Gbytes()")
     exit(1)
   
-  print(round(bytes/1024/1024/1024, 2))
-  exit()
-
   if (bytes > 0):
     return round(bytes/1024/1024/1024, 2)
   else:
@@ -477,7 +474,6 @@ if (__name__ == '__main__'):
           if (Csv):
             print('"%s","%s","%s","%s"' % (DgKey, DbKey, TotalSizeBytes, TotalStorageBytes))
           else:
-            exit()
             print('%-20s %-20s %15s %17s' % (DgKey, DbKey, Gbytes(TotalSizeBytes), Gbytes(TotalStorageBytes)))
 
   # Print File Type Report
