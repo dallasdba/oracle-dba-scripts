@@ -18,6 +18,7 @@
 # 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
 # 07/17/2015 2.20 Randy Johnson    Added prompts for username, password, tnsname.                #
 # 07/13/2017 2.21 Randy Johnson    Added program description to Usage.                           #
+# 11/26/2019 2.22 Randy Johnson    Added data types.                                             #
 ##################################################################################################
 
 # --------------------------------------
@@ -43,8 +44,8 @@ from Oracle       import SetOracleEnv
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Db Instance Parameter Definitions'
-  Version        = '2.21'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.22'
+  VersionDate    = 'Tue Nov 26 14:29:00 EST 2019'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -56,6 +57,14 @@ if (__name__ == '__main__'):
   Password       = ''
   ConnStr        = ''
   InstList       = []
+  DataType       = {}
+
+  DataType[1] =  {'type' : 'bool',   'desc': 'Boolean'       }
+  DataType[2] =  {'type' : 'str',    'desc': 'String'        }
+  DataType[3] =  {'type' : 'int',    'desc': 'Integer'       }
+  DataType[4] =  {'type' : 'pf',     'desc': 'Parameter File'}
+  DataType[5] =  {'type' : 'res',    'desc': 'Reserved'      }
+  DataType[6] =  {'type' : 'bigint', 'desc': 'Big Integer'   }
   
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
@@ -64,7 +73,7 @@ if (__name__ == '__main__'):
   Usage += '\nReports Db instance parameter definitions.'
   ArgParser = OptionParser(Usage)
 
-  ArgParser.add_option('-n',  dest='Name',                            default='',    type=str, help="where name like ...")
+  ArgParser.add_option('-n',  dest='Name',                            default='',    type=str,       help="where name like ...")
   ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,                 help="print SQL query.")
   ArgParser.add_option('--v', dest='ShowVer',    action='store_true', default=False,                 help="print version info.")
   
@@ -80,13 +89,13 @@ if (__name__ == '__main__'):
     exit()
     
   Sql += "col name         format a50 heading 'Name'\n"
-  Sql += "col value        format a30 heading 'Value'\n"
+  Sql += "col type         format a6  heading 'Type'\n"
   Sql += "col description  format a90 heading 'Description'\n"
   Sql += "col bytes format 9999999999999999999\n"
   Sql += "\n"
   Sql += "  SELECT " + SqlHeader + "\n"
   Sql += "         name\n"
-  Sql += "       , value\n"
+  Sql += "       , decode(type, 1,'bool', 2,'str', 3,'int', 4,'pf', 5,'res', 6,'bigint') type \n"
   Sql += "       , description\n"
   if (Name != ''):
     Sql += "    FROM v$parameter\n"
@@ -94,7 +103,7 @@ if (__name__ == '__main__'):
   else:
     Sql += "    FROM v$parameter\n"
   Sql += "ORDER BY name\n"
-  Sql += "       , value\n"
+  Sql += "       , type\n"
   Sql += "       , description;"
 
 
