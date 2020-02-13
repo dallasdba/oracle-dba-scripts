@@ -1,10 +1,34 @@
 #!/bin/env python
 
-#--------------------------------------------------------------------------------------------------#
-# Name:   dbfsfree                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  Reports the real freespace available in the mounted DBFS file system(s).                 #
-#--------------------------------------------------------------------------------------------------#
+##################################################################################################
+#  Name:        dbfsfree                                                                         #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Determines the real freespace available in the mounted DBFS file system(s).      #
+#                                                                                                #
+#  usage: dbfsfree [options]                                                                     #
+#                                                                                                #
+#  options:                                                                                      #
+#    -h, --help  show this help message and exit                                                 #
+#    -b          report in bytes                                                                 #
+#    -k          report in kilobytes                                                             #
+#    -m          report in megabytes                                                             #
+#    -g          report in gigabytes                                                             #
+#                                                                                                #
+#                                                                                                #
+#  Filesystem                Size                Used               Avail  Used%  Mounted on     #
+#  FS_DBFS      3,203,050,426,368      25,509,978,112   3,177,540,448,256  0.80  /dbfs/dbfs      #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 10/11/2012 1.02 Randy Johnson    Removed the dbfs user password from the script.               #
+# 10/11/2012 1.03 Randy Johnson    Internal documentation.                                       #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
+# 01/15/2020 2.01 Randy Johnson    Added round() function to division operations for Python3     #
+##################################################################################################
+
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -275,19 +299,19 @@ if (__name__ == '__main__'):
   (Total, Used, Free) = DiskUsage(DbfsMountpoint)
 
   DbfsFreeBytes  = (Free + DbfsExpiredBytes + DbfsUnExpiredBytes)
-  DbfsFreeKbytes = DbfsFreeBytes  / 1024
-  DbfsFreeMbytes = DbfsFreeKbytes / 1024
-  DbfsFreeGbytes = DbfsFreeMbytes / 1024
+  DbfsFreeKbytes = round(DbfsFreeBytes  / 1024, 2)
+  DbfsFreeMbytes = round(DbfsFreeKbytes / 1024, 2)
+  DbfsFreeGbytes = round(DbfsFreeMbytes / 1024, 2)
   
   DbfsUsedBytes   = Used
-  DbfsUsedKbytes = DbfsUsedBytes  / 1024
-  DbfsUsedMbytes = DbfsUsedKbytes / 1024
-  DbfsUsedGbytes = DbfsUsedMbytes / 1024
+  DbfsUsedKbytes = round(DbfsUsedBytes  / 1024, 2)
+  DbfsUsedMbytes = round(DbfsUsedKbytes / 1024, 2)
+  DbfsUsedGbytes = round(DbfsUsedMbytes / 1024, 2)
   
   DbfsTotalBytes  = Used + DbfsFreeBytes
-  DbfsTotalKbytes = DbfsTotalBytes  / 1024
-  DbfsTotalMbytes = DbfsTotalKbytes / 1024
-  DbfsTotalGbytes = DbfsTotalMbytes / 1024
+  DbfsTotalKbytes = round(DbfsTotalBytes  / 1024, 2)
+  DbfsTotalMbytes = round(DbfsTotalKbytes / 1024, 2)
+  DbfsTotalGbytes = round(DbfsTotalMbytes / 1024, 2)
   
   UsedPct = (Decimal(DbfsUsedKbytes)/Decimal(DbfsTotalKbytes)) * 100
 
