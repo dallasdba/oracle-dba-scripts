@@ -148,7 +148,9 @@ if (__name__ == '__main__'):
 
   # Process command line options
   # ----------------------------------
-  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nSend a File as a MIME Attachment.\n\n'
   Usage += Cmd + '  File Address [[-v][--verbose]]\n'
   Usage += '       ' + Cmd + '  File Address1,Address2,Address3,...\n'

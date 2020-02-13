@@ -34,6 +34,8 @@ from datetime     import datetime
 from optparse     import OptionParser
 from os           import environ
 from os.path      import basename
+from signal       import SIGPIPE
+from signal       import SIG_DFL
 from signal       import signal
 from sys          import argv
 from sys          import exit
@@ -61,9 +63,14 @@ if (__name__ == '__main__'):
   EndTime        = (Now.strftime('%Y-%m-%d %H:%M:%S'))
   ConnStr        = ''
 
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nThis script can be used to locate statements in the shared pool and determine'
   Usage += '\nif they made use of Exadata Smart Scan feature. Other information is also'
   Usage += '\nreported such as the plan hash value, nuber of executions, and last time it'

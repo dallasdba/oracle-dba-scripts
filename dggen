@@ -195,6 +195,25 @@ if __name__ == '__main__':
   StandbyOracleHome         = '/u01/app/oracle/product/12.1.0.2/dbhome_1'
   StandbyGridHome           = '/u01/app/12.1.0.2/grid'
 
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n--------------------------------------------------------------------------------'
+  Usage += '\nGenerates a Step-By-Step Guide for Configuring a Data Guard Standby Database.'   
+  Usage += '\nThis script supports RAC as well as single instance primary/standby'             
+  Usage += '\nconfigurations. Testing was performed on Exadata V2, X2 and Oracle v11g - 12c.'  
+  Usage += '\n'                                                                                
+  Usage += '\nThis includes the following:'                                                    
+  Usage += '\n  1) RMAN Duplicate from Active Database'                                        
+  Usage += '\n  2) Configuration of listener.ora and tnsnames.ora files'                       
+  Usage += '\n  3) Server Control commands to register the standby database (RAC only)'        
+  Usage += '\n  4) Instance parameters for DG'                                                 
+  Usage += '\n  5) Data Guard Broker Commands for creating the configuration'                  
+  Usage += '\n  6) Switchover commands and other useful commands for testing the configuration'
+  Usage += '\n  7) Generate a shell script for starting/stopping the DG Observer'              
+  ArgParser = OptionParser(Usage)
+
   ArgParser.add_option('-c',  dest='CreateConfig', action='store_true', default=False,           help="Create a sample configuration file.")
   ArgParser.add_option('-f',  dest="ConfigFile",                        default='',    type=str, help="Configuration File")
   ArgParser.add_option('-v',  dest='Version',      action='store_true', default=False,           help="print version info.")

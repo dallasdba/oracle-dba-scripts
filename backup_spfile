@@ -43,9 +43,14 @@ if (__name__ == '__main__'):
   Now            = datetime.now()
   Timestamp      = Now.strftime("%Y%m%d.%H%M%S")
 
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nDumps the spfile contents to a pfile.'
   ArgParser = OptionParser(Usage)
 

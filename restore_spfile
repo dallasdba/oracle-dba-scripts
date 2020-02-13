@@ -215,12 +215,14 @@ if (__name__ == '__main__'):
   Pid            = 0
   ThisNodeId     = Hostname[-1:]
 
-
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage  = '\n\n-------------------------------------------------------------------------------'
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n------------------------------------------------------------------------------------'
   Usage += '\nPerform the following tasks:'
   Usage += '\n  1) Startup mount the local instance using a minimal init.ora file (created by this'
   Usage += '\n     program. (startup nomount pfile=...)'

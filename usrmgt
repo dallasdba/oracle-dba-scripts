@@ -646,10 +646,18 @@ if (__name__ == '__main__'):
     from ConfigParser import SafeConfigParser
   # ------------------------------------------------
 
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
   # Process command line options
   # ----------------------------------
-  #Usage = 'parms [options] [parm_filter]'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nCreates roles, user accounts, grants roles, grants privileges to the SYSADM'
+  Usage += '\nobjects to SYSADM_SELECT_ROLE, and SYSADM_ADMIN_ROLE roles.'
   ArgParser = OptionParser()
+
   ArgParser.add_option("-a",  action="store_true", dest="ApplyRules", default=False, help="Apply Rules")
   ArgParser.add_option("--v", action="store_true", dest="ShowVer",    default=False, help="Version Information")
 

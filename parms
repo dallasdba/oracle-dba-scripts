@@ -241,9 +241,14 @@ if __name__ == '__main__':
   rc             = 0
   ParmSet        = None
 
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
   # Process command line options
   # ----------------------------------
-  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nReport instance parameters (including hidden parms). The -n option filters out'
   Usage += '\nall parameter names not matching "where name not like \'%filter%\'".'
   Usage += '\n\nparms [connect_string] [-a] [-m] [-n parm_filter] [-u] [--s] [--v]'
@@ -253,7 +258,6 @@ if __name__ == '__main__':
   Usage += '\nIsMod : If Yes, value has been modified from its startup setting.'
   Usage += '\nIsSet : If Yes, value has been set in the parameter file. This is Yes even if'
   Usage += '\n        it is set to what would otherwise be the default value.'
-
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("-a",  dest="All",     action="store_true", default=False,           help="parms for all running databases")

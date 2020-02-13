@@ -53,9 +53,14 @@ if (__name__ == '__main__'):
   LowSnapId      = '0'
   MaxSnapId      = '9999999999999999999'
        
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nFind busiest time periods in AWR.'
   ArgParser = OptionParser(Usage)
 

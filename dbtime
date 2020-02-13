@@ -15,6 +15,8 @@ from os.path      import basename
 from sys          import argv
 from sys          import exit
 from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
 from signal       import signal
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
@@ -46,10 +48,14 @@ if (__name__ == '__main__'):
   MaxSnapId      = '9999999999999999999'
 
            
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
 
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nFind busiest time periods in the database according to the Automatic Workload'
   Usage += '\nRepository.'
   ArgParser = OptionParser(Usage)

@@ -132,7 +132,6 @@ if (__name__ == '__main__'):
   ExcludeList    = ['/bin','/boot','/dev','/lib','/lib64','/opt','/proc','/root','/sbin','/sys']
   Hostname       = gethostname().split('.')[0]
 
-
   ScanList.append('/etc/oratab')
   ScanList.append('/home/oracle/.env/dbmap')
   ScanList.append('/home/oracle/.bash_profile')
@@ -141,14 +140,14 @@ if (__name__ == '__main__'):
   ScanList.append('/home/oracle/dba/etc/.passwd')
   ScanList.append('/home/oracle/dba/etc/logrotate.conf')
 
-  # For handling termination in stdout pipe.
-  #  ex. when you run: oerrdump | head
-  #--------------------------------------------
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
 
   # Process command line options
   # ----------------------------------
-  Usage = '\n\n-------------------------------------------------------------------------------'
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nLocates file and directory names that belong to a particular database. That is'
   Usage += '\nthe file or directory name contains the name of the database. For some files'
   Usage += '\nsuch as tnsnames.ora and listener.ora the lines from the file containing the'
@@ -159,6 +158,7 @@ if (__name__ == '__main__'):
   Usage += '\n         ' + Cmd + ' MYDB -s /u01 -x /archive,/tmp'
   Usage += '\n         ' + Cmd + ' MYDB -s /u01 -x \'/archive, /tmp\''
   ArgParser = OptionParser(Usage)
+
   ArgParser.add_option("-s", dest="StartingDir",                      default='',    type=str, help="starting directory (default=/)")
   ArgParser.add_option("-x", dest="Exclude",                          default='',    type=str, help="subdirectories to exclude")
   ArgParser.add_option("--v", dest="ShowVer",    action="store_true", default=False,           help="print version info.")

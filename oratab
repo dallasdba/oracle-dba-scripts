@@ -130,14 +130,22 @@ def LoadOratab(Oratab=''):
 # ---- Main Program --------------------
 # --------------------------------------
 if __name__ == '__main__':
-  Cmd          = basename(argv[0])
-  Version      = '1.11'
-  VersionDate  = 'Wed Feb 12 06:25:49 CST 2020'
-  DevState     = 'Production'
-  Banner       = Cmd + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
-  Flag         = ''
+  Cmd            = basename(argv[0])
+  Version        = '1.11'
+  VersionDate    = 'Wed Feb 12 06:25:49 CST 2020'
+  CmdDesc        = 'Report Oratab File'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Flag           = ''
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nReport Contents of the Oratab File.'
   ArgParser = OptionParser(Usage)
 

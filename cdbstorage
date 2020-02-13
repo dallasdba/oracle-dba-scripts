@@ -49,9 +49,14 @@ if (__name__ == '__main__'):
     if (not('ORACLE_HOME' in list(environ.keys()))):
       (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
 
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nReport tablespace storage utilization for multitenant (container) databases.'
   ArgParser = OptionParser(Usage)
 

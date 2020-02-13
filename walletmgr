@@ -489,9 +489,11 @@ if (__name__ == "__main__"):
   credkeys       = []
   home_dir       = pathsplit(pathsplit(argv[0])[0])[0]
 
-  usage  =  "%s [options] [params]"  % cmd_name
-  usage += "\n\n%s"         % cmd_descr
-  usage += "\n------------------------------------------------------------------------------"
+  # Process command line options
+  # ----------------------------------
+  usage  =  '%s [options]'  % cmd_name
+  usage += '\n\n%s'         % cmd_descr
+  usage += '\n-------------------------------------------------------------------------------'
   usage += "\nWrapper for Oracle's mkstore comamnd."
   usage += "\n"
   usage += "\nReport credentials..."

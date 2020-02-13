@@ -26,18 +26,19 @@
 # ---- Import Python Modules -----------
 # --------------------------------------
 import os
-from optparse    import OptionParser
-from os.path     import basename
-from re          import compile
-from re          import search
-from signal      import signal
-from subprocess  import Popen
-from subprocess  import PIPE
-from signal      import SIGPIPE
-from signal      import SIG_DFL
-from subprocess  import STDOUT
-from sys         import argv
-from sys         import exit
+from optparse     import OptionParser
+from os.path      import basename
+from re           import compile
+from re           import search
+from signal       import signal
+from subprocess   import Popen
+from subprocess   import PIPE
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from subprocess   import STDOUT
+from sys          import argv
+from sys          import exit
 
 
 # --------------------------------------
@@ -61,7 +62,12 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nReport online redo log information.'
   Usage += '\nReport Oracle database instances running on the local machine. Two reports'
   Usage += '\navailable: 1) instance name only (sorted by instance name), 2) instance name,'
   Usage += '\npmon process id (sorted by instance name).'

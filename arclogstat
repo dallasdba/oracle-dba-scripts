@@ -41,9 +41,14 @@ if (__name__ == '__main__'):
   ArgParser      = OptionParser()
   ConnStr        = ''
 
-  Usage =  '%s [options]'  % Cmd
-  Usage += '\n\n%s'        % CmdDesc
-  Usage += '\n-------------------------------------------------------------------'
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nReport archived redo log status from v$archived_log.'
   ArgParser = OptionParser(Usage)
 

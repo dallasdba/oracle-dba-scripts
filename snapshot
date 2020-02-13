@@ -18,6 +18,9 @@
 from optparse     import OptionParser
 from os           import environ
 from os.path      import basename
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
 from sys          import argv
 from sys          import exit
 from sys          import version_info
@@ -43,10 +46,15 @@ if (__name__ == '__main__'):
   InStr          = ''
   ConnStr        = ''
 
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
-  Usage += '\Create an AWR Snapshot'
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nCreate an AWR Snapshot'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,                 help="print SQL query.")

@@ -52,9 +52,14 @@ if (__name__ == '__main__'):
     if (not('ORACLE_HOME' in list(environ.keys()))):
       (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
 
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nReport block integrity parameters in the database (db_block_checking,'
   Usage += '\ndb_block_checksum, and lost_write_protect).'
 

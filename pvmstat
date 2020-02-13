@@ -15,15 +15,18 @@
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
-from optparse   import OptionParser
-#from sys        import stdout
-from sys        import exit
-from sys        import argv
-from sys        import version_info
-from subprocess import Popen
-from os.path    import basename
-from subprocess import PIPE
-from subprocess import STDOUT
+from optparse     import OptionParser
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+#from sys          import stdout
+from sys          import exit
+from sys          import argv
+from sys          import version_info
+from subprocess   import Popen
+from os.path      import basename
+from subprocess   import PIPE
+from subprocess   import STDOUT
 
 # --------------------------------------
 # -- Function/Class Definitions --------
@@ -41,7 +44,17 @@ if (__name__ == '__main__'):
   DevState       = 'Dedvelopment'
   CmdDesc        = 'Vmstat Report'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
-  ArgParser      = OptionParser()
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nPretty Vmstat Reporting.'
+  ArgParser = OptionParser(Usage)
 
   ArgParser.add_option("--v", action="store_true",  dest="ShowVer",    default=False, help="print version info.")
 

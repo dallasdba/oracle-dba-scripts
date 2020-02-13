@@ -45,9 +45,14 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   Ps             = '/bin/ps'
 
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nReport ASM disk group space allocation and free space available.'
   ArgParser = OptionParser(Usage)
 

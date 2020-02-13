@@ -49,8 +49,12 @@ if (__name__ == '__main__'):
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
-  Usage += '\nReports Online Redolog Status'
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nReport online redo log status.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('--s', dest='Show',     action='store_true', default=False,           help="print SQL query.")

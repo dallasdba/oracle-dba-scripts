@@ -59,7 +59,11 @@ if (__name__ == '__main__'):
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nProduces various reports useful for diagnosing SQL tuning issues.'
   ArgParser = OptionParser(Usage)
 

@@ -45,9 +45,14 @@ if (__name__ == '__main__'):
   Now            = datetime.now()
   EndTime        = (Now.strftime('%Y-%m-%d %H:%M:%S'))
 
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nReport SQL plan changes for a SQL ID.'
   ArgParser = OptionParser(Usage)
 

@@ -210,9 +210,11 @@ if (__name__ == '__main__'):
   Standby2AuditFileDest     = '/u01/app/oracle/admin/MYDB/adump'
   Standby2OracleHome        = '/u01/app/oracle/product/11.2.0.4/dbhome_1'
 
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n--------------------------------------------------------------------------------'
   Usage += '\nGenerate a command-by-command guide for configuring a Data Guard physical'
   Usage += '\nstandby database. Includes the following:'
   Usage += '\n  1) RMAN Duplicate from Backup'                                                 

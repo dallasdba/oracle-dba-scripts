@@ -59,9 +59,16 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   InstList       = []
 
-
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nReport V$SESS_TIME_MODEL and GV$SESS_TIME_MODEL.'
+  ArgParser = OptionParser(Usage)
 
   # Check/setup the Oracle environment
   if (not('ORACLE_SID' in list(environ.keys()))):

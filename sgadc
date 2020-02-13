@@ -55,9 +55,16 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   InstList       = []
 
-
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nReport v$sga_dynamic_components and gv$sga_dynamic_components.'
+  ArgParser = OptionParser(Usage)
 
   # ------------------------------------------------
   # Imports that are conditional on Python Version.

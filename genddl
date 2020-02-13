@@ -34,6 +34,8 @@ from os.path      import basename
 from sys          import argv
 from sys          import exit
 from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
 from signal       import signal
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
@@ -57,9 +59,14 @@ if (__name__ == '__main__'):
   InStr          = ''
   ConnStr        = ''
 
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nGenerates DDL for an object using DBMS_METADATA.GET_DDL'
   ArgParser = OptionParser(Usage)
 

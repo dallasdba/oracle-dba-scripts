@@ -102,13 +102,14 @@ if (__name__ == '__main__'):
   ArgParser      = OptionParser()
   pwdFilename    = '/home/oracle/dba/etc/.passwd'
 
+  # Process command line options
+  # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nRetrieves (and optionally decodes) a password from the password file.'
   ArgParser = OptionParser(Usage)
 
-  ArgParser = OptionParser(usage=Usage)
   ArgParser.add_option("-p",  dest="PlainText", action="store_true", default=False, help="plaintext mode.")
   ArgParser.add_option("-t",  dest="Trace",     action="store_true", default=False, help="print runtime trace information.")
   ArgParser.add_option('--v', dest='ShowVer',   action='store_true', default=False, help="print version info.")

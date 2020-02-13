@@ -45,6 +45,7 @@ from subprocess import Popen
 from subprocess import PIPE
 from signal     import SIGPIPE
 from signal     import SIG_DFL
+from signal     import signal
 from subprocess import STDOUT
 from Oracle     import GetDbState
 from Oracle     import RunSqlplus
@@ -857,7 +858,14 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
   SidList        = []
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nReport key database information.'
   ArgParser = OptionParser(Usage)
 

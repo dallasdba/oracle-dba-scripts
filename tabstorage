@@ -55,13 +55,8 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   ConnStr        = ''
-
-
-  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
-  signal(SIGPIPE, SIG_DFL)
 
   # ------------------------------------------------
   # Imports that are conditional on Python Version.
@@ -72,6 +67,19 @@ if (__name__ == '__main__'):
     from ConfigParser import SafeConfigParser
   # ------------------------------------------------
   
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nPrint 6 different reports:'
+  Usage += '\n  1-3) Table/Partition/Subpartition Storage Detail.'
+  Usage += '\n  4-6) Table/Partition/Subpartition Storage Summary.'
+  ArgParser = OptionParser()
+
   ArgParser.add_option('-d',  dest='DetailRpt',       action='store_true', default=False,           help="detail report (default is summary report)")
   ArgParser.add_option('-o',  dest='Owners',                               default='',    type=str, help="where table in table1,table2,table3,...")
   ArgParser.add_option('-p',  dest='PartitionRpt',    action='store_true', default=False,           help="Partition report (default is table report)")

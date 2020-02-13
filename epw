@@ -33,7 +33,11 @@ if (__name__ == '__main__'):
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nGenerate a UU encoded password from a plain-text string.'
   ArgParser = OptionParser(Usage)
 

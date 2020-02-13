@@ -39,40 +39,41 @@
 # ---- Import Python Modules -----------
 # --------------------------------------
 import sys
-from datetime   import datetime, timedelta
-from optparse   import OptionParser
-from os         import access
-from os         import environ
-from os         import listdir
-from os         import path
-from os         import walk
-from os         import unlink
-from os         import X_OK as ExecOk
-from os         import W_OK as WriteOk
-from os         import R_OK as ReadOk
-from os.path    import isdir
-from os.path    import isfile
-from os.path    import abspath
-from os.path    import basename
-from os.path    import dirname
-from os.path    import getmtime
-from os.path    import join as pathjoin
-from os.path    import sep as pathsep
-from os         import stat
-from re         import compile
-from re         import match
-from re         import search
-from sys        import argv
-from sys        import exc_info
-from sys        import exit
-from sys        import stdout
-from sys        import version_info
-from subprocess import Popen
-from subprocess import PIPE
-from signal     import SIGPIPE
-from signal     import SIG_DFL
-from subprocess import STDOUT
-from time       import strftime, gmtime
+from datetime     import datetime, timedelta
+from optparse     import OptionParser
+from os           import access
+from os           import environ
+from os           import listdir
+from os           import path
+from os           import walk
+from os           import unlink
+from os           import X_OK as ExecOk
+from os           import W_OK as WriteOk
+from os           import R_OK as ReadOk
+from os.path      import isdir
+from os.path      import isfile
+from os.path      import abspath
+from os.path      import basename
+from os.path      import dirname
+from os.path      import getmtime
+from os.path      import join as pathjoin
+from os.path      import sep as pathsep
+from os           import stat
+from re           import compile
+from re           import match
+from re           import search
+from sys          import argv
+from sys          import exc_info
+from sys          import exit
+from sys          import stdout
+from sys          import version_info
+from subprocess   import Popen
+from subprocess   import PIPE
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from subprocess   import STDOUT
+from time         import strftime, gmtime
 
 # --------------------------------------
 # ---- Function Definitions ------------
@@ -386,7 +387,14 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
   OraHome        = ''
   Adrci          = ''
 
-  Usage  = '\n\n-------------------------------------------------------------------------------'
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nDiscover database alert logs and call logrotate to manage them. Call adrci and'
   Usage += '\npurge old diag files. Discover and remove old database audit files. See'
   Usage += '\nlogfile_maintenance.cfg file for tunables. See also Logfile Management.docx for'

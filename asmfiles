@@ -30,11 +30,9 @@ from os         import environ
 from os         import path
 from os.path    import basename
 from os.path    import isfile
-from signal     import SIG_DFL
 from signal     import SIGPIPE
+from signal     import SIG_DFL
 from signal     import signal
-from signal     import SIGPIPE
-from signal     import SIG_DFL
 from subprocess import Popen
 from subprocess import PIPE
 from subprocess import STDOUT
@@ -118,9 +116,14 @@ if (__name__ == '__main__'):
 
   setlocale(LC_ALL, 'en_US')
 
-  Usage =  '%s [options]'  % Cmd
-  Usage += '\n\n%s'        % CmdDesc
-  Usage += '\n-------------------------------------------------------------------'
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nReport ASM storage utilization by file, by database, by file type,'
   Usage += '\nby disk.'
   ArgParser = OptionParser(Usage)

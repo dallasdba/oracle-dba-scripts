@@ -49,13 +49,19 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   ConnStr        = ''
 
-
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nReport history of pluggable databases.'
+  ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,                 help="print SQL query.")
   ArgParser.add_option('--v', dest='ShowVer',    action='store_true', default=False,                 help="print version info.")

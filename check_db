@@ -1077,12 +1077,11 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
   OratabFile     = '/etc/oratab'
   Config         = SafeConfigParser()
 
-
   # Process command line options
   # ----------------------------------
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
-  Usage += '\n------------------------------------------------------------------------------'
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nValidate database configuration and parameters according to rules specified'
   Usage += '\nin the configuration file.'
   ArgParser = OptionParser(Usage)

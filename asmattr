@@ -43,9 +43,14 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   Ps             = '/bin/ps'
 
-  Usage =  '%s [options]'  % Cmd
-  Usage += '\n\n%s'        % CmdDesc
-  Usage += '\n-------------------------------------------------------------------'
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
   Usage += '\nReport all ASM disk group attributes.'
   ArgParser = OptionParser(Usage)
 
