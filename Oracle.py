@@ -80,6 +80,7 @@
 # 01/01/2020 2.42 Randy Johnson    Changed '-\d\d\d\d' to '-\d\d\d\d\d'                          #
 # 01/04/2020 2.43 Randy Johnson    Added del environ['ORACLE_PATH'] to RunSqlplus.               #
 # 01/04/2020 2.44 Randy Johnson    Added classes SqlQuery() and SqlReport().                     #
+# 02/13/2020 2.45 Randy Johnson    Added PythonVersion handling for imports.                     #
 #                                                                                                #
 ##################################################################################################
  
@@ -129,13 +130,7 @@ from time         import sleep
 # ------------------------------------------------
 # Imports that are conditional on Python Version.
 # ------------------------------------------------
-PythonVersion = '%s.%s' % (version_info[0],version_info[1])
-try:
-  PythonVersion = float(PythonVersion)
-except:
-  print("Cannot convert string PythonVersion from string to float: %s" % PythonVersion)
-  exit(1)
-
+PythonVersion = version_info[0] + (version_info[1] * .1)
 if (PythonVersion >= 3.2):
   from configparser import ConfigParser as SafeConfigParser
 elif (PythonVersion >= 3.0):
@@ -146,15 +141,14 @@ else:
   from ConfigParser import SafeConfigParser
   import cPickle as pickle
 
-# ------------------------------------------------
-# For handling termination in stdout pipe; ex: when you run: oerrdump | head
-signal(SIGPIPE, SIG_DFL)
-
-
 # Set min/max compatible Python versions.
 # ----------------------------------------
 PyMaxVer = 3.8
 PyMinVer = 2.4
+
+# ------------------------------------------------
+# For handling termination in stdout pipe; ex: when you run: oerrdump | head
+signal(SIGPIPE, SIG_DFL)
 
 #---------------------------------------------------------------------------
 # Def : IsCdb()
