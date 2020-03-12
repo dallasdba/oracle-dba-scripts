@@ -22,6 +22,7 @@
 # 02/13/2018 2.12 Randy Johnson    Added db_keep_cache_size.                                     #
 # 11/18/2019 2.13 Randy Johnson    Added IsCdb().                                                #
 # 01/16/2020 2.14 Randy Johnson    Added PDB Info.                                               #
+# 03/12/2020 2.15 Randy Johnson    Added Database Vault Info.                                    #
 ##################################################################################################
 
 
@@ -209,6 +210,15 @@ def CollectInfo(Sid, Cdb):
     Sql += "         TO_CHAR(open_time, 'mm/dd/yyyy') open_time\n"
     Sql += "    FROM sys.v$pdbs\n"
     Sql += "ORDER BY con_id;\n"
+
+  # Dstabase Vault
+  Sql += "\n"
+  Sql += "SELECT " + SqlHeader + "\n"
+  Sql += "       '" + Sid + "'    || '" + Colsep + "' ||\n"
+  Sql += "       'database_vault' || '" + Colsep + "' ||\n"
+  Sql += "       value\n"
+  Sql += "  FROM v$option\n"
+  Sql += " WHERE parameter = 'Oracle Database Vault';\n"
 
   # Storage for data files
   Sql += "\n"
@@ -422,6 +432,9 @@ def TransformInfo(RawInfo):
   try:    DbInfo['controlfile_bytes']              = FormatNumber(RawInfo['controlfile_bytes'])
   except: DbInfo['controlfile_bytes']              = 'unknown'
 
+  try:    DbInfo['database_vault']                 = RawInfo['database_vault']
+  except: DbInfo['database_vault']                 = 'unknown'
+
   try:    DbInfo['cpu_count']                      = RawInfo['cpu_count']
   except: DbInfo['cpu_count']                      = 'unknown'
 
@@ -621,6 +634,7 @@ def StandardReport(RawInfo):
     Report +='\n %-28s  %-29s' % ('db_block_size',                DbInfo['db_block_size'])
     Report +='\n %-28s  %-29s' % ('db_id',                        DbInfo['db_id'])
     Report +='\n %-28s  %-29s' % ('db_version',                   DbInfo['db_version'])
+    Report +='\n %-28s  %-29s' % ('database_vault',               DbInfo['database_vault'])
     Report +='\n %-28s  %-29s' % ('cdb',                          DbInfo['cdb'])
     for Parm in sorted(DbInfo):
       if Parm.startswith('pdb-'):
@@ -738,6 +752,7 @@ def KeyValReport(RawInfo):
     Report +='\n %-s=%-s' % ('db_block_size',                DbInfo['db_block_size'])
     Report +='\n %-s=%-s' % ('db_id',                        DbInfo['db_id'])
     Report +='\n %-s=%-s' % ('db_version',                   DbInfo['db_version'])
+    Report +='\n %-s=%-s' % ('database_vault',               DbInfo['database_vault'])
     Report +='\n %-s=%-s' % ('cdb',                          DbInfo['cdb'])
     Report +='\n %-s=%-s' % ('compatible',                   DbInfo['compatible'])
     Report +='\n %-s=%-s' % ('cluster_database',             DbInfo['cluster_database'])
@@ -847,8 +862,8 @@ def FormatNumber( s, tSep=',', dSep='.'):
 if (__name__ == '__main__'):      # if this is true, then this script is *not* being imported by another Python script.
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Database Info.'
-  Version        = '2.14'
-  VersionDate    = 'Thu Jan 16 18:53:40 CST 2020'
+  Version        = '2.15'
+  VersionDate    = 'Thu Mar 12 10:37:00 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ' Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   OratabFile     = '/etc/oratab'
