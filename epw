@@ -37,7 +37,7 @@ if (version_info[0] >= 3):
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Encode Password'
-  Version        = '3.2'
+  Version        = '3.02'
   VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
