@@ -1832,6 +1832,7 @@ def LoadOratab(Oratab=''):
   OratabDict = {}
   OratabList = []
   OratabLoc  = ['/etc/oratab','/var/opt/oracle/oratab']
+  otab       = ''
 
   # If an oratab file name has been passed in...
   if (Oratab != ''):
