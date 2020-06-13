@@ -1,16 +1,15 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        statsdefault                                                                     #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Report default settings for dbms_stats package.                                  #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 09/29/2017 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+#  Name:   statsdefault                                                                            #
+#  Author: Randy Johnson                                                                           #
+#  Descr:  Report default settings for dbms_stats package.                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 09/29/2017 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -36,8 +35,8 @@ from Oracle       import PrintError
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Report Default Parms for DBMS_STATS'
-  Version        = '1.00'
-  VersionDate    = 'Wed Aug 2 12:16:45 CDT 2017'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

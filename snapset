@@ -1,22 +1,21 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        snapset                                                                          #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Set AWR snapshot frequency and retention.                                        #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 05/29/2014 1.00 Randy Johnson    Initial write.                                                #
-# 05/29/2014 1.10 Randy Johnson    Fixed bug -- was using retention minutes. Should be days.     #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-#                                  Added prompts for username, password, tnsname.                #
-# 08/24/2015 2.10 Randy Johnson    Bug fix in the code generation for the call to                #
-#                                  dbms_workload_repository. Also some cosmetic Sql changes.     #
-# 07/13/2017 1.01 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   snapset                                                                                  #
+# Author: Randy Johnson                                                                            #
+# Descr:  Set AWR snapshot frequency and retention.                                                #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 05/29/2014 1.00 Randy Johnson    Initial write.                                                  #
+# 05/29/2014 1.10 Randy Johnson    Fixed bug -- was using retention minutes. Should be days.       #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+#                                  Added prompts for username, password, tnsname.                  #
+# 08/24/2015 2.10 Randy Johnson    Bug fix in the code generation for the call to                  #
+#                                  dbms_workload_repository. Also some cosmetic Sql changes.       #
+# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 2.12 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -42,8 +41,8 @@ from Oracle       import PrintError
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Set AWR Snapshot Frequency and Retention'
-  Version        = '2.11'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.12'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

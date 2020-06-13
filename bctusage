@@ -4,7 +4,13 @@
 # Name:   bctusage                                                                                 #
 # Author: Randy Johnson                                                                            #
 # Descr:  Report block change tracking usage.                                                      #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/15/2019 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -28,8 +34,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Block Change Tracking Usage'
-  Version        = '1.12'
-  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

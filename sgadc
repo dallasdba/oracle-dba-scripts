@@ -1,24 +1,15 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        sgadc                                                                            #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Reports on v$sga_dynamic_components and gv$sga_dynamic_components.               #
-#                                                                                                #
-#  usage: sgadc [options]                                                                        #
-#                                                                                                #
-#  options:                                                                                      #
-#    -h, --help  show this help message and exit                                                 #
-#    -g          search gv$sql (default is v$sql)                                                #
-#    -s          print SQL query.                                                                #
-#    -v          print version info.                                                             #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 09/28/2014 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   sgadc                                                                                    #
+# Author: Randy Johnson                                                                            #
+# Descr:  Reports on v$sga_dynamic_components and gv$sga_dynamic_components.                       #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 09/28/2014 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -43,8 +34,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'SGA Dynamic Components'
-  Version        = '1.00'
-  VersionDate    = 'Mon Sep 28 09:16:16 CDT 2015'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

@@ -1,28 +1,29 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:        genddl                                                                              #
-# Author:      Randy Johnson                                                                       #
-# Description: Generates DDL for an object using DBMS_METADATA.GET_DDL                             #
-#                                                                                                  #
-# Notes:       Types known to be supported:                                                        #
-#                *CONTEXT                                                                          #
-#                *DIRECTORY                                                                        #
-#                CLUSTER                                                                           #
-#                FUNCTION                                                                          #
-#                INDEX                                                                             #
-#                LIBRARY                                                                           #
-#                OPERATOR                                                                          #
-#                PACKAGE                                                                           #
-#                PROCEDURE                                                                         #
-#                SEQUENCE                                                                          #
-#                SYNONYM                                                                           #
-#                TABLE                                                                             #
-#                TRIGGER                                                                           #
-#                TYPE                                                                              #
-#                VIEW                                                                              #
-#                                                                                                  #
-#                * Do not require schema (owner)                                                   #
+# Name:   genddl                                                                                   #
+# Author: Randy Johnson                                                                            #
+# Descr:  Generates DDL for an object using DBMS_METADATA.GET_DDL. Types known to be supported:    #
+#           *CONTEXT                                                                               #
+#           *DIRECTORY                                                                             #
+#           CLUSTER                                                                                #
+#           FUNCTION                                                                               #
+#           INDEX                                                                                  #
+#           LIBRARY                                                                                #
+#           OPERATOR                                                                               #
+#           PACKAGE                                                                                #
+#           PROCEDURE                                                                              #
+#           SEQUENCE                                                                               #
+#           SYNONYM                                                                                #
+#           TABLE                                                                                  #
+#           TRIGGER                                                                                #
+#           TYPE                                                                                   #
+#           VIEW                                                                                   #
+#                                                                                                  # 
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/07/2016 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -48,8 +49,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Generate DDL'
-  Version        = '1.02'
-  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

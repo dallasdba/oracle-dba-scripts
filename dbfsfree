@@ -1,32 +1,20 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        dbfsfree                                                                         #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Determines the real freespace available in the mounted DBFS file system(s).      #
-#                                                                                                #
-#  usage: dbfsfree [options]                                                                     #
-#                                                                                                #
-#  options:                                                                                      #
-#    -h, --help  show this help message and exit                                                 #
-#    -b          report in bytes                                                                 #
-#    -k          report in kilobytes                                                             #
-#    -m          report in megabytes                                                             #
-#    -g          report in gigabytes                                                             #
-#                                                                                                #
-#                                                                                                #
-#  Filesystem                Size                Used               Avail  Used%  Mounted on     #
-#  FS_DBFS      3,203,050,426,368      25,509,978,112   3,177,540,448,256  0.80  /dbfs/dbfs      #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 10/11/2012 1.02 Randy Johnson    Removed the dbfs user password from the script.               #
-# 10/11/2012 1.03 Randy Johnson    Internal documentation.                                       #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 01/15/2020 2.01 Randy Johnson    Added round() function to division operations for Python3     #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   dbfsfree                                                                                 #
+# Author: Randy Johnson                                                                            #
+# Descr:  Determines the real freespace available in the mounted DBFS file system(s).              #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 10/11/2012 1.02 Randy Johnson    Removed the dbfs user password from the script.                 #
+# 10/11/2012 1.03 Randy Johnson    Internal documentation.                                         #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 01/15/2020 2.01 Randy Johnson    Added round() function to division operations for Python3       #
+# 06/12/2020 2.02 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 
 # --------------------------------------
@@ -34,7 +22,6 @@
 # --------------------------------------
 import profile
 import traceback
-
 from decimal     import Decimal
 from optparse    import OptionParser
 from os          import environ
@@ -167,7 +154,7 @@ if (__name__ == '__main__'):
   Cmd                 = path.split(argv[0])[1]
   CmdDesc             = 'DFS Free'
   Version             = '2.02'
-  VersionDate         = 'Fri Jul 19 10:12:14 CDT 2019'
+  VersionDate         = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState            = 'Production'
   Banner              = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sqlplus             = environ['ORACLE_HOME'] + '/bin/sqlplus'

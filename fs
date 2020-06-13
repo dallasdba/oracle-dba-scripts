@@ -25,6 +25,17 @@
 #                                                                                                  #
 # Todo's                                                                                           #
 # Switch from gv$sqltext and v$sqltext (sql_text) to gv$sql and v$sql (sql_fulltext)               #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/23/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Folded in the fsx     #
+#                                  script and assigned it to the -x option. Folded in the fs_awr   #
+#                                  and fsx_awr scripts -a and -a -x options.                       #
+# 07/17/2015 2.10 Randy Johnson    Added prompts for username, password, tnsname.                  #
+#                                  Changed -b and -e options from SnapID to SnapTime.              #
+# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 2.12 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -53,7 +64,7 @@ if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Find SQL'
   Version        = '2.12'
-  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

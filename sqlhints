@@ -1,21 +1,20 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        sqlhints                                                                          #
-# Author:      Randy Johnson                                                                     #
-# Description: Dumps outline hints for a SQL statement.                                          #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# mm/dd/yyyy 1.00 Randy Johnson    Initial write.                                                #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 07/17/2015 3.00 Randy Johnson    Added prompts for username, password, tnsname. Folded AWR and #
-#                                  V$ versions of the script together into this script (see -a   #
-#                                  option).                                                      #
-# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:    sqlhints                                                                                #
+# Author:  Randy Johnson                                                                           #
+# Descrip: Dumps outline hints for a SQL statement.                                                #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# mm/dd/yyyy 1.00 Randy Johnson    Initial write.                                                  #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 07/17/2015 3.00 Randy Johnson    Added prompts for username, password, tnsname. Folded AWR and   #
+#                                  V$ versions of the script together into this script (see -a     #
+#                                  option).                                                        #
+# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 3.02 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -40,8 +39,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'SQL Hints'
-  Version        = '3.01'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '3.02'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

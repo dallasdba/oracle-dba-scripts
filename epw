@@ -4,6 +4,15 @@
 # Name:   epw (encode password)                                                                    #
 # Author: Randy Johnson                                                                            #
 # Descr:  Generate a UU encoded password from a plain-text string.                                 #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- --------------------------------------------------------------  #
+# 07/06/2012 1.00 Randy Johnson    Initial release.                                                #
+# 09/19/2012 2.00 Randy Johnson    Cleanup, minor cosmetic changes, removed OptionParser.          #
+# 12/07/2012 2.10 Randy Johnson    Changed encode/decode to use built-in string functions.         #
+# 07/17/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 3.02 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -20,7 +29,7 @@ from sys          import version_info
 # ------------------------------------------------
 if (version_info[0] >= 3):
   from base64 import b64encode
-# ------------------------------------------------  
+# ------------------------------------------------
 
 # --------------------------------------
 # ---- Main Program --------------------
@@ -28,8 +37,8 @@ if (version_info[0] >= 3):
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Encode Password'
-  Version        = '3.02'
-  VersionDate    = 'Fri Jul 19 10:52:43 CDT 2019'
+  Version        = '3.2'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
 
@@ -42,11 +51,11 @@ if (__name__ == '__main__'):
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('--v', dest='ShowVer', action='store_true', default=False, help="print version info.")
-  
+
   # Parse command line arguments
   Options, args = ArgParser.parse_args()
   argc = len(argv)
-  
+
   ShowVer = Options.ShowVer
 
   if (ShowVer):

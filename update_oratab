@@ -1,24 +1,18 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:         update_oratab                                                                    #
-# Author:       Randy Johnson                                                                    #
-# Description:  Adds new instance names the the oratab file on all nodes in the cluster.         #
-# Dependencies: $ASM_HOME/bin/olsnodes                                                           #
-#               ssh                                                                              #
-#               echo                                                                             #
-#               OS account must authendicate (no prompt required) across all nodes in the        #
-#               cluster.                                                                         #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 02/16/2014 1.00 Randy Johnson    Initial release.                                              #
-# 10/09/2015 1.01 Randy Johnson    Removed Pid, getpgid()                                        #
-# 09/30/2015 1.02 Randy Johnson    Updated for non-RAC environments.                             #
-# 07/13/2017 1.03 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   update_oratab                                                                            #
+# Author: Randy Johnson                                                                            #
+# Descr:  Adds new instance names the the oratab file on all nodes in the cluster.                 #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 02/16/2014 1.00 Randy Johnson    Initial release.                                                #
+# 10/09/2015 1.01 Randy Johnson    Removed Pid, getpgid()                                          #
+# 09/30/2015 1.02 Randy Johnson    Updated for non-RAC environments.                               #
+# 07/13/2017 1.03 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 1.04 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -53,8 +47,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd          = basename(argv[0])
   CmdDesc      = 'Update Oratab (' + Cmd + ')'
-  Version      = '1.03'
-  VersionDate  = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version      = '1.04'
+  VersionDate  = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState     = 'Production'
   Banner       = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Oratab       = '/etc/oratab'

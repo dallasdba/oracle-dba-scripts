@@ -1,19 +1,18 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        systime                                                                          #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Report V$SYS_TIME_MODEL and GV$SYS_TIME_MODEL.                                   #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/31/2015 1.00 Randy Johnson    Initial write.                                                #
-# 08/06/2015 2.00 Randy Johnson    Changed to hierarchial report format andd global options.     #
-# 09/04/2015 2.01 Randy Johnson    Changed to -m option to -n                                    #
-# 07/13/2017 2.02 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   systime                                                                                  #
+# Author: Randy Johnson                                                                            #
+# Descr:  Report V$SYS_TIME_MODEL and GV$SYS_TIME_MODEL.                                           #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/31/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 08/06/2015 2.00 Randy Johnson    Changed to hierarchial report format andd global options.       #
+# 09/04/2015 2.01 Randy Johnson    Changed to -m option to -n                                      #
+# 07/13/2017 2.02 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 2.03 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -39,8 +38,8 @@ from Oracle       import PrintError
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Report System Time'
-  Version        = '2.02'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.03'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

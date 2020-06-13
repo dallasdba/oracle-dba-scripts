@@ -1,30 +1,30 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        dbinfo                                                                           #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Report key database information.                                                 #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 12/13/2012 1.00 Randy Johnson    This is a rewrite of the original dbinfo script. This one     #
-#                                  uses the Oracle.py Python library instead of locally defined  #
-#                                  functions. It requires Oracle.py to run.                      #
-# 04/24/2013 1.10 Randy Johnson    Added 'from re import match, search' back in.                 #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 08/18/2015 2.10 Randy Johnson    Bug fixes for handling -a, uninitialized ORACLE_SID, and      #
-#                                  Oracle SID passed on the command line.                        #
-# 02/15/2017 2.10 Randy Johnson    Added a few items such as NLS language properties, added      #
-#                                  columnar report format.                                       #
-# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                           #
-# 02/13/2018 2.12 Randy Johnson    Added db_keep_cache_size.                                     #
-# 11/18/2019 2.13 Randy Johnson    Added IsCdb().                                                #
-# 01/16/2020 2.14 Randy Johnson    Added PDB Info.                                               #
-# 03/12/2020 2.15 Randy Johnson    Added Database Vault Info.                                    #
-##################################################################################################
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   dbinfo                                                                                   #
+# Author: Randy Johnson                                                                            #
+# Descr:  Report key database information.                                                         #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 12/13/2012 1.00 Randy Johnson    This is a rewrite of the original dbinfo script. This one       #
+#                                  uses the Oracle.py Python library instead of locally defined    #
+#                                  functions. It requires Oracle.py to run.                        #
+# 04/24/2013 1.10 Randy Johnson    Added 'from re import match, search' back in.                   #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 08/18/2015 2.10 Randy Johnson    Bug fixes for handling -a, uninitialized ORACLE_SID, and        #
+#                                  Oracle SID passed on the command line.                          #
+# 02/15/2017 2.10 Randy Johnson    Added a few items such as NLS language properties, added        #
+#                                  columnar report format.                                         #
+# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                             #
+# 02/13/2018 2.12 Randy Johnson    Added db_keep_cache_size.                                       #
+# 11/18/2019 2.13 Randy Johnson    Added IsCdb().                                                  #
+# 01/16/2020 2.14 Randy Johnson    Added PDB Info.                                                 #
+# 03/12/2020 2.15 Randy Johnson    Added Database Vault Info.                                      #
+# 06/12/2020 2.16 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -862,8 +862,8 @@ def FormatNumber( s, tSep=',', dSep='.'):
 if (__name__ == '__main__'):      # if this is true, then this script is *not* being imported by another Python script.
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Database Info.'
-  Version        = '2.15'
-  VersionDate    = 'Thu Mar 12 10:37:00 CDT 2020'
+  Version        = '2.16'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ' Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   OratabFile     = '/etc/oratab'

@@ -1,22 +1,15 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        genddl2                                                                           #
-# Author:      Randy Johnson                                                                     #
-# Description: Dumps schema DDL using DBMS_METADATA.GET_DDL                                      #
-# Usage: genddl2 [options]                                                                       #
-#                                                                                                #
-# Options:                                                                                       #
-#   -h, --help  show this help message and exit                                                  #
-#   -s SCHEMA   schema                                                                           #
-#   --v         print version info.                                                              #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 03/20/2017 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   genddl2                                                                                  #
+# Author: Randy Johnson                                                                            #
+# Descr:  Dumps schema DDL using DBMS_METADATA.GET_DDL                                             #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 03/20/2017 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -42,7 +35,7 @@ if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Generate DDL'
   Version        = '1.01'
-  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

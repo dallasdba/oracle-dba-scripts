@@ -1,19 +1,18 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        rsm                                                                               #
-# Author:      Randy Johnson                                                                     #
-# Description: Generates a SQL Monitor Report                                                    #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/16/2014 1.00 Randy Johnson    Initial write.                                                #
-# 07/17/2015 2.00 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 06/12/2017 2.01 Randy Johnson    Cosmetic changes to usage help.                               #
-# 07/13/2017 2.02 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   rsm                                                                                      #
+# Author: Randy Johnson                                                                            #
+# Descr:  Generates a SQL Monitor Report                                                           #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/16/2014 1.00 Randy Johnson    Initial write.                                                  #
+# 07/17/2015 2.00 Randy Johnson    Added prompts for username, password, tnsname.                  #
+# 06/12/2017 2.01 Randy Johnson    Cosmetic changes to usage help.                                 #
+# 07/13/2017 2.02 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 2.03 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -37,8 +36,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Report SQL Monitor'
-  Version        = '2.02'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.03'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

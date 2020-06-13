@@ -1,39 +1,30 @@
 #!/bin/env python
 
-###################################################################################################
-# Name:         usrmgt                                                                            #
-# Author:       Randy Johnson                                                                     #
-# Description:  Creates roles, user accounts, grants roles, grants privileges to the SYSADM       #
-#               objects to SYSADM_SELECT_ROLE, and SYSADM_ADMIN_ROLE roles.                       #
-# Dependencies: Sqlplus                                                                           #
-#                                                                                                 #
-#               User Table: PS_CCSF_USERS                                                         #
-#                                                                                                 #
-#                Name          Type                                                               #
-#                ------------- -----------------                                                  #
-#                USERID        VARCHAR2(30 CHAR)                                                  #
-#                COMPANY_NAME  VARCHAR2(70 CHAR)                                                  #
-#                DESCR         VARCHAR2(30 CHAR)                                                  #
-#                PRIVILEGE     VARCHAR2(10 CHAR)                                                  #
-#                EFFDT         DATE                                                               #
-#                STATUS1       VARCHAR2(30 CHAR)                                                  #
-#                                                                                                 #
-# Usage: usrmgt [options]                                                                         #
-#                                                                                                 #
-# Options:                                                                                        #
-#   -h, --help  show this help message and exit                                                   #
-#   -a          Apply Rules                                                                       #
-#   --v         Version Information#                                                              #
-#                                                                                                 #
-# History:                                                                                        #
-#                                                                                                 #
-# Date       Ver. Who              Change Description                                             #
-# ---------- ---- ---------------- -------------------------------------------------------------- #
-# 07/04/2016 1.00 Randy Johnson    Initial release.                                               #
-# 07/07/2016 1.10 Randy Johnson    Add check for custom roles and create if missing.              #
-# 07/08/2016 1.20 Randy Johnson    Added CheckTable function and logic to handle missing          #
-#                                  UserTable.                                                     #
-###################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   usrmgt                                                                                   #
+# Author: Randy Johnson                                                                            #
+# Descr:  Creates roles, user accounts, grants roles, grants privileges to the SYSADM              #
+#         objects to SYSADM_SELECT_ROLE, and SYSADM_ADMIN_ROLE roles.                              #
+#                                                                                                  #
+#           User Table: PS_CCSF_USERS                                                              #
+#                                                                                                  #
+#            Name          Type                                                                    #
+#            ------------- -----------------                                                       #
+#            USERID        VARCHAR2(30 CHAR)                                                       #
+#            COMPANY_NAME  VARCHAR2(70 CHAR)                                                       #
+#            DESCR         VARCHAR2(30 CHAR)                                                       #
+#            PRIVILEGE     VARCHAR2(10 CHAR)                                                       #
+#            EFFDT         DATE                                                                    #
+#            STATUS1       VARCHAR2(30 CHAR)                                                       #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/04/2016 1.00 Randy Johnson    Initial release.                                                #
+# 07/07/2016 1.10 Randy Johnson    Add check for custom roles and create if missing.               #
+# 07/08/2016 1.20 Randy Johnson    Added CheckTable function and logic to handle missing           #
+#                                  UserTable.                                                      #
+# 06/12/2020 1.21 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -592,8 +583,8 @@ def LoadDbaRoleGrants():
 if (__name__ == '__main__'):
   Cmd              = basename(argv[0])
   CmdDesc          = 'User Management (' + Cmd + ')'
-  Version          = '1.20'
-  VersionDate      = 'Fri Jul  8 15:37:04 CDT 2016'
+  Version          = '1.21'
+  VersionDate      = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState         = 'Development'
   Banner           = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Now              = datetime.now()

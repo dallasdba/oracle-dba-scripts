@@ -1,18 +1,17 @@
 #!/bin/env python
 
-#------------------------------------------------------------------------------------------------#
-# Name:   asmfiles                                                                               #
-# Author: Randy Johnson                                                                          #
-# Descr:  ASM Storage by Diskgroup, by Database, by Type, by File                                #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/24/2008 1.00 Randy Johnson    Initial write                                                 #
-# 01/04/2020 3.44 Randy Johnson    Added change tracking to script.                              #
-# 02/12/2020 3.45 Randy Johnson    Added support for Python 3.                                   #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   asmfiles                                                                                 #
+# Author: Randy Johnson                                                                            #
+# Descr:  ASM Storage by Diskgroup, by Database, by Type, by File                                  #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/24/2008 1.00 Randy Johnson    Initial write                                                   #
+# 01/04/2020 1.01 Randy Johnson    Added change tracking to script.                                #
+# 02/12/2020 1.02 Randy Johnson    Added support for Python 3.                                     #
+# 06/12/2020 1.03 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -88,8 +87,8 @@ def Gbytes(bytes):
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'ASM Space Usage'
-  Version        = '3.45'
-  VersionDate    = 'Wed Feb 12 15:51:15 CST 2020'
+  Version        = '1.03'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

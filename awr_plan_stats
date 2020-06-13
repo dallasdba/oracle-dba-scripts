@@ -4,10 +4,18 @@
 # Name:   awr_plan_stats                                                                           #
 # Author: Randy Johnson                                                                            #
 # Descr:  Reports SQL execution plan statistics for a SQL ID.                                      #
+#         Credit to Kerry Osborne for the core logic in the SQL queries.                           #
+#         See http://kerryosborne.oracle-guy.com/2008/10/unstable-plans/ for more info.            #
 #                                                                                                  #
-#              Credit to Kerry Osborne for the core logic in the SQL queries.                      #
-#              See http://kerryosborne.oracle-guy.com/2008/10/unstable-plans/ for more info.       #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/21/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 07/21/2015 2.00 Randy Johnson    Updated print(statements for Python 3.4 compatibility.          #
+# 08/01/2015 2.10 Randy Johnson    Added prompts for username, password, tnsname.                  #
+# 07/12/2017 2.20 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 2.21 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -34,7 +42,7 @@ if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'AWR Plan Stats'
   Version        = '2.21'
-  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

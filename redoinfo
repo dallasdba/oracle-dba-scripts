@@ -1,18 +1,17 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        redoinfo                                                                         #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Reports redolog info from v$log, and v$logfile.                                  #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/31/2015 1.00 Randy Johnson    Initial write.                                                #
-# 11/09/2015 1.10 Randy Johnson    Added v$standby_log report.                                   #
-# 07/13/2017 2.02 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+#  Name:   redoinfo                                                                                #
+#  Author: Randy Johnson                                                                           #
+#  Descr:  Reports redolog info from v$log, and v$logfile.                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/31/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 11/09/2015 1.10 Randy Johnson    Added v$standby_log report.                                     #
+# 07/13/2017 2.02 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 2.03 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -37,8 +36,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Report Redolog Info'
-  Version        = '1.11'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.03'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

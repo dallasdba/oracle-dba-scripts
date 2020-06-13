@@ -1,35 +1,36 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        fscleanup                                                                        #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Prints a report of files to edit and directories to remove when a database is    #
-#               dropped.                                                                         #
-#                                                                                                #
-#  Wish List                                                                                     #
-#   - Identify Backups                                                                           #
-#   - Identify other files such as scripts, logs, etc.                                           #
-#   - Identify cluster identities (service names, etc.)                                          #
-#                                                                                                #
-# Todo's                                                                                         #
-# - Check for existance of tnsnames.ora before attempting to scan it.                            #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 11/09/2012 1.00 Randy Johnson    Initial release.                                              #
-# 07/20/2015 2.00 Randy Johnson    Automated locating tnsnames.ora and listener.ora files.       #
-#                                  Added the -x and -s options. Updated for Python 2.4-3.4       #
-#                                  compatibility.                                                #
-# 08/19/2015 2.10 Randy Johnson    Better error message when I cannot open a file for read.      #
-# 08/25/2015 2.20 Randy Johnson    Renamed script from dbcleanup to fscleanup.                   #
-# 09/02/2015 2.30 Randy Johnson    Removed file permissions/ownership check as it was causing    #
-#                                  issue with symlinks. Fixed bug in file search logic that was  #
-#                                  causing a miss in certain cases.                              #
-# 07/13/2017 2.31 Randy Johnson    Added program description to Usage.                           #
-# 09/02/2019 2.32 Randy Johnson    Minor fix to a print statement.                               #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+#  Name:   fscleanup                                                                               #
+#  Author: Randy Johnson                                                                           #
+#  Descr:  Prints a report of files to edit and directories to remove when a database is           #
+#          dropped.                                                                                #
+#                                                                                                  #
+#  Wish List                                                                                       #
+#   - Identify Backups                                                                             #
+#   - Identify other files such as scripts, logs, etc.                                             #
+#   - Identify cluster identities (service names, etc.)                                            #
+#                                                                                                  #
+# Todo's                                                                                           #
+# - Check for existance of tnsnames.ora before attempting to scan it.                              #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 11/09/2012 1.00 Randy Johnson    Initial release.                                                #
+# 07/20/2015 2.00 Randy Johnson    Automated locating tnsnames.ora and listener.ora files.         #
+#                                  Added the -x and -s options. Updated for Python 2.4-3.4         #
+#                                  compatibility.                                                  #
+# 08/19/2015 2.10 Randy Johnson    Better error message when I cannot open a file for read.        #
+# 08/25/2015 2.20 Randy Johnson    Renamed script from dbcleanup to fscleanup.                     #
+# 09/02/2015 2.30 Randy Johnson    Removed file permissions/ownership check as it was causing      #
+#                                  issue with symlinks. Fixed bug in file search logic that was    #
+#                                  causing a miss in certain cases.                                #
+# 07/13/2017 2.31 Randy Johnson    Added program description to Usage.                             #
+# 09/02/2019 2.32 Randy Johnson    Minor fix to a print statement.                                 #
+# 06/12/2020 2.33 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -118,8 +119,8 @@ def ScanFile(Filename, SearchString):
 if (__name__ == '__main__'):
   Cmd            = pathsplit(argv[0])[1]
   CmdDesc        = 'File System Cleanup Utility'
-  Version        = '2.32'
-  VersionDate    = 'Mon Sep  2 12:18:52 CDT 2019'
+  Version        = '2.33'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   OratabFile     = '/etc/oratab'

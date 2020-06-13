@@ -5,6 +5,13 @@
 # Author: Randy Johnson                                                                            #
 # Descr:  Prints database component version information from product_component_version,            #
 #         and dba_registry_history.                                                                #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 12/09/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -31,7 +38,7 @@ if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Database Components'
   Version        = '1.01'
-  VersionDate    = 'Fri Jul 19 10:12:14 CDT 2019'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

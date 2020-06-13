@@ -1,17 +1,18 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        fuzzyfiles                                                                       #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Checks the fuzzy state of the database datafiles.                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 09/07/2017 1.00 Randy Johnson    Initial write.                                                #
-# 11/12/2017 1.01 Randy Johnson    Removed extraneous absolute_fuzzy_scn in format statement.    #
-# 11/20/3019 1.02 Randy Johnson    Added sort order to the queries. Removed 1 query.             #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   fuzzyfiles                                                                               #
+# Author: Randy Johnson                                                                            #
+# Descr:  Checks the fuzzy state of the database datafiles.                                        #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 09/07/2017 1.00 Randy Johnson    Initial write.                                                  #
+# 11/12/2017 1.01 Randy Johnson    Removed extraneous absolute_fuzzy_scn in format statement.      #
+# 11/20/3019 1.02 Randy Johnson    Added sort order to the queries. Removed 1 query.               #
+# 06/12/2020 1.03 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -36,8 +37,8 @@ if (__name__ == '__main__'):
   Cmd            = basename(argv[0])
   CmdPrefix      = Cmd.split('.')[0]
   CmdDesc        = 'Fuzzy Files (' + Cmd + ')'
-  VersionDate    = 'Wed Nov 20 06:55:07 CST 2019'
-  Version        = '1.02'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
+  Version        = '1.03'
   Sql            = ''
   ErrChk         = False
   ArgParser      = OptionParser()

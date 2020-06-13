@@ -1,20 +1,18 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        parmhist                                                                         #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Report history of parameter changes from AWR.                                    #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 05/29/2014 1.00 Randy Johnson    Initial write.                                                #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 09/04/2015 2.10 Randy Johnson    Bug fixes related to -g and -i options.                       #
-# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
-
+#--------------------------------------------------------------------------------------------------#
+#  Name:   parmhist                                                                                #
+#  Author: Randy Johnson                                                                           #
+#  Descr:  Report history of parameter changes from AWR.                                           #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 05/29/2014 1.00 Randy Johnson    Initial write.                                                  #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 09/04/2015 2.10 Randy Johnson    Bug fixes related to -g and -i options.                         #
+# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 2.12 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -43,8 +41,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Parameter Change History'
-  Version        = '2.11'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.12'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

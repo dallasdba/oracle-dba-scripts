@@ -1,23 +1,15 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        logswitches                                                                       #
-# Author:      Randy Johnson                                                                     #
-# Description: Reports count of log switches for each hour of the day/week.                      #
-#                                                                                                #
-# Usage: logswitches [options]                                                                   #
-#                                                                                                #
-# Options:                                                                                       #
-#   -h, --help  show this help message and exit                                                  #
-#   --s         print SQL query.                                                                 #
-#   --v         print version info.                                                              #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 10/26/2015 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   logswitches                                                                              #
+# Author: Randy Johnson                                                                            #
+# Descr:  Reports count of log switches for each hour of the day/week.                             #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 10/26/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -35,15 +27,14 @@ from Oracle       import ParseConnectString
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 
-
 # --------------------------------------
 # ---- Main Program --------------------
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Log Switches'
-  Version        = '1.00'
-  VersionDate    = 'Tue Sep 15 21:02:11 CDT 2015'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

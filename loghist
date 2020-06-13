@@ -1,17 +1,18 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        loghist                                                                           #
-# Author:      Randy Johnson                                                                     #
-# Description: Reports archivelog history by instance.                                           #
-#                                                                                                #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 08/28/2017 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   loghist                                                                                  #
+# Author: Randy Johnson                                                                            #
+# Descr:  Reports archivelog history by instance.                                                  #
+#                                                                                                  #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 08/28/2017 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -29,15 +30,14 @@ from Oracle       import ParseConnectString
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 
-
 # --------------------------------------
 # ---- Main Program --------------------
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Log History'
-  Version        = '1.00'
-  VersionDate    = 'Mon Aug 28 09:23:23 CDT 2017'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

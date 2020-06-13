@@ -1,41 +1,42 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        dggen3                                                                            #
-# Author:      Randy Johnson                                                                     #
-# Description: Generates Step-Byt-Step Commands for Configuring 2 Data Guard Standby Databases.  #
-#                                                                                                #
-#              This includes the following:                                                      #
-#                1) RMAN Duplicate from Backup                                                   #
-#                2) Configuration of listener.ora and tnsnames.ora files                         #
-#                3) Instance parameters for DG                                                   #
-#                4) Data Guard Broker Commands for creating the configuration                    #
-#                5) Switchover commands and other useful commands for testing the configuration  #
-#                -) Generate a shell script for starting/stopping the DG Observer                #
-#                                                                                                #
-# Wish List:                                                                                     #
-#  - Add configurable Listener Name                                                              #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 11/19/2017 1.00 Randy Johnson    Spinoff from dggen2.                                          #
-# 12/03/2017 1.20 Randy Johnson    Added local_listener to support non-default port, added       #
-#                                  StaticConnectIdentifier to DG Config -- maybe temporary.      #
-# 12/04/2017 1.30 Randy Johnson    Added PrimaryListenerName, Standby{1/2}ListenerName.          #
-#                                  Replaced NodeName with ListenerHost.                          #
-#                                  Added LISTENER = ... to listener.ora when listener host !=    #
-#                                  hostname or port != 1521. Added local_listener to instance    #
-#                                  parameters when listener host != hostname or port != 1521.    #
-#                                  Added set property StaticConnectIdentifier when listener host #
-#                                  !=  hostname or port != 1521. Added listener entry in         #
-#                                  tnsnames.ora file when listener host !=  hostname or port !=  #
-#                                  1521.                                                         #
-# 12/28/2017 1.31 Randy Johnson    Removed redundant creation of standby logfile groups for      #
-#                                  Standby2.                                                     #
-# 02/12/2020 1.32 Randy Johnson    Modifications to support Python 3.2+                          #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   dggen3                                                                                   #
+# Author: Randy Johnson                                                                            #
+# Descr:  Generates Step-Byt-Step Commands for Configuring 2 Data Guard Standby Databases.         #
+#                                                                                                  #
+#         This includes the following:                                                             #
+#           1) RMAN Duplicate from Backup                                                          #
+#           2) Configuration of listener.ora and tnsnames.ora files                                #
+#           3) Instance parameters for DG                                                          #
+#           4) Data Guard Broker Commands for creating the configuration                           #
+#           5) Switchover commands and other useful commands for testing the configuration         #
+#           -) Generate a shell script for starting/stopping the DG Observer                       #
+#                                                                                                  #
+# Wish List:                                                                                       #
+#  - Add configurable Listener Name                                                                #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 11/19/2017 1.00 Randy Johnson    Spinoff from dggen2.                                            #
+# 12/03/2017 1.20 Randy Johnson    Added local_listener to support non-default port, added         #
+#                                  StaticConnectIdentifier to DG Config -- maybe temporary.        #
+# 12/04/2017 1.30 Randy Johnson    Added PrimaryListenerName, Standby{1/2}ListenerName.            #
+#                                  Replaced NodeName with ListenerHost.                            #
+#                                  Added LISTENER = ... to listener.ora when listener host !=      #
+#                                  hostname or port != 1521. Added local_listener to instance      #
+#                                  parameters when listener host != hostname or port != 1521.      #
+#                                  Added set property StaticConnectIdentifier when listener host   #
+#                                  !=  hostname or port != 1521. Added listener entry in           #
+#                                  tnsnames.ora file when listener host !=  hostname or port !=    #
+#                                  1521.                                                           #
+# 12/28/2017 1.31 Randy Johnson    Removed redundant creation of standby logfile groups for        #
+#                                  Standby2.                                                       #
+# 02/12/2020 1.32 Randy Johnson    Modifications to support Python 3.2+                            #
+# 06/12/2020 1.33 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -138,8 +139,8 @@ def LoadConfig(ConfigFile):
 if (__name__ == '__main__'):
   Cmd                   = basename(argv[0]).split('.')[0]
   CmdDesc               = 'Generate Dataguard Configuration'
-  Version               = '1.32'
-  VersionDate           = 'Wed Feb 12 15:51:15 CST 2020'
+  Version               = '1.33'
+  VersionDate           = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState              = 'Production'
   Banner                = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   ArgParser             = OptionParser()

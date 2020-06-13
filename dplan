@@ -4,7 +4,17 @@
 # Name:   dplan                                                                                    #
 # Author: Randy Johnson                                                                            #
 # Descr:  Executes a dbms_xplan.display_awr report on a SQL_ID and prints the rerport.             #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 04/13/2012 1.00 Randy Johnson    Initial write.                                                  #
+# 05/19/2014 1.10 Randy Johnson    Removed Keyboard input for Child ID. Now must use -c            #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 07/17/2015 2.10 Randy Johnson    Added prompts for username, password, tnsname.                  #
+# 08/09/2015 3.00 Randy Johnson    Folded in dplan_awr script. Invoke with -a option.              #
+# 06/12/2020 3.01 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -28,8 +38,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'DBMS Xplan'
-  Version        = '2.11'
-  VersionDate    = 'Fri Jul 19 10:12:14 CDT 2019'
+  Version        = '3.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

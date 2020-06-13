@@ -1,19 +1,18 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        snapinfo                                                                         #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Display information about AWR snapshots (interval, retention, TopNSQL).          #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# mm/dd/yyyy 1.00 Randy Johnson    Initial write.                                                #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 07/17/2015 2.20 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 07/13/2017 2.21 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   snapinfo                                                                                 #
+# Author: Randy Johnson                                                                            #
+# Descr:  Display information about AWR snapshots (interval, retention, TopNSQL).                  #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# mm/dd/yyyy 1.00 Randy Johnson    Initial write.                                                  #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 07/17/2015 2.20 Randy Johnson    Added prompts for username, password, tnsname.                  #
+# 07/13/2017 2.21 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 2.22 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -38,8 +37,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Report AWR Snapshot Configuration Info.'
-  Version        = '2.21'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.22'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

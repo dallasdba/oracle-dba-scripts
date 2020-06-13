@@ -1,17 +1,16 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        plan_changes                                                                      #
-# Author:      Randy Johnson                                                                     #
-# Description: Reports SQL Plan Changes                                                          #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 09/21/2017 1.00 Randy Johnson    Initial write.                                                #
-# 10/16/2017 1.10 Randy Johnson    Bug fixes around Time parameter.                              #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   plan_changes                                                                             #
+# Author: Randy Johnson                                                                            #
+# Descr:  Reports SQL Plan Changes                                                                 #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 09/21/2017 1.00 Randy Johnson    Initial write.                                                  #
+# 10/16/2017 1.10 Randy Johnson    Bug fixes around Time parameter.                                #
+# 06/12/2020 1.11 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -37,8 +36,8 @@ from Oracle       import ValidateDate
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Plan Changes'
-  Version        = '1.10'
-  VersionDate    = 'Mon Oct 16 10:15:38 CDT 2017'
+  Version        = '1.11'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

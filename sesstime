@@ -1,27 +1,15 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        sesstime                                                                         #
-#  Author:      Randy Johnson                                                                    #
-#  Description: This script prints a report from V$SESS_TIME_MODEL and GV$SESS_TIME_MODEL.       #
-#                                                                                                #
-#  Usage: sesstime [options]                                                                     #
-#                                                                                                #
-#  Options:                                                                                      #
-#    -h, --help    show this help message and exit                                               #
-#    -g            search gv$sysemtric (default is v$sysmetric)                                  #
-#    -i INSTANCES  where inst_id in 1,2,3,...                                                    #
-#    -m NAME       where upper(stat_name) like '%CPU%'                                           #
-#    -t SID        where sid = 123                                                               # 
-#    -s            print SQL query.                                                              #
-#    -v            print version info.                                                           #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/31/2015 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   sesstime                                                                                 #
+# Author: Randy Johnson                                                                            #
+# Descr:  This script prints a report from V$SESS_TIME_MODEL and GV$SESS_TIME_MODEL.               #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/31/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -46,8 +34,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Report Session Time'
-  Version        = '1.00'
-  VersionDate    = 'Tue Sep 15 21:02:11 CDT 2015'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

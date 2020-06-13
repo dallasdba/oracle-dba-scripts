@@ -4,7 +4,13 @@
 # Name:   asmattr                                                                                  #
 # Author: Randy Johnson                                                                            #
 # Descr:  Report ASM Attributes                                                                    #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 09/08/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -33,8 +39,8 @@ from Oracle       import ValidateDate
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'ASM Attributes'
-  Version        = '1.02'
-  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -94,7 +100,7 @@ if (__name__ == '__main__'):
     Sql += "     AND UPPER(a.name) LIKE '%" + Attr.upper() + "%'\n"
   Sql +=" ORDER BY g.name\n"
   Sql +="        , a.name;"
-  
+
   Sql = Sql.strip()
 
   if(Show):
@@ -110,16 +116,16 @@ if (__name__ == '__main__'):
   else:
     # Discover all running database instances and add them to the list.
     Proc = Popen([Ps, '-ef'], bufsize=1, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
-    
+
     # Stderr is just a placeholder. We redirected stderr to stdout as follows 'stderr=STDOUT'.
     (Stdout,Stderr) = Proc.communicate()
     Stdout = Stdout.strip()
-                       
-    AsmSid = ''                   
+
+    AsmSid = ''
     for Line in Stdout.split('\n'):
       (Splt) = Line.split()
       Uid, Pid, Ppid, C, Stime, Tty, Time, Cmd = Splt[0], Splt[1], Splt[2], Splt[3], Splt[4], Splt[5], Splt[6] , Splt[7]
-      
+
       if ((Cmd.find('asm_pmon_+ASM', 0, 13)) >= 0):
         AsmSid = Cmd[9:]
       else:
@@ -127,7 +133,7 @@ if (__name__ == '__main__'):
           AsmSid = Cmd[9:]
         else:
           continue
-    
+
     # Set the ORACLE_HOME just in case it isn't set already.
     if (AsmSid != ''):
       (OracleSid, OracleHome) = SetOracleEnv(AsmSid)

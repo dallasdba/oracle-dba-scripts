@@ -1,18 +1,17 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        pvalid                                                                            #
-# Author:      Randy Johnson                                                                     #
-# Description: Display valid parameter values from v$parameter_valid_values.                     #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Added prompts for   #
-#                                  username, password, tnsname.                                  #
-# 07/13/2017 2.01 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   pvalid                                                                                   #
+# Author: Randy Johnson                                                                            #
+# Descr:  Display valid parameter values from v$parameter_valid_values.                            #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Added prompts for     #
+#                                  username, password, tnsname.                                    #
+# 07/13/2017 2.01 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 2.02 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -39,8 +38,8 @@ from Oracle       import ValidateDate
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Valid Parameter Values2'
-  Version        = '2.01'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.02'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

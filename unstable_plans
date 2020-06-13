@@ -1,24 +1,23 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        unstable_plans                                                                    #
-# Author:      Randy Johnson                                                                     #
-# Description: Attempts to find SQL statements with plan instability.                            #
-#              This scripts prompts for two values, both of which can be left blank.             #
-#                min_stddev: the minimum "normalized" standard deviation between plans           #
-#                            (the default is 2)                                                  #
-#                min_etime:  only include statements that have an avg. etime > this value        #
-#                            (the default is .1 second)                                          #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 04/18/2012 1.00 Randy Johnson    Initial write.                                                #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 07/23/2015 2.20 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 07/13/2017 2.21 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   unstable_plans                                                                           #
+# Author: Randy Johnson                                                                            #
+# Descr:  Attempts to find SQL statements with plan instability.                                   #
+#         This scripts prompts for two values, both of which can be left blank.                    #
+#           min_stddev: the minimum "normalized" standard deviation between plans                  #
+#                       (the default is 2)                                                         #
+#           min_etime:  only include statements that have an avg. etime > this value               #
+#                       (the default is .1 second)                                                 #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 04/18/2012 1.00 Randy Johnson    Initial write.                                                  #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 07/23/2015 2.20 Randy Johnson    Added prompts for username, password, tnsname.                  #
+# 07/13/2017 2.21 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 2.22 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -43,8 +42,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Report Unstable Plans'
-  Version        = '2.21'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '2.22'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

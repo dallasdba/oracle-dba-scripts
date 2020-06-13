@@ -1,9 +1,15 @@
 #!/bin/env python
 
 #------------------------------------------------------------------------------------------------#
-# Name:        what_changed                                                                      #
-# Author:      Randy Johnson                                                                     #
-# Description: Report SQL Plan Changes                                                           #
+# Name:   what_changed                                                                           #
+# Author: Randy Johnson                                                                          #
+# Descr:  Report SQL Plan Changes                                                                #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- -----------------------------------------------------------   #
+# 09/21/2017 1.00 Randy Johnson    Initial write.                                                #
+# 10/16/2017 1.10 Randy Johnson    Several formatting changes. Added -x option.                  #
+# 06/12/2020 1.11 Randy Johnson    Reset header formatting.                                      #
 #------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -22,7 +28,6 @@ from Oracle       import ParseConnectString
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 
-
 # --------------------------------------
 # ---- Main Program --------------------
 # --------------------------------------
@@ -30,7 +35,7 @@ if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'What Changed'
   Version        = '1.11'
-  VersionDate    = 'Mon Jul 15 11:31:01 CDT 2019'
+  VersionDate    = ''
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

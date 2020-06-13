@@ -1,28 +1,21 @@
 #!/bin/env python
 
-###################################################################################################
-# Name:         oratab                                                                            #
-# Author:       Randy Johnson                                                                     #
-# Description:  Displays the contents of the oratab file in report format. Commented lines are    #
-#               omitted.                                                                          #
-#                                                                                                 #
-# Usage: oratab [options]                                                                         #
-#                                                                                                 #
-# options:                                                                                        #
-#   -h, --help  show this help message and exit                                                   #
-#   -v          print version info.                                                               #
-#                                                                                                 #
-# History:                                                                                        #
-#                                                                                                 #
-# Date       Ver. Who              Change Description                                             #
-# ---------- ---- ---------------- -------------------------------------------------------------- #
-# 04/17/2017 1.00 Randy Johnson    Initial release.                                               #
-# 09/01/2017 1.01 Randy Johnson    Add program description to -h.                                 #
-# 09/05/2017 1.10 Randy Johnson    Added -d, -i, -r, -t and -v options. Simplified parsing logic  #
-#                                  in LoadOratab().                                               #
-# 02/12/2020 1.11 Randy Johnson    Added logic to gracefuly handle missing oratab file.           #
-#                                  Changed -d Distinct option to -u Unique.                       #
-###################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   oratab                                                                                   #
+# Author: Randy Johnson                                                                            #
+# Descr:  Displays the contents of the oratab file in report format. Commented lines are           #
+#         omitted.                                                                                 #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- --------------------------------------------------------------  #
+# 04/17/2017 1.00 Randy Johnson    Initial release.                                                #
+# 09/01/2017 1.01 Randy Johnson    Add program description to -h.                                  #
+# 09/05/2017 1.10 Randy Johnson    Added -d, -i, -r, -t and -v options. Simplified parsing logic   #
+#                                  in LoadOratab().                                                #
+# 02/12/2020 1.11 Randy Johnson    Added logic to gracefuly handle missing oratab file.            #
+#                                  Changed -d Distinct option to -u Unique.                        #
+# 06/12/2020 1.12 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -131,8 +124,8 @@ def LoadOratab(Oratab=''):
 # --------------------------------------
 if __name__ == '__main__':
   Cmd            = basename(argv[0])
-  Version        = '1.11'
-  VersionDate    = 'Wed Feb 12 06:25:49 CST 2020'
+  Version        = '1.12'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   CmdDesc        = 'Report Oratab File'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate

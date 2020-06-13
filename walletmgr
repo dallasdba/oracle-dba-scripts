@@ -3,8 +3,7 @@
 #--------------------------------------------------------------------------------------------------#
 # Name:   walletmgr                                                                                #
 # Author: Randy Johnson                                                                            #
-# Descr:  wrapper for mkstore, Oracle"s wallet management command.                                 #
-# History:                                                                                         #
+# Descr:  wrapper for mkstore, Oracles wallet management command.                                  #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- --------------------------------------------------------------- #
@@ -55,7 +54,9 @@
 #                                  between standard credentials report and the password report.    #
 # 08/29/2014 1.41 Randy Johnson    Modified the regex search to look for exact match unless * is   #
 #                                  used. Changed keys to credkeys to avoid reserved word.          #
+# 06/12/2020 1.42 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -479,8 +480,8 @@ def report_credendial_attrs(attrs):
 if (__name__ == "__main__"):
   cmd_name       = basename(argv[0]).split(".")[0]
   cmd_descr      = "Wallet Manager"
-  versn          = "1.41"
-  versn_date     = "Thu Aug 29 13:02:36 CDT 2019"
+  versn          = "1.42"
+  versn_date     = "Fri Jun 12 22:00:50 CDT 2020"
   dev_state      = "Production"
   banner         = cmd_descr + ": Release " + versn + " "  + dev_state + ". Last updated: " + versn_date
   now            = datetime.now()

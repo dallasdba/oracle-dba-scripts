@@ -1,47 +1,48 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        dggen                                                                             #
-# Author:      Randy Johnson                                                                     #
-# Description: Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.     #
-#              This script supports RAC as well as single instance primary/standby               #
-#              configurations. Testing was performed on Exadata V2, X2 and Oracle v11g - 12c.    #
-#                                                                                                #
-#              This includes the following:                                                      #
-#                1) RMAN Duplicate from Active Database                                          #
-#                2) Configuration of listener.ora and tnsnames.ora files                         #
-#                3) Server Control commands to register the standby database (RAC only)          #
-#                4) Instance parameters for DG                                                   #
-#                5) Data Guard Broker Commands for creating the configuration                    #
-#                6) Switchover commands and other useful commands for testing the configuration  #
-#                7) Generate a shell script for starting/stopping the DG Observer                #
-#                                                                                                #
-# Wish List:                                                                                     #
-#  - Add configurable Listener Name                                                              #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 03/20/2017 1.00 Randy Johnson    Initial write.                                                #
-# 08/22/2017 1.10 Randy Johnson    Moved initialization for TempPfile and BackupPfile to after   #
-#                                  config file has been processed since there is a dependency on #
-#                                  DbName.                                                       #
-# 08/06/2017 1.20 Randy Johnson    Several fixes as result of QA tests.                          #
-# 08/29/2017 1.21 Randy Johnson    Added textual helps on the summary re. Standby Online Redo    #
-#                                  Logs.                                                         #
-# 01/09/2018 1.22 Randy Johnson    Moved alter database force logging up to just before          #
-#                                  duplication of primary.                                       #
-#                                  Added --privilege sysasm to asmcmd commands.                  #
-#                                  Removed hard dependency on the dbmap.                         #
-# 01/20/2020 1.23 Randy Johnson    Modified to support single instance primary/standby.          #
-#                                  Added handling for *.key=val, SID.key=val, key=val            #
-#                                  Added cluster_database=false. Added explicit instance names   #
-#                                  and asm instance names to better support asymetric            #
-#                                  configurations. Thoroughly tested on enkdb01-enkdb04.         #
-# 01/23/2020 1.24 Randy Johnson    Added *.db_unique_name = StandbyDbUniqueName to temporary     #
-#                                  init.ora file.                                                #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   dggen                                                                                    #
+# Author: Randy Johnson                                                                            #
+# Descr:  Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.            #
+#         This script supports RAC as well as single instance primary/standby                      #
+#         configurations. Testing was performed on Exadata V2, X2 and Oracle v11g - 12c.           #
+#                                                                                                  #
+#         This includes the following:                                                             #
+#           1) RMAN Duplicate from Active Database                                                 #
+#           2) Configuration of listener.ora and tnsnames.ora files                                #
+#           3) Server Control commands to register the standby database (RAC only)                 #
+#           4) Instance parameters for DG                                                          #
+#           5) Data Guard Broker Commands for creating the configuration                           #
+#           6) Switchover commands and other useful commands for testing the configuration         #
+#           7) Generate a shell script for starting/stopping the DG Observer                       #
+#                                                                                                  #
+# Wish List:                                                                                       #
+#  - Add configurable Listener Name                                                                #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 03/20/2017 1.00 Randy Johnson    Initial write.                                                  #
+# 08/22/2017 1.10 Randy Johnson    Moved initialization for TempPfile and BackupPfile to after     #
+#                                  config file has been processed since there is a dependency on   #
+#                                  DbName.                                                         #
+# 08/06/2017 1.20 Randy Johnson    Several fixes as result of QA tests.                            #
+# 08/29/2017 1.21 Randy Johnson    Added textual helps on the summary re. Standby Online Redo      #
+#                                  Logs.                                                           #
+# 01/09/2018 1.22 Randy Johnson    Moved alter database force logging up to just before            #
+#                                  duplication of primary.                                         #
+#                                  Added --privilege sysasm to asmcmd commands.                    #
+#                                  Removed hard dependency on the dbmap.                           #
+# 01/20/2020 1.23 Randy Johnson    Modified to support single instance primary/standby.            #
+#                                  Added handling for *.key=val, SID.key=val, key=val              #
+#                                  Added cluster_database=false. Added explicit instance names     #
+#                                  and asm instance names to better support asymetric              #
+#                                  configurations. Thoroughly tested on enkdb01-enkdb04.           #
+# 01/23/2020 1.24 Randy Johnson    Added *.db_unique_name = StandbyDbUniqueName to temporary       #
+#                                  init.ora file.                                                  #
+# 06/12/2020 1.25 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -128,8 +129,8 @@ def LoadConfig(ConfigFile):
 if __name__ == '__main__':
   Cmd                   = basename(argv[0]).split('.')[0]
   CmdDesc               = 'Generate Dataguard Configuration'
-  Version               = '1.24'
-  VersionDate           = 'Thu Jan 23 09:53:20 CST 2020'
+  Version               = '1.25'
+  VersionDate           = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState              = 'Production'
   Banner                = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   ArgParser             = OptionParser()

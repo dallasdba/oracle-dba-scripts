@@ -1,26 +1,25 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        instlist                                                                         #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Prints a list of all Oracle database instances running on the local machine.     #
-#               Two reports available: 1) instance name only (sorted by instance name)           #
-#               2) instance name, pmon process id (sorted by instance name).                     #
-#               This script has only been tested on Red Hat / Oracle Linux and may fail on other #
-#               Unix types due to dependency on the output format of the ps command.             #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 08/27/2012 1.00 Randy Johnson    Initial release.                                              #
-# 09/11/2012 1.01 Randy Johnson    Replaced Proc.stdout.readlines() with Proc.communicate().     #
-# 09/11/2012 1.01 Randy Johnson    Added -p option for printing pmon process id.                 #
-# 09/11/2012 1.02 Randy Johnson    Renamed to instlist                                           #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 07/13/2017 2.02 Randy Johnson    Added program description to Usage.                           #
-# 12/10/2018 3.00 Randy Johnson    Changed search to regex pattern matching.                     #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+#  Name:   instlist                                                                                #
+#  Author: Randy Johnson                                                                           #
+#  Descr:  Prints a list of all Oracle database instances running on the local machine.            #
+#          Two reports available: 1) instance name only (sorted by instance name)                  #
+#          2) instance name, pmon process id (sorted by instance name).                            #
+#          This script has only been tested on Red Hat / Oracle Linux and may fail on other        #
+#          Unix types due to dependency on the output format of the ps command.                    #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 08/27/2012 1.00 Randy Johnson    Initial release.                                                #
+# 09/11/2012 1.01 Randy Johnson    Replaced Proc.stdout.readlines() with Proc.communicate().       #
+# 09/11/2012 1.01 Randy Johnson    Added -p option for printing pmon process id.                   #
+# 09/11/2012 1.02 Randy Johnson    Renamed to instlist                                             #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 07/13/2017 2.02 Randy Johnson    Added program description to Usage.                             #
+# 12/10/2018 3.00 Randy Johnson    Changed search to regex pattern matching.                       #
+# 06/12/2020 3.01 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -47,8 +46,8 @@ from sys          import exit
 if (__name__ == '__main__'):      # if this is true, then this script is *not* being imported by another Python script.
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'List Running Oracle Database Instances'
-  Version        = '3.00'
-  VersionDate    = 'Mon Dec 10 11:37:29 CST 2018'
+  Version        = '3.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Ps             = '/bin/ps'

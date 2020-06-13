@@ -1,23 +1,22 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        sqx (SQL Execute)                                                                #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Takes a sql script file from the command line and executes it in the database.   #
-#               If no connect string provided ORACLE_SID is used and authentication defaults to  #
-#               sys / as sysdba.                                                                 #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/06/2012 1.00 Randy Johnson    Initial release.                                              #
-# 09/19/2012 2.00 Randy Johnson    Cleanup, minor cosmetic changes, removed OptionParser.        #
-# 07/17/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Added prompts for   #
-#                                  username, password, tnsname. Added -f option.                 #
-# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                           #
-# 02/12/2020 3.02 Randy Johnson    Simple syntax formatting changes.                             #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+#  Name:    sqx (SQL Execute)                                                                      #
+#  Author:  Randy Johnson                                                                          #
+#  Descrip: Takes a sql script file from the command line and executes it in the database.         #
+#           If no connect string provided ORACLE_SID is used and authentication defaults to        #
+#           sys / as sysdba.                                                                       #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/06/2012 1.00 Randy Johnson    Initial release.                                                #
+# 09/19/2012 2.00 Randy Johnson    Cleanup, minor cosmetic changes, removed OptionParser.          #
+# 07/17/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Added prompts for     #
+#                                  username, password, tnsname. Added -f option.                   #
+# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                             #
+# 02/12/2020 3.02 Randy Johnson    Simple syntax formatting changes.                               #
+# 06/12/2020 3.03 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -44,8 +43,8 @@ from Oracle       import ParseConnectString
 if __name__ == '__main__':
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'SQL Execute'
-  Version        = '3.02'
-  VersionDate    = 'Wed Feb 12 06:37:38 CST 2020'
+  Version        = '3.03'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

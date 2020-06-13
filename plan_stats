@@ -1,23 +1,22 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        plan_stats                                                                       #
-#  Author:      Randy Johnson                                                                    #
-#  Description:                                                                                  #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 01/19/2015 1.00 Randy Johnson    Initial write.                                                #
-# 04/23/2015 1.30 Randy Johnson    Updated print statements for Python 3.4 compatibility. This   #
-#                                  is most commonly changes to the print() and join() functions. #
-#                                  Changed the SQL to use Sqlplus headings instead of printing   #
-#                                  them myself.                                                  #
-# 08/13/2015 3.00 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                           #
-# 10/21/2017 3.02 Randy Johnson    Renamed from planstats to plan_stats.                         #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   plan_stats                                                                               #
+# Author: Randy Johnson                                                                            #
+# Descr:                                                                                           #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 01/19/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 04/23/2015 1.30 Randy Johnson    Updated print statements for Python 3.4 compatibility. This     #
+#                                  is most commonly changes to the print() and join() functions.   #
+#                                  Changed the SQL to use Sqlplus headings instead of printing     #
+#                                  them myself.                                                    #
+# 08/13/2015 3.00 Randy Johnson    Added prompts for username, password, tnsname.                  #
+# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                             #
+# 10/21/2017 3.02 Randy Johnson    Renamed from planstats to plan_stats.                           #
+# 06/12/2020 3.03 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -42,8 +41,8 @@ from Oracle       import SetOracleEnv
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'SQL Execution Plan Statistics'
-  Version        = '3.02'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '3.03'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

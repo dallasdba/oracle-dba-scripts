@@ -4,7 +4,14 @@
 # Name:   backup_controlfile                                                                       #
 # Author: Randy Johnson                                                                            #
 # Descr:  alter database backup controlfile to [trace as] {filename} [reuse];                      #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 10/09/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 07/13/2017 1.01 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 1.02 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -32,7 +39,7 @@ if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Backup Controlfile'
   Version        = '1.02'
-  VersionDate    = 'Mon Jul 15 14:36:57 CDT 2019'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

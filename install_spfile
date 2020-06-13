@@ -1,31 +1,28 @@
 #!/bin/env python
 
-###################################################################################################
-# Name:         install_spfile                                                                    #
-# Author:       Randy Johnson                                                                     #
-# Description:  Starts the database on the local node using the pfile (from the -p option) then   #
-#               creates an spfile in ASM from the pfile. Checks the database state before         #
-#               starting the operation and after each startup/shutdown command is executed.       #
-# Dependencies: $ASM_HOME/bin/olsnodes                                                            #
-#               $ORACLE_HOME/bin/sqlplus                                                          #
-#                                                                                                 #
-# History:                                                                                        #
-#                                                                                                 #
-# Date       Ver. Who          on the local node.    Change Description                           #
-# ---------- ---- ---------------- -------------------------------------------------------------- #
-# 02/16/2014 1.00 Randy Johnson    Initial release.                                               #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                      #
-# 09/19/2015 3.00 Randy Johnson    Updated fairly heavily in order to improve flexibility. Added  #
-#                                  -g (diskgroup) option, -u (db_unique_name) option, eliminated  #
-#                                  the -e (ext) option. Removed GetClustername(), GetClusterInfo()#
-#                                  and switched GetNodes() from a local definition to the         #
-#                                  Oracle.py module. Cleaned up a lot of print statements that    #
-#                                  were still of the < Python3.4 style.                           #
-# 10/09/2015 3.01 Randy Johnson    Removed Pid, getpgid()                                         #
-# 07/11/2017 3.02 Randy Johnson    Replaced PythonStackTrace() with traceback.format_exc()        #
-# 07/13/2017 3.10 Randy Johnson    Added program description to Usage. Removed                    #
-#                                  traceback.format_exc() in favor of simple error messages.      #
-###################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   install_spfile                                                                           #
+# Author: Randy Johnson                                                                            #
+# Descr:  Starts the database on the local node using the pfile (from the -p option) then          #
+#         creates an spfile in ASM from the pfile. Checks the database state before                #
+#         starting the operation and after each startup/shutdown command is executed.              #
+#                                                                                                  #
+# Date       Ver. Who          on the local node.    Change Description                            #
+# ---------- ---- ---------------- --------------------------------------------------------------  #
+# 02/16/2014 1.00 Randy Johnson    Initial release.                                                #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 09/19/2015 3.00 Randy Johnson    Updated fairly heavily in order to improve flexibility. Added   #
+#                                  -g (diskgroup) option, -u (db_unique_name) option, eliminated   #
+#                                  the -e (ext) option. Removed GetClustername(), GetClusterInfo() #
+#                                  and switched GetNodes() from a local definition to the          #
+#                                  Oracle.py module. Cleaned up a lot of print statements that     #
+#                                  were still of the < Python3.4 style.                            #
+# 10/09/2015 3.01 Randy Johnson    Removed Pid, getpgid()                                          #
+# 07/11/2017 3.02 Randy Johnson    Replaced PythonStackTrace() with traceback.format_exc()         #
+# 07/13/2017 3.10 Randy Johnson    Added program description to Usage. Removed                     #
+#                                  traceback.format_exc() in favor of simple error messages.       #
+# 06/12/2020 3.11 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -51,11 +48,10 @@ from Oracle       import SetOracleEnv
 from Oracle       import GetDbState
 from Oracle       import IsExecutable
 
-
 # --------------------------------------
 # ---- Function Definitions ------------
 # --------------------------------------
-
+#---------------------------------------------------------------------------
 # Def : InstallSpfile()
 # Desc: Creates an spfile in ASM from an init.ora file and starts the
 #       database to the mount state.
@@ -127,8 +123,9 @@ def InstallSpfile(Pfile):
   ErrChk = False
   Stdout = RunSqlplus(Sql, ErrChk)
   print('Current state is: %s on the local node.' % DbState)
+#---------------------------------------------------------------------------
 # End RestoreSpfile()
-
+#---------------------------------------------------------------------------
 # --------------------------------------
 # ---- End Function Definitions --------
 # --------------------------------------
@@ -139,8 +136,8 @@ def InstallSpfile(Pfile):
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Install Spfile'
-  Version        = '3.10'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '3.11'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Colsep         = '!~!'

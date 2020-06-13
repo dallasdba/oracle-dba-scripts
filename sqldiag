@@ -1,18 +1,16 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        sqldiag                                                                           #
-# Author:      Randy Johnson                                                                     #
-# Description: Produces various reports useful for diagnosing SQL tuning issues.                 #
-#                                                                                                #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/12/2017 1.00 Randy Johnson    Initial write.                                                #
-# 07/13/2017 1.10 Randy Johnson    Enhanced Top 10 Wait Events report for -g option.             #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   sqldiag                                                                                  #
+# Author: Randy Johnson                                                                            #
+# Descr:  Produces various reports useful for diagnosing SQL tuning issues.                        #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/12/2017 1.00 Randy Johnson    Initial write.                                                  #
+# 07/13/2017 1.10 Randy Johnson    Enhanced Top 10 Wait Events report for -g option.               #
+# 06/12/2020 1.11 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -38,8 +36,8 @@ from Oracle       import SetOracleEnv
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'SQL Diagnostics'
-  Version        = '1.10'
-  VersionDate    = 'Wed Jul 13 08:56:12 CDT 2017'
+  Version        = '1.11'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

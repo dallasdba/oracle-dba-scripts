@@ -1,20 +1,19 @@
 #!/bin/env python
 
-##################################################################################################################
-#  Name:        getpw (get password)                                                                             #
-#  Author:      Randy Johnson                                                                                    #
-#  Description: Looks up an encoded database password and returns the decoded version of it.                     #
-#                                                                                                                #
-# History:                                                                                                       #
-#                                                                                                                #
-# Date       Ver. Who              Change Description                                                            #
-# ---------- ---- ---------------- ----------------------------------------------------------------------------- #
-# 07/06/2012 1.00 Randy Johnson    Initial release.                                                              #
-# 09/19/2012 2.00 Randy Johnson    Initial release.                                                              #
-# 12/07/2012 2.10 Randy Johnson    Changed encode/decode to use built-in string functions.                       #
-# 07/17/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                                     #
-# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                                           #
-##################################################################################################################
+#--------------------------------------------------------------------------------------------------#
+#  Name:        getpw (get password)                                                               #
+#  Author:      Randy Johnson                                                                      #
+#  Description: Looks up an encoded database password and returns the decoded version of it.       #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- --------------------------------------------------------------  #
+# 07/06/2012 1.00 Randy Johnson    Initial release.                                                #
+# 09/19/2012 2.00 Randy Johnson    Initial release.                                                #
+# 12/07/2012 2.10 Randy Johnson    Changed encode/decode to use built-in string functions.         #
+# 07/17/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 3.02 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -96,7 +95,7 @@ if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Get Password'
   Version        = '3.02'
-  VersionDate    = 'Mon Jul 22 10:51:33 CDT 2019'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   ArgParser      = OptionParser()

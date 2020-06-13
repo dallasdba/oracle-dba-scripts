@@ -1,31 +1,29 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        sendfile                                                                         #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Sends a simple text file as attachment using sendmail. Returns the return code   #
-#               from the sendmail session. Any return code not equal to 0 is an error.           #
-#                                                                                                #
-#  sendfile.py  File Address [[-v][--verbose]]                                                   #
-#         sendfile.py  File  Address1,Address2,Address3,...                                      #
-#      ** sendfile.py  File 'Address1, Address2, Address3, ...'                                  #
-#                                                                                                #
-#  Where:                                                                                        #
-#    File    : is the name of the file you want to send as an attachment.                        #
-#    Address : is the email address you want to send the file to.                                #
-#                                                                                                #
-#   ** You may provide a comma delimited list of destination addresses but                       #
-#      if there are any embedded spaces in the list, the list must be                            #
-#      enclosed in quotes ('|")                                                                  #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/06/2012 1.00 Randy Johnson    Initial release.                                              #
-# 07/13/2017 1.01 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
-
+#--------------------------------------------------------------------------------------------------#
+# Name:   sendfile                                                                                 #
+# Author: Randy Johnson                                                                            #
+# Descr:  Sends a simple text file as attachment using sendmail. Returns the return code           #
+#         from the sendmail session. Any return code not equal to 0 is an error.                   #
+#                                                                                                  #
+# sendfile.py  File Address [[-v][--verbose]]                                                      #
+#        sendfile.py  File  Address1,Address2,Address3,...                                         #
+#     ** sendfile.py  File 'Address1, Address2, Address3, ...'                                     #
+#                                                                                                  #
+# Where:                                                                                           #
+#   File    : is the name of the file you want to send as an attachment.                           #
+#   Address : is the email address you want to send the file to.                                   #
+#                                                                                                  #
+#  ** You may provide a comma delimited list of destination addresses but                          #
+#     if there are any embedded spaces in the list, the list must be                               #
+#     enclosed in quotes ('|")                                                                     #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/06/2012 1.00 Randy Johnson    Initial release.                                                #
+# 07/13/2017 1.01 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 1.02 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -141,8 +139,8 @@ def splitThousands( s, tSep=',', dSep='.'):
 if (__name__ == '__main__'):
   Cmd = basename(argv[0])
   CmdDesc        = 'Send a File as a MIME Attachment'
-  Version        = '1.01'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '1.02'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Development'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
 

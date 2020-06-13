@@ -1,16 +1,15 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        tdewallet                                                                        #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Reports v$encryption_wallet                                                      #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 11/07/2019 1.00 Randy Johnson    Initial write.                                                #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   tdewallet                                                                                #
+# Author: Randy Johnson                                                                            #
+# Descr:  Reports v$encryption_wallet                                                              #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 11/07/2019 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -37,8 +36,8 @@ from Oracle       import ValidateDate
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'TDE Wallet'
-  Version        = '1.00'
-  VersionDate    = 'Thu Nov 7 15:12:32 UTC 2019'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

@@ -1,37 +1,36 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        parms                                                                             #
-# Author:      Randy Johnson                                                                     #
-# Description: Prints a list of all instance parameters (including hidden parms). If you         #
-#              provide a parameter or part of a parameter on the command line then all           #
-#              parameters not LIKE %parameter% will be filtered out.                             #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 08/27/2012 1.00 Randy Johnson    Initial release.                                              #
-# 05/31/2014 2.00 Randy Johnson    Added -m option to provide two different report formats (one  #
-#                                  with and without parameter change metrics). Added the -s      #
-#                                  option to print the SQL Query. Added the -u option to report  #
-#                                  undocumented (hidden) parameters. By default the report no    #
-#                                  longer includes undocumented parameters.                      #
-# 08/12/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 08/12/2015 3.10 Randy Johnson    Added prompts for username, password, tnsname.                #
-# 08/25/2015 3.11 Randy Johnson    Cosmetic only. Tidied up the Sql. Flipped state from dev to   #
-#                                  prod.                                                         #
-# 09/16/2015 3.12 Randy Johnson    Fixed invalid results of IsSet (caused by change to INITCAP() #
-#                                  used for IsDef and IsMod.                                     #
-# 02/06/2015 3.13 Randy Johnson    Cosmetic change. TRUE -> True                                 #
-# 07/13/2017 3.14 Randy Johnson    Added program description to Usage.                           #
-# 11/18/2019 3.15 Randy Johnson    Added support for pluggable databases.                        #
-# 11/25/2019 3.16 Randy Johnson    Modified value to replace(value, chr(10), '!!!') to           #
-#                                  accomodate newline characters in the value column.            #
-# 11/27/2019 3.17 Randy Johnson    Mojor structural changes to better accomodate the -a option.  #
-#                                  Added exception handling for Sqlplus errors.                  #
-# 12/03/2019 3.18 Randy Johnson    Switched to ResultSet2() + other fixes.                       #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   parms                                                                                    #
+# Author: Randy Johnson                                                                            #
+# Descr:  Prints a list of all instance parameters (including hidden parms). If you                #
+#         provide a parameter or part of a parameter on the command line then all                  #
+#         parameters not LIKE %parameter% will be filtered out.                                    #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 08/27/2012 1.00 Randy Johnson    Initial release.                                                #
+# 05/31/2014 2.00 Randy Johnson    Added -m option to provide two different report formats (one    #
+#                                  with and without parameter change metrics). Added the -s        #
+#                                  option to print the SQL Query. Added the -u option to report    #
+#                                  undocumented (hidden) parameters. By default the report no      #
+#                                  longer includes undocumented parameters.                        #
+# 08/12/2015 3.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 08/12/2015 3.10 Randy Johnson    Added prompts for username, password, tnsname.                  #
+# 08/25/2015 3.11 Randy Johnson    Cosmetic only. Tidied up the Sql. Flipped state from dev to     #
+#                                  prod.                                                           #
+# 09/16/2015 3.12 Randy Johnson    Fixed invalid results of IsSet (caused by change to INITCAP()   #
+#                                  used for IsDef and IsMod.                                       #
+# 02/06/2015 3.13 Randy Johnson    Cosmetic change. TRUE -> True                                   #
+# 07/13/2017 3.14 Randy Johnson    Added program description to Usage.                             #
+# 11/18/2019 3.15 Randy Johnson    Added support for pluggable databases.                          #
+# 11/25/2019 3.16 Randy Johnson    Modified value to replace(value, chr(10), '!!!') to             #
+#                                  accomodate newline characters in the value column.              #
+# 11/27/2019 3.17 Randy Johnson    Mojor structural changes to better accomodate the -a option.    #
+#                                  Added exception handling for Sqlplus errors.                    #
+# 12/03/2019 3.18 Randy Johnson    Switched to ResultSet2() + other fixes.                         #
+# 06/12/2020 3.19 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -217,8 +216,8 @@ def GenSql(Cdb, ColSep):
 if __name__ == '__main__':
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Instance Parameters'
-  Version        = '3.17'
-  VersionDate    = 'Tue Dec 3 14:45:16 CST 2019'
+  Version        = '3.19'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

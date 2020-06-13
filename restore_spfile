@@ -1,20 +1,18 @@
 #!/bin/env python
 
-##################################################################################################
-# Name:        restore_spfile                                                                    #
-# Author:      Randy Johnson                                                                     #
-# Description: Restores the spfile from RMAN backuppiece.                                        #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 11/18/2014 1.00 Randy Johnson    Initial release.                                              #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
-# 10/09/2015 2.01 Randy Johnson    Changed getpgid() to getpid()                                 #
-# 07/13/2017 3.00 Randy Johnson    Renamed to restore_spfile. Added program description to       #
-#                                  Usage.                                                        #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   restore_spfile                                                                           #
+# Author: Randy Johnson                                                                            #
+# Descr:  Restores the spfile from RMAN backuppiece.                                               #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 11/18/2014 1.00 Randy Johnson    Initial release.                                                #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 10/09/2015 2.01 Randy Johnson    Changed getpgid() to getpid()                                   #
+# 07/13/2017 3.00 Randy Johnson    Renamed to restore_spfile. Added program description to Usage.  #
+# 06/12/2020 3.01 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -55,7 +53,7 @@ from Oracle       import SetOracleEnv
 # Retn: <none>
 #---------------------------------------------------------------------------
 def RestoreSpfile():
-
+ 
   # Ensure the database is down...
   # ---------------------------------
   DbState = GetDbState();
@@ -204,8 +202,8 @@ def GetParameter(ParmName):
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Restore Spfile via RMAN'
-  Version        = '3.00'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '3.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Colsep         = '!~!'

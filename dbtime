@@ -4,6 +4,17 @@
 # Name:   dbtime                                                                                   #
 # Author: Randy Johnson                                                                            #
 # Descr:  Find busiest time periods in AWR.                                                        #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 05/29/2014 1.00 Randy Johnson    Initial write.                                                  #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility. Added prompts for     #
+#                                  username, password, tnsname.                                    #
+# 09-19-2019 2.10 Randy Johnson    Added -l and -m options. Set EndTime default to                 #
+#                                  3000-01-01 00:00:00                                             #
+# 06/12/2020 2.11 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -30,8 +41,8 @@ from Oracle       import ValidateDate
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Database Time'
-  Version        = '2.12'
-  VersionDate    = 'Fri Jul 19 10:12:14 CDT 2019'
+  Version        = '2.11'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -43,7 +54,6 @@ if (__name__ == '__main__'):
   SqlText        = ''
   SqlId          = ''
   Now            = datetime.now()
-  EndTime        = '3000-01-01 00:00:00'
   LowSnapId      = '0'
   MaxSnapId      = '9999999999999999999'
 
@@ -61,7 +71,7 @@ if (__name__ == '__main__'):
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-b',  dest='BeginTime',                       default='1960-01-01 00:00:00', type=str, help="sample_time >= BeginTime   (default 1960-01-01 00:00:00)")
-  ArgParser.add_option('-e',  dest='EndTime',                         default=EndTime,               type=str, help="sample_time <= EndTime     (default "  + EndTime + ")")
+  ArgParser.add_option('-e',  dest='EndTime',                         default='3000-01-01 00:00:00', type=str, help="sample_time <= EndTime     (default 3000-01-01 00:00:00)")
   ArgParser.add_option("-l",  dest="LowSnapId",                       default=LowSnapId,             type=str, help="where snap_id >= LowSnapId (default '" + LowSnapId + "')")
   ArgParser.add_option("-m",  dest="MaxSnapId",                       default=MaxSnapId,             type=str, help="where snap_id <= MaxSnapId (default '" + MaxSnapId + "')")  
   ArgParser.add_option('-i',  dest='Instances',                       default='',                    type=str, help="where inst_id in 1,2,3,...")

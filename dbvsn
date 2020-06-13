@@ -4,7 +4,20 @@
 # Name:   dbvn                                                                                     #
 # Author: Randy Johnson                                                                            #
 # Descr:  Report database version and patch information from produt_component_version, and         #
-#              dba_registry_history.                                                               #
+#         dba_registry_history.                                                                    #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/08/2014 1.00 Randy Johnson    Initial write.                                                  #
+# 07/10/2014 1.10 Randy Johnson    Added xmltransform(dbms_qopatch.get_opatch_list(), -            #
+#                                   dbms_qopatch.GET_OPATCH_XSLT()) for 12c databases.             #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 08/07/2015 2.10 Randy Johnson    Minor mods for consistency + added tns connect option.          #
+# 07/13/2017 2.11 Randy Johnson    Added program description to Usage.                             #
+# 01/08/2018 2.11 Randy Johnson    Added 12c Features.                                             #
+# 06/12/2020 2.12 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -31,8 +44,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Database Version Information'
-  Version        = '2.13'
-  VersionDate    = 'Fri Jul 19 10:12:14 CDT 2019'
+  Version        = '2.12'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

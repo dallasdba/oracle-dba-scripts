@@ -1,16 +1,15 @@
 #!/bin/env python
 
-#------------------------------------------------------------------------------------------------#
-# Name:        profiles                                                                          #
-# Author:      Randy Johnson                                                                     #
-# Description: Prints a report of dba_profiles.                                                  #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 03/12/2020 1.00 Randy Johnson    Initial write.                                                #
-#------------------------------------------------------------------------------------------------#
+#--------------------------------------------------------------------------------------------------#
+# Name:   profiles                                                                                 #
+# Author: Randy Johnson                                                                            #
+# Descr:  Prints a report of dba_profiles.                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 03/12/2020 1.00 Randy Johnson    Initial write.                                                  #
+# 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -35,8 +34,8 @@ from Oracle       import SetOracleEnv
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Active SQL'
-  Version        = '2.21'
-  VersionDate    = 'Thu Mar 12 09:56:58 CDT 2020'
+  Version        = '1.01'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''

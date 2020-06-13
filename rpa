@@ -1,23 +1,22 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        rpa                                                                              #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Recovery Point Advisor - prints the latest valid point of recovery in a RAC      #
-#               database. This script is based on MOS notes:                                     #
-#                 - RAC Backup, Restore and Recovery using RMAN (Doc ID 243760.1)                #
-#                 - Open Database failed - DATAFILE NEEDS MORE RECOVERY TO BE CONSISTENT         #
-#                   ORA-1194 ORA-1547 ORA-1110 (Doc ID 1528788.1)                                #
-#                 - How to quickly check that Database is consistent after incomplete recovery   #
-#                   (Point in Time Recovery) before OPEN RESETLOGS (Doc ID 1354256.1)            #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 07/08/2014 1.00 Randy Johnson    Initial write.                                                #
-# 02-02-2017 2.00 Randy Johnson    Switched queries to use NEXT_CHANGE# instead of SEQUENCE#.    #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   rpa                                                                                      #
+# Author: Randy Johnson                                                                            #
+# Descr:  Recovery Point Advisor - prints the latest valid point of recovery in a RAC              #
+#         database. This script is based on MOS notes:                                             #
+#           - RAC Backup, Restore and Recovery using RMAN (Doc ID 243760.1)                        #
+#           - Open Database failed - DATAFILE NEEDS MORE RECOVERY TO BE CONSISTENT                 #
+#             ORA-1194 ORA-1547 ORA-1110 (Doc ID 1528788.1)                                        #
+#           - How to quickly check that Database is consistent after incomplete recovery           #
+#             (Point in Time Recovery) before OPEN RESETLOGS (Doc ID 1354256.1)                    #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/08/2014 1.00 Randy Johnson    Initial write.                                                  #
+# 02-02-2017 2.00 Randy Johnson    Switched queries to use NEXT_CHANGE# instead of SEQUENCE#.      #
+# 06/12/2020 2.01 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -42,8 +41,8 @@ if (__name__ == '__main__'):
   Cmd            = basename(argv[0])
   CmdPrefix      = Cmd.split('.')[0]
   CmdDesc        = 'Recovery Point Advisor (' + Cmd + ')'
-  VersionDate    = 'Thu Feb  2 11:54:57 CST 2017'
-  Version        = '2.00'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
+  Version        = '2.01'
   Sql            = ''
   Colsep         = '~'
   ErrChk         = True

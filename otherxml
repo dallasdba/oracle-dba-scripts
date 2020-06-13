@@ -1,17 +1,18 @@
 #!/bin/env python
 
-##################################################################################################
-#  Name:        otherxml                                                                         #
-#  Author:      Randy Johnson                                                                    #
-#  Description: Dumps the OTHER_XML column from v$sqltext                                        #
-#                                                                                                #
-# History:                                                                                       #
-#                                                                                                #
-# Date       Ver. Who              Change Description                                            #
-# ---------- ---- ---------------- ------------------------------------------------------------- #
-# 08/17/2015 1.00 Randy Johnson    Initial write.                                                #
-# 07/13/2017 1.01 Randy Johnson    Added program description to Usage.                           #
-##################################################################################################
+#--------------------------------------------------------------------------------------------------#
+# Name:   otherxml                                                                                 #
+# Author: Randy Johnson                                                                            #
+# Descr:  Dumps the OTHER_XML column from v$sqltext                                                #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 08/17/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 07/13/2017 1.01 Randy Johnson    Added program description to Usage.                             #
+# 06/12/2020 1.02 Randy Johnson    Reset header formatting.                                        #
+#--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -29,15 +30,14 @@ from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 from Oracle       import ParseConnectString
 
-
 # --------------------------------------
 # ---- Main Program --------------------
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Other XML'
-  Version        = '1.01'
-  VersionDate    = 'Thu Jul 13 12:15:38 CDT 2017'
+  Version        = '1.02'
+  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
