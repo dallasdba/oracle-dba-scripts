@@ -1,0 +1,653 @@
+#!/bin/env python
+
+#--------------------------------------------------------------------------------------------------#
+# Name:   dginfo                                                                                   #
+# Author: Randy Johnson                                                                            #
+# Descr:  Reports information on the Data Guard Status and Configuration.                          #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 07/10/2014 1.00 Randy Johnson    Initial write.                                                  #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
+# 08/09/2015 3.00 Randy Johnson    Added prompts for username, password, tnsname.                  #
+# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                             #
+# 07/13/2017 3.02 Randy Johnson    Minor formatting changes to reports.                            #
+# 06/14/2020 3.03 Randy Johnson    Minor formatting changes to header.                             #
+#--------------------------------------------------------------------------------------------------#
+
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Data Guard Info.'
+  Version        = '3.02'
+  VersionDate    = 'Tue Dec 12 13:58:54 GST 2017'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  InStr          = ''
+  ConnStr        = ''
+
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nReports information on the Data Guard Status and Configuration.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('-g',  dest='Global',  action='store_true', default=False, help="search gv$... (default is v$...)")
+  ArgParser.add_option('--s', dest='Show',    action='store_true', default=False, help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer', action='store_true', default=False, help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  Global    = Options.Global
+  Show      = Options.Show
+  ShowVer   = Options.ShowVer
+  
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+    
+  Sql += "-- db_mode.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id        format 999  heading 'Inst'\n"
+  Sql += "column database_role  format a18  heading 'Role  ' \n"
+  Sql += "column open_mode      format a20  heading 'Open Mode'\n"
+  Sql += "column log_mode       format a14  heading 'Log Mode'\n"
+  Sql += "column flashback_on   format a13  heading 'Flashback On'\n"
+  Sql += "column force_logging  format a14  heading 'Force Logging'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id                inst_id\n"
+    Sql += "       , INITCAP(database_role) database_role\n"
+  else:
+    Sql += "         INITCAP(database_role) database_role\n"
+  Sql += "       , INITCAP(open_mode)     open_mode\n"
+  Sql += "       , INITCAP(log_mode)      log_mode\n"
+  Sql += "       , INITCAP(flashback_on)  flashback_on\n"
+  Sql += "       , INITCAP(force_logging) force_logging\n"
+  if (Global):
+    Sql += "    FROM gv$database\n"
+    Sql += "ORDER BY inst_id;\n"
+  else:
+    Sql += "    FROM v$database;"
+
+  Sql += "\n\n-- dg_check_standby.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id              format 999       heading 'S'\n"
+  Sql += "column dest_id                format 999       heading 'D'\n"
+  Sql += "column destination            format a20       heading 'Destination'\n"
+  Sql += "column status                 format a10       heading 'Stat'\n"
+  Sql += "column synchronization_status format a20       heading 'Sync. Stat'\n"
+  Sql += "column synchronized           format a5        heading 'Sync?'\n"
+  Sql += "column gap_status             format a10       heading 'Gap Stat.'\n"
+  Sql += "column database_mode          format a20       heading 'Db Mode'\n"
+  Sql += "column recovery_mode          format a25       heading 'Recov. Mode'\n"
+  Sql += "column protection_mode        format a20       heading 'Prot. Mode'\n"
+  Sql += "column applied_seq#           format 99999999  heading 'Applied Seq#'\n"
+  Sql += "column error                  format a20       heading 'Error'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id,\n"
+    Sql += "         dest_id,\n"
+  else:
+    Sql += "         dest_id,\n"
+  Sql += "         destination,\n"
+  Sql += "         status,\n"
+  Sql += "         synchronization_status,\n"
+  Sql += "         synchronized,\n"
+  Sql += "         gap_status,\n"
+  Sql += "         database_mode,\n"
+  Sql += "         recovery_mode,\n"
+  Sql += "         protection_mode,\n"
+  Sql += "         applied_seq#,\n"
+  Sql += "         error\n"
+  if (Global):
+    Sql += "    FROM gv$archive_dest_status\n"
+  else:
+    Sql += "    FROM v$archive_dest_status\n"
+  Sql += "   WHERE archived_seq# > 0\n"
+  Sql += "     AND status <> 'INACTIVE'\n"
+  if (Global):
+    Sql += "     AND type='PHYSICAL'\n"
+    Sql += "ORDER BY inst_id;"
+  else:
+    Sql += "     AND type='PHYSICAL';"
+
+  Sql += "\n\n-- dg_check_standby_gap.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id               format 999          heading 'Inst.'\n"
+  Sql += "column destination             format a40          heading 'Destination'\n"
+  Sql += "column database_mode           format a20          heading 'Db Mode'\n"
+  Sql += "column archived_seq#           format 999999999999 heading 'Arch. Seq#'\n"
+  Sql += "column applied_seq#            format 999999999999 heading 'Applied Seq#'\n"
+  Sql += "column synchronization_status  format a20          heading 'Sync. Statatus'\n"
+  Sql += "column synchronized            format a4           heading 'Syncd.'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         INITCAP(type) ||' Standby Db => '|| db_unique_name || inst_id destination\n"
+  else:
+    Sql += "         INITCAP(type) ||' Standby Db => '|| db_unique_name destination\n"
+  Sql += "       , initcap(database_mode) database_mode\n"
+  Sql += "       , archived_seq#\n"
+  Sql += "       , applied_seq#\n"
+  Sql += "       , INITCAP(synchronization_status) synchronization_status\n"
+  Sql += "       , INITCAP(synchronized) synchronized\n"
+  if (Global):
+    Sql += "    FROM gv$archive_dest_status\n"
+  else:
+    Sql += "    FROM v$archive_dest_status\n"
+  Sql += "   WHERE dest_id > 1\n"
+  Sql += "     AND status <> 'deferred'\n"
+  Sql += "     AND status <> 'inactive'\n"
+  if (Global):
+    Sql += "ORDER BY db_unique_name, inst_id;"
+  else:
+    Sql += "ORDER BY db_unique_name;"
+
+  Sql += "\n\n-- dg_log_applied.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id              format 999           heading 'Src.'\n"
+  Sql += "column dest_id              format 999           heading 'Dst.'\n"
+  Sql += "column thread#              format 999           heading 'Thread#'\n"
+  Sql += "column sequence#            format 999999999999  heading 'Sequence#'\n"
+  Sql += "column first_time           format a20           heading 'First Chg Time'\n"
+  Sql += "column blocks               format 999999999999  heading 'Blocks'\n"
+  Sql += "column archived             format a8            heading 'Archived'\n"
+  Sql += "column applied              format a7            heading 'Applied'\n"
+  Sql += "column deleted              format a7            heading 'Deleted'\n"
+  Sql += "column status               format a7            heading 'Status'\n"
+  Sql += "\n"
+
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         *\n"
+  if (Global):
+    Sql += "    FROM (    SELECT inst_id\n"
+    Sql += "                   , dest_id\n"
+  else:
+    Sql += "    FROM (    SELECT dest_id\n"
+  Sql += "                   , thread#\n"
+  Sql += "                   , sequence#\n"
+  Sql += "                   , TO_CHAR(first_time,'YYYY-MM-DD HH24:MI:SS') first_time\n"
+  Sql += "                   , blocks\n"
+  Sql += "                   , INITCAP(archived) archived\n"
+  Sql += "                   , INITCAP(applied ) applied\n"
+  Sql += "                   , INITCAP(deleted ) deleted\n"
+  Sql += "                   , INITCAP(status  ) status\n"
+  if (Global):            
+    Sql += "                FROM gv$archived_log\n"
+  else:                   
+    Sql += "                FROM v$archived_log\n"
+  Sql += "              WHERE standby_dest = 'YES'\n"
+  Sql += "                AND applied = 'YES'\n"
+  Sql += "             -- AND creator = 'LGWR'\n"
+  if (Global):
+    Sql += "          ORDER BY inst_id, first_time desc\n"
+  else:
+    Sql += "          ORDER BY first_time desc\n"
+  Sql += "         )\n"
+  Sql += "   WHERE rownum < 10;"
+
+  Sql += "\n\n-- dg_param.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id  format 999      heading 'Inst.'\n"
+  Sql += "column name     format a50      heading 'Name'\n"
+  Sql += "column value    format a60 wrap heading 'Value'\n"
+  Sql += "\n"
+
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id\n"
+    Sql += "       , name\n"
+  else:
+    Sql += "         name\n"
+  Sql += "       , value\n"
+
+  if (Global):
+    Sql += "    FROM gv$parameter\n"
+  else:
+    Sql += "    FROM v$parameter\n"
+  Sql += "   WHERE name IN ( 'db_name'\n"
+  Sql += "                   , 'db_unique_name'\n"
+  Sql += "                   , 'log_archive_config'\n"
+  Sql += "                   , 'log_archive_dest_1'\n"
+  Sql += "                   , 'log_archive_dest_2'\n"
+  Sql += "                   , 'log_archive_dest_state_1'\n"
+  Sql += "                   , 'log_archive_dest_state_2'\n"
+  Sql += "                   , 'remote_login_passwordfile'\n"
+  Sql += "                   , 'log_archive_format'\n"
+  Sql += "                   , 'log_archive_max_processes'\n"
+  Sql += "                   , 'fal_server'\n"
+  Sql += "                   , 'db_file_name_convert'\n"
+  Sql += "                   , 'log_file_name_convert'\n"
+  Sql += "                   , 'remote_listener'\n"
+  Sql += "                   , 'standby_file_management'\n"
+  Sql += "                 )\n"
+  if (Global):
+    Sql += "ORDER BY inst_id\n"
+    Sql += "       , name;"
+  else:
+    Sql += "ORDER BY name;"
+
+  Sql += "\n\n-- dg_sby_apply_rate.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id         format 9999                 heading 'Inst.'\n"
+  Sql += "column timestamp       format a20                  heading 'Timestamp'\n"
+  Sql += "column completion_time format a20                  heading 'Completion Time'\n"
+  Sql += "column sequence#       format 999999999999999      heading 'Sequence#'\n"
+  Sql += "column size_mb         format 999,999,999,999.99   heading 'Size(M)'\n"
+  Sql += "column diff_sec        format 999,999,999,999.99   heading 'Diff(sec)'\n"
+  Sql += "column kb_sec          format 999,999,999,999.99   heading 'KB(sec)'\n"
+  Sql += "column mb_sec          format 999,999,999,999.99   heading 'MB(sec)'\n"
+  Sql += "column lag_sec         format 999,999,999,999      heading 'Lag(sec)'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         dgs.inst_id\n"
+    Sql += "       , TO_CHAR(timestamp,'YYYY-MM-DD HH24:MI:SS') timestamp\n"
+  else:
+    Sql += "         TO_CHAR(timestamp,'YYYY-MM-DD HH24:MI:SS') timestamp\n"
+  Sql += "       , TO_CHAR(completion_time,'YYYY-MM-DD HH24:MI:SS') completion_time\n"
+  Sql += "       , sequence#\n"
+  Sql += "       , ROUND((blocks*block_size)/(1024*1024),1) size_mb\n"
+  Sql += "       , ROUND((timestamp - lag(timestamp,1,timestamp) OVER (order by timestamp))*24*60*60,1) diff_sec\n"
+  Sql += "       , ROUND((blocks*block_size)/1024/ DECODE(((timestamp-lag(timestamp,1,timestamp) OVER (order by timestamp))*24*60*60),0,1, (timestamp-lag(timestamp,1,timestamp) OVER (order by timestamp))*24*60*60),1) kb_sec\n"
+  Sql += "       , ROUND((blocks*block_size)/(1024*1024)/DECODE(((timestamp-lag(timestamp,1,timestamp) OVER (order by timestamp))*24*60*60),0,1, (timestamp-lag(timestamp,1,timestamp) OVER (order by timestamp))*24*60*60),3) mb_sec\n"
+  Sql += "       , ROUND(((lead(timestamp,1,timestamp) over (order by timestamp))-completion_time)*24*60*60,1) lag_sec\n"
+  if (Global):
+    Sql += "    FROM gv$archived_log a,\n"
+    Sql += "         gv$dataguard_status dgs\n"
+  else:  
+    Sql += "    FROM v$archived_log a,\n"
+    Sql += "         v$dataguard_status dgs\n"
+  Sql += "   WHERE a.name = REPLACE(dgs.message,'Media Recovery Log ','')\n"
+  Sql += "     AND dgs.facility = 'Log Apply Services'\n"
+  if (Global):
+    Sql += "ORDER BY dgs.inst_id\n"
+    Sql += "       , timestamp DESC;"
+  else:
+    Sql += "ORDER BY timestamp DESC;"
+
+  Sql += "\n\n-- dg_sby_list_sbylog.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id              format 999            heading 'Inst.'\n"
+  Sql += "column group#               format 9999           heading 'Group#'\n"
+  Sql += "column thread#              format 999            heading 'Thread#'\n"
+  Sql += "column sequence#            format 999999999999   heading 'Sequence#'\n"
+  Sql += "column archived             format a4             heading 'Arch.'\n"
+  Sql += "column status               format a15            heading 'Status'\n"
+  Sql += "column size_mb              format 999,999,999.99 heading 'Size(M)'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id\n"
+    Sql += "       , group#\n"
+  else:
+    Sql += "         group#\n"
+  Sql += "       , thread#\n"
+  Sql += "       , sequence#\n"
+  Sql += "       , INITCAP(archived) archived\n"
+  Sql += "       , INITCAP(status) status\n"
+  Sql += "       , bytes/1048576 size_mb\n"
+  if (Global):
+    Sql += "    FROM gv$standby_log\n"
+    Sql += "ORDER BY inst_id;"
+  else:
+    Sql += "    FROM v$standby_log;"
+      
+  Sql += "\n\n-- dg_sby_process.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id              format 999             heading 'Inst.'\n"
+  Sql += "column thread#              format 999             heading 'Thread#'\n"
+  Sql += "column sequence#            format 999999999999    heading 'Sequence#'\n"
+  Sql += "column status               format a15             heading 'Status'\n"
+  Sql += "column process              format a15             heading 'Process'\n"
+  Sql += "column client_process       format a15             heading 'Client Process'\n"
+  Sql += "column block#               format 999999999999    heading 'Block#'\n"
+  Sql += "column blocks               format 999,999,999,999 heading 'Blocks'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id\n"
+    Sql += "       , process\n"
+  else:
+    Sql += "         process process\n"
+  Sql += "       , client_process\n"
+  Sql += "       , sequence#\n"
+  Sql += "       , thread#\n"
+  Sql += "       , status\n"
+  Sql += "       , block#\n"
+  Sql += "       , blocks\n"
+  if (Global):
+    Sql += "    FROM gv$managed_standby\n"
+    Sql += "-- WHERE thread# <> 0\n"
+    Sql += "ORDER BY inst_id\n"
+    Sql += "       , process;"
+  else:
+    Sql += "    FROM v$managed_standby\n"
+    Sql += "-- WHERE thread# <> 0\n"
+    Sql += "ORDER BY process;"
+  
+  Sql += "\n\n-- dg_sby_rec_mode.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id      format 999        heading 'Inst.'\n"
+  Sql += "column dest_id        format 999        heading 'Dest.'\n"
+  Sql += "column recovery_mode  format a50        heading 'Recovery Mode'\n"
+  Sql += "column applied_seq#   format 9999999999 heading 'Applied Seq#'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id\n"
+    Sql += "       , dest_id\n"
+  else:
+    Sql += "         dest_id\n"
+  Sql += "       , INITCAP(recovery_mode) recovery_mode\n"
+  Sql += "       , applied_seq#\n"
+  if (Global):
+    Sql += "    FROM gv$archive_dest_status\n"
+  else:
+    Sql += "    FROM v$archive_dest_status\n"
+  Sql += "   WHERE status != 'INACTIVE'\n"
+  if (Global):
+    Sql += "ORDER BY inst_id\n"
+    Sql += "       , dest_id\n"
+    Sql += "       , applied_seq#;"
+  else:
+    Sql += "ORDER BY dest_id\n"
+    Sql += "       , applied_seq#;"
+  
+  Sql += "\n\n-- dg_sby_sync_time.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id      format 999        heading 'Inst.'\n"
+  Sql += "column name           format a25        heading 'Name'\n"
+  Sql += "column value          format a20        heading 'Value'\n"
+  Sql += "column time_computed  format a25        heading 'Time Computed'\n"
+  Sql += "column datum_time     format a25        heading 'Datum Time'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id\n"
+    Sql += "       , INITCAP(name) name\n"
+  else:
+    Sql += "         INITCAP(name) name\n"
+  Sql += "       , value\n"
+  Sql += "       , time_computed\n"
+  Sql += "       , datum_time\n"
+  if (Global):
+    Sql += "    FROM gv$dataguard_stats\n"
+  else:
+    Sql += "    FROM v$dataguard_stats\n"
+  if (Global):
+    Sql += "ORDER BY inst_id\n"
+    Sql += "       , name\n"
+    Sql += "       , value;\n"
+  else:
+    Sql += "ORDER BY name\n"
+    Sql += "       , value;"
+  
+  Sql += "\n\n-- listMaxApplied.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id        format 999           heading 'Inst.'\n"
+  Sql += "column thread#        format 999           heading 'Thread#'\n"
+  Sql += "column sequence#      format 999999999999  heading 'Max Sequence#'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id\n"
+    Sql += "       , thread#\n"
+    Sql += "       , MAX(sequence#) sequence#\n"
+    Sql += "    FROM gv$log_history\n"
+    Sql += "GROUP BY inst_id\n"
+    Sql += "       , thread#\n"
+    Sql += "ORDER BY inst_id\n"
+    Sql += "       , thread#;"
+  else:
+    Sql += "         thread#\n"
+    Sql += "       , MAX(sequence#) sequence#\n"
+    Sql += "    FROM v$log_history\n"
+    Sql += "GROUP BY thread#\n"
+    Sql += "ORDER BY thread#;"
+  
+  Sql += "\n\n-- listRedoLogs.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id        format 999              heading 'Inst.'\n"
+  Sql += "column group#         format 99               heading 'Group#'\n"
+  Sql += "column member         format a55              heading 'Member'\n"
+  Sql += "column bytes          format 999,999,999,999  heading 'Bytes'\n"
+  Sql += "column status         format a15              heading 'Status'\n"
+  Sql += "column type           format a10              heading 'Type'\n"
+  Sql += "column thread#        format 999              heading 'Thread#'\n"
+  Sql += "column sequence#      format 999999999999     heading 'Max Sequence#'\n"
+  Sql += "column archived       format a9               heading 'Archived'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id\n"
+    Sql += "       , group#\n"
+  else:
+    Sql += "         group#\n"
+  Sql += "       , type\n"
+  Sql += "       , member\n"
+  if (Global):
+    Sql += "    FROM gv$logfile\n"
+    Sql += "ORDER BY inst_id\n"
+    Sql += "       , group#;\n"
+  else:
+    Sql += "    FROM v$logfile\n"
+    Sql += "ORDER BY group#;\n"
+  Sql += "\n"
+
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id\n"
+    Sql += "       , group#\n"
+  else:
+    Sql += "         group#\n"
+    Sql += "       , thread#\n"
+  Sql += "       , sequence#\n"
+  Sql += "       , bytes\n"
+  Sql += "       , INITCAP(status) status\n"
+  Sql += "       , INITCAP(archived) archived\n"
+  if (Global):
+    Sql += "    FROM gv$log\n"
+  else:
+    Sql += "    FROM v$log\n"
+  if (Global):
+    Sql += "ORDER BY inst_id\n"
+    Sql += "       , thread#\n"
+  else:
+    Sql += "ORDER BY thread#\n"
+  Sql += "       , group#\n"
+  Sql += "       , sequence#;\n"
+  Sql += "\n"
+ 
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id\n"
+    Sql += "       , group#\n"
+  else:
+    Sql += "         group#\n"
+  Sql += "       , thread#\n"
+  Sql += "       , sequence#\n"
+  Sql += "       , bytes\n"
+  Sql += "       , INITCAP(status) status\n"
+  Sql += "       , INITCAP(archived) archived\n"
+  if (Global):
+    Sql += "    FROM gv$standby_log\n"
+  else:
+    Sql += "    FROM v$standby_log\n"
+  if (Global):
+    Sql += "ORDER BY inst_id\n"
+    Sql += "       , thread#\n"
+    Sql += "       , group#\n"
+    Sql += "       , sequence#;\n"
+  else:
+    Sql += "ORDER BY thread#\n"
+    Sql += "       , group#\n"
+    Sql += "       , sequence#;\n"
+
+  Sql += "\n\n-- listStandbyDB.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id           format 999         heading 'Inst.'\n"
+  
+  Sql += "column name              format a10         heading 'Name'\n"
+  Sql += "column dbid              format a12         heading 'Db ID'\n"
+  Sql += "column db_unique_name    format a15         heading 'Db Unique Name'\n"
+  Sql += "column open_mode         format a15         heading 'Open Mode'\n"
+  Sql += "column status            format a15         heading 'Status'\n"
+  Sql += "column instance_name     format a15         heading 'Instance Name'\n"
+  Sql += "column database_role     format a20         heading 'Database Role'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         TO_CHAR(db.inst_id) inst_id\n"
+    Sql += "       , TO_CHAR(dbid) dbid\n"
+  else:
+    Sql += "        TO_CHAR(dbid) dbid\n"
+  Sql += "       , name, db_unique_name\n"
+  Sql += "       , instance_name\n"
+  Sql += "       , INITCAP(status) status\n"
+  Sql += "       , INITCAP(open_mode) open_mode\n"
+  Sql += "       , INITCAP(database_role) database_role\n"
+  if (Global):
+    Sql += "    FROM gv$database db,\n"
+    Sql += "         gv$instance inst\n"
+    Sql += "   WHERE inst.inst_id = db.inst_id;\n"
+  else:
+    Sql += "    FROM v$database db,\n"
+    Sql += "         v$instance inst;\n"
+    
+  Sql += "\n\n-- listStandbyStatus.sql\n"
+  Sql += "-------------------------------------------------------------------------\n"
+  if (Global):
+    Sql += "column inst_id            format 999             heading 'Inst.'\n"
+  Sql += "column archived_thread#   format 999999999999999 heading 'Archived Thread#'\n"
+  Sql += "column archived_seq#      format 999999999999999 heading 'Applied Seq#'\n"
+  Sql += "column applied_thread#    format 999999999999999 heading 'Applied Thread#'\n"
+  Sql += "column applied_seq#       format 999999999999999 heading 'Applied Seq#'\n"
+  Sql += "column sequence#          format 999999999999999 heading 'Sequence#'\n"
+  Sql += "column first_time         format a20             heading 'First Change Time'\n"
+  Sql += "column next_time          format a20             heading 'Next Change Time'\n"
+  Sql += "column applied            format a8              heading 'Applied'\n"
+  Sql += "\n"
+
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         *\n"
+  if (Global):
+    Sql += "    FROM gv$archive_gap\n"
+    Sql += "ORDER BY inst_id;\n"
+  else:
+    Sql += "    FROM v$archive_gap;\n"
+    
+  Sql += "\n"
+
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id\n"
+    Sql += "       , sequence#\n"
+  else:
+    Sql += "         sequence#\n"
+  Sql += "       , TO_CHAR(first_time, 'YYYY-MM-DD HH24:MI:SS') first_time\n"
+  Sql += "       , TO_CHAR(next_time, 'YYYY-MM-DD HH24:MI:SS') next_time\n"
+  Sql += "       , INITCAP(applied) applied\n"
+  if (Global):
+    Sql += "    FROM gv$archived_log\n"
+    Sql += "ORDER BY inst_id;\n"
+  else:
+    Sql += "    FROM v$archived_log;\n"
+  Sql += "\n"
+
+  Sql += "  SELECT " + SqlHeader + "\n"
+  if (Global):
+    Sql += "         inst_id\n"
+    Sql += "       , archived_thread#\n"
+  else:
+    Sql += "         archived_thread#\n"
+  Sql += "       , archived_seq#\n"
+  Sql += "       , applied_thread#\n"
+  Sql += "       , applied_seq#\n"
+  if (Global):
+    Sql += "    FROM gv$archive_dest_status\n"
+    Sql += "ORDER BY inst_id;\n"
+  else:
+    Sql += "    FROM v$archive_dest_status;\n"
+  Sql += "\n"
+
+  Sql = Sql.strip()
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and not Show):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
