@@ -58,7 +58,7 @@ if (__name__ == '__main__'):
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
   Usage += '\n-------------------------------------------------------------------------------'
-  Usage += '\nMake a backup of the database control file.'
+  Usage += '\nMake a backup of the database control file using Sqlplus.'
   ArgParser = OptionParser(Usage)
 
   ArgParser.add_option('-b',  dest='Binary',  action='store_true', default=False,           help="make binary copy of controlfile (default=trace).")

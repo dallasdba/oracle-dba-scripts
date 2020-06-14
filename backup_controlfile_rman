@@ -1,34 +1,34 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   endian                                                                                   #
+# Name:   backup_controlfile_rman                                                                  #
 # Author: Randy Johnson                                                                            #
-# Descr:  Prints contents of the V$TRANSPORTABLE_PLATFORM view.                                    #
+# Descr:  Takes an rman backup of the current controlfile.                                         #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
-# 03/06/2015 1.00 Randy Johnson    Initial write.                                                  #
-# 04/23/2015 1.30 Randy Johnson    Updated print statements for Python 3.4 compatibility. This     #
-#                                  is most commonly changes to the print() and join() functions.   #
-# 08/13/2015 3.00 Randy Johnson    Added prompts for username, password, tnsname.                  #
-# 06/12/2020 3.01 Randy Johnson    Reset header formatting.                                        #
+# 10/09/2015 1.00 Randy Johnson    Initial write.                                                  #
+# 12/22/2015 1.01 Randy Johnson    Changed the tag for controlfile backup when *not* for standby.  #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
+from datetime     import datetime
 from optparse     import OptionParser
 from os           import environ
 from os.path      import basename
-from signal       import SIG_DFL
-from signal       import SIGPIPE
-from signal       import signal
+from os.path      import join as pathjoin
 from sys          import argv
 from sys          import exit
 from sys          import version_info
-from Oracle       import ParseConnectString
-from Oracle       import RunSqlplus
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from Oracle       import RunRman
 from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+from Oracle       import PrintError
 
 
 # --------------------------------------
@@ -36,21 +36,19 @@ from Oracle       import SetOracleEnv
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
-  CmdDesc        = 'Endian'
-  Version        = '3.01'
-  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
+  CmdDesc        = 'RMAN Backup Current Controlfile'
+  Version        = '1.01'
+  VersionDate    = 'Thu Dec 22 13:44:21 CST 2016'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
-  Sql            = ''
-  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  Rcv            = ''
+  RcvHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
-  TnsName        = ''
-  Username       = ''
-  Password       = ''
   ConnStr        = ''
-  
+  Now            = datetime.now()
+  Timestamp      = Now.strftime("%Y%m%d.%H%M%S")
+
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
 
@@ -59,42 +57,48 @@ if (__name__ == '__main__'):
   Usage  =  '%s [options]'  % Cmd
   Usage += '\n\n%s'         % CmdDesc
   Usage += '\n-------------------------------------------------------------------------------'
-  Usage += '\nReport endian orientation of OS platforms known to the database.'
+  Usage += '\nMake a backup of the database control file using RMAN.'
   ArgParser = OptionParser(Usage)
 
-  ArgParser.add_option("-p",  dest="Platform",                      default='',    type=str, help="where upper(platform_name) like upper(%...%)")
-  ArgParser.add_option('--s', dest='Show',     action='store_true', default=False,           help="print SQL query.")
-  ArgParser.add_option('--v', dest='ShowVer',  action='store_true', default=False,           help="print version info.")
+  ArgParser.add_option("-f",  dest="Cfile",                           default='',    type=str, help="name of the backup file.")
+  ArgParser.add_option('-s',  dest='ForStandby', action='store_true', default=False,           help="backup controlfile for standby.")
+  ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,           help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer',    action='store_true', default=False,           help="print version info.")
 
   # Parse command line arguments
   Options, args = ArgParser.parse_args()
 
-  Platform  = Options.Platform
-  Show      = Options.Show
-  ShowVer   = Options.ShowVer
+  Cfile      = Options.Cfile
+  ForStandby = Options.ForStandby
+  Show       = Options.Show
+  ShowVer    = Options.ShowVer
 
   if (ShowVer):
     print('\n%s' % Banner)
-    exit()
+    exit(1)
+  else:
+    print('')
 
-  Sql += "column platform_id    format a5    heading 'ID'\n"
-  Sql += "column platform_name  format a50   heading 'Platform'\n"
-  Sql += "column endian_format  format a10   heading 'Endian'\n"
-  Sql += "\n"
-  Sql += "  SELECT " + SqlHeader + "\n"
-  Sql += "         to_char(platform_id) platform_id\n"
-  Sql += "       , platform_name\n"
-  Sql += "       , endian_format\n"
-  Sql += "    FROM v$transportable_platform\n"
-  if (Platform != ''):
-    Sql += "   WHERE upper(platform_name) LIKE UPPER('%" + Platform + "%')\n"
-  Sql += "ORDER BY to_number(platform_id);"
+  if (Cfile == ''):
+    if(environ['ORACLE_SID'] != ''):
+      Cfile = pathjoin('/', 'tmp', 'cf_' + environ['ORACLE_SID'] + '.' + Timestamp)
+    else:
+      Cfile = pathjoin('/', 'tmp', 'cf_backup' + '.' + Timestamp)
 
-  Sql = Sql.strip()
+    if (ForStandby):
+      Cfile += '.sby'
+    else:
+      Cfile += '.bak'
+
+  # Formulate the backup command...
+  if (ForStandby):
+    Rcv = "backup current controlfile for standby format '" + Cfile + "' tag for_standby;"
+  else:
+    Rcv = "backup current controlfile format '" + Cfile + "' tag controlfile_backup;"
 
   if(Show):
     print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
-    print(Sql)
+    print(Rcv)
     print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
     exit()
 
@@ -108,15 +112,22 @@ if (__name__ == '__main__'):
       (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
 
   # Parse the connect string if any, prompt for username, password if needed.
-  if (len(args) > 0 and Show == False):
+  if (len(args) > 0 and not Show):
     InStr = args[0]
     ConnStr = ParseConnectString(InStr)
 
-  # Execute the report
-  if (ConnStr != ''):
-    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  if (ForStandby):
+    print("Creating controlfile backup for standby: %s" % Cfile)
   else:
-    (Stdout) = RunSqlplus(Sql, ErrChk)
+    print("Creating controlfile backup: %s" % Cfile)
+
+  # Execute
+  if (ConnStr != ''):
+    (Stdout) = RunRman(Rcv, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunRman(Rcv, ErrChk)
+
+  Stdout = Stdout.strip()
 
   # Print the report
   if (Stdout != ''):
@@ -126,3 +137,4 @@ if (__name__ == '__main__'):
 # --------------------------------------
 # ---- End Main Program ----------------
 # --------------------------------------
+
