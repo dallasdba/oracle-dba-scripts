@@ -1,10 +1,10 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   sqlprofiles                                                                              #
-# Author: Randy Johnson                                                                            #
-# Descr:  Prints a report of SQL profiles that have been created in the database. Report           #
-#         includes: Name, Category, Status, Sql Text, Force Matching.                              #
+# Name: sqlprofiles                                                                                #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints a report of SQL profiles that have been created in the database. Report             #
+#       includes: Name, Category, Status, Sql Text, Force Matching.                                #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

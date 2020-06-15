@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   tdewallet                                                                                #
-# Author: Randy Johnson                                                                            #
-# Descr:  Reports v$encryption_wallet                                                              #
+# Name: tdewallet                                                                                  #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports v$encryption_wallet                                                                #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

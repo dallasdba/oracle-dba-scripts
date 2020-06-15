@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   systime                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report V$SYS_TIME_MODEL and GV$SYS_TIME_MODEL.                                           #
+# Name: systime                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report V$SYS_TIME_MODEL and GV$SYS_TIME_MODEL.                                             #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

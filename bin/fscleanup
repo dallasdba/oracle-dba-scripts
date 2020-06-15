@@ -1,10 +1,10 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:   fscleanup                                                                               #
-#  Author: Randy Johnson                                                                           #
-#  Descr:  Prints a report of files to edit and directories to remove when a database is           #
-#          dropped.                                                                                #
+# Name: fscleanup                                                                                  #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints a report of files to edit and directories to remove when a database is              #
+#       dropped.                                                                                   #
 #                                                                                                  #
 #  Wish List                                                                                       #
 #   - Identify Backups                                                                             #
@@ -13,8 +13,6 @@
 #                                                                                                  #
 # Todo's                                                                                           #
 # - Check for existance of tnsnames.ora before attempting to scan it.                              #
-#                                                                                                  #
-# History:                                                                                         #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -65,7 +63,7 @@ from sys          import exit
 # --------------------------------------
 # ---- Function Definitions ------------
 # --------------------------------------
-
+#---------------------------------------------------------------------------
 # Def : FindFile()
 # Desc: Searches for a file starting at a specific directory/subdirectory.
 #       Exits at first occurance found.
@@ -77,9 +75,11 @@ def FindFile(StartingDir, Filename):
     if(Filename in files):
       return(pathjoin(path, Filename))
   return('')
+#---------------------------------------------------------------------------
 # End FindFile()
+#---------------------------------------------------------------------------
 
-
+#---------------------------------------------------------------------------
 # Def : ScanFile()
 # Desc: Scans a text file for a string
 # Args: Filename, SearchString
@@ -107,8 +107,9 @@ def ScanFile(Filename, SearchString):
   f.close()
 
   return(Hitcount, Hitlist)
+#---------------------------------------------------------------------------
 # End ScanFile()
-
+#---------------------------------------------------------------------------
 # --------------------------------------
 # ---- End Function Definitions --------
 # --------------------------------------

@@ -1,11 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dbfsfree                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  Determines the real freespace available in the mounted DBFS file system(s).              #
-#                                                                                                  #
-# History:                                                                                         #
+# Name: dbfsfree                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Determines the real freespace available in the mounted DBFS file system(s).                #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -15,7 +13,6 @@
 # 01/15/2020 2.01 Randy Johnson    Added round() function to division operations for Python3       #
 # 06/12/2020 2.02 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
-
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -45,15 +42,12 @@ from Oracle      import PrintError
 from Oracle      import RunSqlplus
 from Oracle      import FormatNumber
 
-
 # --------------------------------------
 # ---- Function Definitions ------------
 # --------------------------------------
-
 # ---------------------------------------------------------------------------
 # Def : GetDbfsInfo()
 # Desc: 
-#       
 # Args: 
 # Retn: 
 # ---------------------------------------------------------------------------
@@ -122,12 +116,9 @@ def GetDbfsInfo(DbfsResourceName):
 # End GetDbfsInfo()
 # ---------------------------------------------------------------------------
 
-
 # ---------------------------------------------------------------------------
 # Def : DiskUsage()
 # Desc:                                                                      
-#                                                                            
-#                                                                            
 # Args:                                                                      
 # Retn:                                                                      
 # ---------------------------------------------------------------------------
@@ -139,9 +130,8 @@ def DiskUsage(Filesystem):
   
   return (int(total), int(used), int(free))
 # ---------------------------------------------------------------------------
-# End DiskUsage
+# End DiskUsage()
 # ---------------------------------------------------------------------------
-
 # --------------------------------------
 # ---- End Function Definitions --------
 # --------------------------------------

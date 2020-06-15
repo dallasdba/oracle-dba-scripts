@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dplan                                                                                    #
-# Author: Randy Johnson                                                                            #
-# Descr:  Executes a dbms_xplan.display_awr report on a SQL_ID and prints the rerport.             #
+# Name: dplan                                                                                      #
+# Auth: Randy Johnson                                                                              #
+# Desc: Executes a dbms_xplan.display_awr report on a SQL_ID and prints the rerport.               #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -30,7 +30,6 @@ from signal       import signal
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 from Oracle       import ParseConnectString
-
 
 # --------------------------------------
 # ---- Main Program --------------------

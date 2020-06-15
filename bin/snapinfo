@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   snapinfo                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  Display information about AWR snapshots (interval, retention, TopNSQL).                  #
+# Name: snapinfo                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Display information about AWR snapshots (interval, retention, TopNSQL).                    #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -44,7 +44,6 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   ConnStr        = ''
 

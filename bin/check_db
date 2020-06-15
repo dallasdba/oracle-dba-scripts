@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   check_db                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  Validates database configuration according to rules in check_db.cfg.                     #
+# Name: check_db                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Validates database configuration according to rules in check_db.cfg.                       #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- --------------------------------------------------------------  #
@@ -40,9 +40,8 @@ from os            import W_OK as WriteOk
 from os            import R_OK as ReadOk
 from os            import X_OK as ExecOk
 
-# --------------------------------------
-# ---- Import Python Modules -----------
-# --------------------------------------
+# Conditional Imports
+# --------------------
 PythonVersion = '%s.%s' % (version_info[0],version_info[1])
 try:
   PythonVersion = float(PythonVersion)
@@ -1053,7 +1052,6 @@ def LookupMessage(FacilityCode):
 #---------------------------------------------------------------------------
 # End LookupMessage()
 #---------------------------------------------------------------------------
-
 # --------------------------------------
 # ---- End Function Definitions --------
 # --------------------------------------
@@ -1074,7 +1072,6 @@ if (__name__ == '__main__'):      # if this is true, then this script is *not* b
   ErrChk         = False
   Report         = ''
   Sql            = ''
-  ArgParser      = OptionParser()
   Sid            = 0
   Now            = datetime.now()
   InStr          = ''

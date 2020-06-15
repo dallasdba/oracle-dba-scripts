@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   backup_controlfile                                                                       #
-# Author: Randy Johnson                                                                            #
-# Descr:  alter database backup controlfile to [trace as] {filename} [reuse];                      #
+# Name: backup_controlfile                                                                         #
+# Auth: Randy Johnson                                                                              #
+# Desc: alter database backup controlfile to [trace as] {filename} [reuse];                        #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

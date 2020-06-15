@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   spd                                                                                      #
-# Author: Randy Johnson                                                                            #
-# Descr:  Prints a report of DBA_SQL_PLAN_DIRECTIVES (Oracle 12c+ only).                           #
+# Name: spd                                                                                        #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints a report of DBA_SQL_PLAN_DIRECTIVES (Oracle 12c+ only).                             #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

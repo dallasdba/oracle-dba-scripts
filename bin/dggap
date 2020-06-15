@@ -1,15 +1,14 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dggap                                                                                    #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report redo apply gap information.                                                       #
+# Name: dggap                                                                                      #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report redo apply gap information.                                                         #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
 # 10/27/2015 1.00 Randy Johnson    Initial write.                                                  #
 #--------------------------------------------------------------------------------------------------#
-
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -50,7 +49,6 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   ConnStr        = ''
 

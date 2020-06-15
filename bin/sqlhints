@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:    sqlhints                                                                                #
-# Author:  Randy Johnson                                                                           #
-# Descrip: Dumps outline hints for a SQL statement.                                                #
+# Name: sqlhints                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Dumps outline hints for a SQL statement.                                                   #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

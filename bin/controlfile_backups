@@ -1,10 +1,10 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:   controlfile_backups                                                                     #
-#  Author: Randy Johnson                                                                           #
-#  Descr:  Report all automatic control files within all available (and expired) backup            #
-#          sets.                                                                                   #
+# Name: controlfile_backups                                                                        #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report all automatic control files within all available (and expired) backup               #
+#       sets.                                                                                      #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -44,19 +44,8 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   ConnStr        = ''
-
-  # Check/set the Oracle environment
-  if ('ORACLE_SID' in list(environ.keys())):
-    (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
-  else:
-    if (version_info[0] >= 3):
-      Sid = input('\nEnter the ORACLE_SID of the database you want to search: ')
-    else:
-      Sid = raw_input('\nEnter the ORACLE_SID of the database you want to search: ')
-    (OracleSid, OracleHome) = SetOracleEnv(Sid)
 
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)

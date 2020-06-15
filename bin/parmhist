@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:   parmhist                                                                                #
-#  Author: Randy Johnson                                                                           #
-#  Descr:  Report history of parameter changes from AWR.                                           #
+# Name: parmhist                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report history of parameter changes from AWR.                                              #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

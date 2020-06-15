@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   restore_spfile                                                                           #
-# Author: Randy Johnson                                                                            #
-# Descr:  Restores the spfile from RMAN backuppiece.                                               #
+# Name: restore_spfile                                                                             #
+# Auth: Randy Johnson                                                                              #
+# Desc: Restores the spfile from RMAN backuppiece.                                                 #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -41,7 +41,6 @@ from Oracle       import RunRman
 from Oracle       import RunSqlplus
 from Oracle       import PrintError
 from Oracle       import SetOracleEnv
-
 
 # --------------------------------------
 # ---- Function Definitions ------------
@@ -190,7 +189,6 @@ def GetParameter(ParmName):
         return(ParmValue)
   return(Stdout)
 # End GetParameter()
-
 # --------------------------------------
 # ---- End Function Definitions --------
 # --------------------------------------

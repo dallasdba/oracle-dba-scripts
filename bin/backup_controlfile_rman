@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   backup_controlfile_rman                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Takes an rman backup of the current controlfile.                                         #
+# Name: backup_controlfile_rman                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Takes an rman backup of the current controlfile.                                           #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

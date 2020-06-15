@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   epw (encode password)                                                                    #
-# Author: Randy Johnson                                                                            #
-# Descr:  Generate a UU encoded password from a plain-text string.                                 #
+# Name: epw (encode password)                                                                      #
+# Auth: Randy Johnson                                                                              #
+# Desc: Generate a UU encoded password from a plain-text string.                                   #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- --------------------------------------------------------------  #
@@ -30,6 +30,7 @@ from sys          import version_info
 if (version_info[0] >= 3):
   from base64 import b64encode
 # ------------------------------------------------
+
 
 # --------------------------------------
 # ---- Main Program --------------------

@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   awr_snaps                                                                                #
-# Author: Randy Johnson                                                                            #
-# Descr:  Reports AWR Snapshots and the times they were taken.                                     #
+# Name: awr_snaps                                                                                  #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports AWR Snapshots and the times they were taken.                                       #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

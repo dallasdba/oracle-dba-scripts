@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   backup_info                                                                              #
-# Author: Randy Johnson                                                                            #
-# Descr:  Reports RMAN backup information.                                                         #
+# Name: backup_info                                                                                #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports RMAN backup information.                                                           #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

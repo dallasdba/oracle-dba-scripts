@@ -1,11 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dginfo                                                                                   #
-# Author: Randy Johnson                                                                            #
-# Descr:  Reports information on the Data Guard Status and Configuration.                          #
-#                                                                                                  #
-# History:                                                                                         #
+# Name: dginfo                                                                                     #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports information on the Data Guard Status and Configuration.                            #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -16,7 +14,6 @@
 # 07/13/2017 3.02 Randy Johnson    Minor formatting changes to reports.                            #
 # 06/14/2020 3.03 Randy Johnson    Minor formatting changes to header.                             #
 #--------------------------------------------------------------------------------------------------#
-
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -50,7 +47,6 @@ if (__name__ == '__main__'):
   ErrChk         = False
   InStr          = ''
   ConnStr        = ''
-
 
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)

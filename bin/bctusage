@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   bctusage                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report block change tracking usage.                                                      #
+# Name: bctusage                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report block change tracking usage.                                                        #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -41,21 +41,11 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   Sid            = 0
   InStr          = ''
   ConnStr        = ''
   InstList       = []
 
-
-  # Check/setup the Oracle environment
-  if (not('ORACLE_SID' in list(environ.keys()))):
-    print('ORACLE_SID is required.')
-    exit(1)
-  else:
-    # Set the ORACLE_HOME just in case it isn't set already.
-    if (not('ORACLE_HOME' in list(environ.keys()))):
-      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
 
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)

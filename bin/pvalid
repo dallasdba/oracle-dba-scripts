@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   pvalid                                                                                   #
-# Author: Randy Johnson                                                                            #
-# Descr:  Display valid parameter values from v$parameter_valid_values.                            #
+# Name: pvalid                                                                                     #
+# Auth: Randy Johnson                                                                              #
+# Desc: Display valid parameter values from v$parameter_valid_values.                              #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

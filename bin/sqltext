@@ -1,10 +1,10 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   sqltext                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Finds a SQL statement using a piece of the sql_text or its sql_id, and prints the        #
-#         full SQL Text listing of the statement.                                                  #
+# Name: sqltext                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Finds a SQL statement using a piece of the sql_text or its sql_id, and prints the          #
+#       full SQL Text listing of the statement.                                                    #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

@@ -1,10 +1,10 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   block_checking                                                                           #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report block integrity parameters in the database (db_block_checking,                    #
-#         db_block_checksum, and lost_write_protect).                                              #
+# Name: block_checking                                                                             #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report block integrity parameters in the database (db_block_checking,                      #
+#       db_block_checksum, and lost_write_protect).                                                #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -48,15 +48,6 @@ if (__name__ == '__main__'):
   ConnStr        = ''
   InstList       = []
 
-
-  # Check/setup the Oracle environment
-  if (not('ORACLE_SID' in list(environ.keys()))):
-    print('ORACLE_SID is required.')
-    exit(1)
-  else:
-    # Set the ORACLE_HOME just in case it isn't set already.
-    if (not('ORACLE_HOME' in list(environ.keys()))):
-      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
 
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)

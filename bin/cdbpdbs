@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   cdbpdbs                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Flips cdb_pdbs view on its side and prints all name, value pairs.                        #
+# Name: cdbpdbs                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Flips cdb_pdbs view on its side and prints all name, value pairs.                          #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -26,7 +26,6 @@ from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 from Oracle       import ParseConnectString
 from Oracle       import PrintError
-
 
 # --------------------------------------
 # ---- Main Program --------------------

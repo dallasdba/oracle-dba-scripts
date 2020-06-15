@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   redostat                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  Reports online redolog status.                                                           #
+# Name: redostat                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports online redolog status.                                                             #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

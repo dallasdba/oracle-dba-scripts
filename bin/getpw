@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:        getpw (get password)                                                               #
-#  Author:      Randy Johnson                                                                      #
-#  Description: Looks up an encoded database password and returns the decoded version of it.       #
+# Name: getpw                                                                                      #
+# Auth: Randy Johnson                                                                              #
+# Desc: Looks up an encoded database password and returns the decoded version of it.               #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- --------------------------------------------------------------  #
@@ -34,10 +34,10 @@ if (version_info[0] >= 3):
 # --------------------------------------
 # ---- Function Definitions ------------
 # --------------------------------------
-
-# Function: GetPassword()
-# Retrieve database password from the password file.
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Def : GetPassword()
+# Desc: Retrieve database password from the password file.
+# ---------------------------------------------------------------------------
 def GetPassword(dbName, dbUser):
   pwdContents = ''
 
@@ -81,8 +81,9 @@ def GetPassword(dbName, dbUser):
     print('TRACE: Password not found. Returning: null')
     print('TRACE: Exiting sub GetPassword()')
   return('')
+# ---------------------------------------------------------------------------
 # End GetPassword()
-
+# ---------------------------------------------------------------------------
 # --------------------------------------
 # ---- End Function Definitions --------
 # --------------------------------------
@@ -98,7 +99,6 @@ if (__name__ == '__main__'):
   VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
-  ArgParser      = OptionParser()
   pwdFilename    = '/home/oracle/dba/etc/.passwd'
 
   # Process command line options

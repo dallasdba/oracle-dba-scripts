@@ -1,10 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   oratab                                                                                   #
-# Author: Randy Johnson                                                                            #
-# Descr:  Displays the contents of the oratab file in report format. Commented lines are           #
-#         omitted.                                                                                 #
+# Name: oratab                                                                                     #
+# Auth: Randy Johnson                                                                              #
+# Desc: Displays the contents of the oratab file in report format. Commented lines are omitted.    #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- --------------------------------------------------------------  #
@@ -118,6 +117,7 @@ def LoadOratab(Oratab=''):
 # ---------------------------------------------------------------------------
 # End LoadOratab()
 # ---------------------------------------------------------------------------
+
 
 # --------------------------------------
 # ---- Main Program --------------------

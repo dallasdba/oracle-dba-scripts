@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:   parmdef                                                                                 #
-#  Author: Randy Johnson                                                                           #
-#  Descr:  Prints a report database instance parameter definitions.                                #
+# Name: parmdef                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints a report database instance parameter definitions.                                   #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

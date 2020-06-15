@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:   redoinfo                                                                                #
-#  Author: Randy Johnson                                                                           #
-#  Descr:  Reports redolog info from v$log, and v$logfile.                                         #
+# Name: redoinfo                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports redolog info from v$log, and v$logfile.                                            #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

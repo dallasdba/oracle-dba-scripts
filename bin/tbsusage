@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:   tbsusage                                                                                #
-#  Author: Randy Johnson                                                                           #
-#  Descr:  Report space usage at the tablespace level.                                             #
+# Name: tbsusage                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report space usage at the tablespace level.                                                #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

@@ -1,11 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dbinfo                                                                                   #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report key database information.                                                         #
-#                                                                                                  #
-# History:                                                                                         #
+# Name: dbinfo                                                                                     #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report key database information.                                                           #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -101,7 +99,6 @@ def CollectInfo(Sid, Cdb):
   ParmQry    = ''
   Sql        = ''
   PostQry    = ''
-
   ParmList   = []
   PropsList  = []
   Colsep     = '~'
@@ -731,7 +728,6 @@ def StandardReport(RawInfo):
 # End StandardReport()
 #---------------------------------------------------------------------------
 
-
 #---------------------------------------------------------------------------
 # Def : KeyValReport()
 # Desc: Prints a detailed report of database configuration information.
@@ -849,7 +845,7 @@ def FormatNumber( s, tSep=',', dSep='.'):
 
   return(lhs + splt[ :-1 ] + rhs)
 #---------------------------------------------------------------------------
-# End FormatNumber
+# End FormatNumber()
 #---------------------------------------------------------------------------
 # --------------------------------------
 # ---- End Function Definitions --------

@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   sqldiag                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Produces various reports useful for diagnosing SQL tuning issues.                        #
+# Name: sqldiag                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Produces various reports useful for diagnosing SQL tuning issues.                          #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

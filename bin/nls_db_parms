@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   nls_db_parms                                                                             #
-# Author: Randy Johnson                                                                            #
-# Descr:  Prints contents of the nls_database_parameters table.                                    #
+# Name: nls_db_parms                                                                               #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints contents of the nls_database_parameters table.                                      #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

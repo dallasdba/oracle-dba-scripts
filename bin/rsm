@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   rsm                                                                                      #
-# Author: Randy Johnson                                                                            #
-# Descr:  Generates a SQL Monitor Report                                                           #
+# Name: rsm                                                                                        #
+# Auth: Randy Johnson                                                                              #
+# Desc: Generates a SQL Monitor Report                                                             #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -29,6 +29,7 @@ from signal       import signal
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 from Oracle       import ParseConnectString
+
 
 # --------------------------------------
 # ---- Main Program --------------------
@@ -62,7 +63,7 @@ if (__name__ == '__main__'):
   ArgParser.add_option("-t",  dest="Type",                            default='TEXT', type=str, help="report type (text/html/xml/active)")
   ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,            help="print SQL query.")
   ArgParser.add_option('--v', dest='ShowVer',    action='store_true', default=False,            help="print version info.")
-  
+
   # Parse command line arguments
   Options, args = ArgParser.parse_args()
 
@@ -71,7 +72,7 @@ if (__name__ == '__main__'):
   Type      = Options.Type
   Show      = Options.Show
   ShowVer   = Options.ShowVer
-  
+
   if (ShowVer):
     print('\n%s' % Banner)
     exit()
@@ -79,7 +80,7 @@ if (__name__ == '__main__'):
   if (Type.upper() not in ['TEXT','HTML','XML','ACTIVE']):
     print("Invalid Report Format. Format must be one of: text, html, xml, active")
     exit()
-  
+
   if (SqlId == ''):
     if (version_info[0] >= 3):
       SqlId = input('\nEnter a SQL ID: ')

@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   sgastat                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Display SGA statistics (v$sgastat, gv$sgastat).                                          #
+# Name: sgastat                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Display SGA statistics (v$sgastat, gv$sgastat).                                            #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

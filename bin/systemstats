@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   systemstats                                                                              #
-# Author: Randy Johnson                                                                            #
-# Descr:  Reports system stats                                                                     #
+# Name: systemstats                                                                                #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports system stats                                                                       #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

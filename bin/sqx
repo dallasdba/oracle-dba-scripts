@@ -1,11 +1,11 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:    sqx (SQL Execute)                                                                      #
-#  Author:  Randy Johnson                                                                          #
-#  Descrip: Takes a sql script file from the command line and executes it in the database.         #
-#           If no connect string provided ORACLE_SID is used and authentication defaults to        #
-#           sys / as sysdba.                                                                       #
+# Name: sqx (SQL Execute)                                                                          #
+# Auth: Randy Johnson                                                                              #
+# Desc: Takes a sql script file from the command line and executes it in the database.             #
+#       If no connect string provided ORACLE_SID is used and authentication defaults to            #
+#       sys / as sysdba.                                                                           #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

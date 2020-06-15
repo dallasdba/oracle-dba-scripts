@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   snapset                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Set AWR snapshot frequency and retention.                                                #
+# Name: snapset                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Set AWR snapshot frequency and retention.                                                  #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

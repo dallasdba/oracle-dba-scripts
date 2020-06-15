@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dpw (decode password)                                                                    #
-# Author: Randy Johnson                                                                            #
-# Descr:  Decodes a UU encoded string.                                                             #
+# Name: dpw (decode password)                                                                      #
+# Auth: Randy Johnson                                                                              #
+# Desc: Decodes a UU encoded string.                                                               #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dggen                                                                                    #
-# Author: Randy Johnson                                                                            #
-# Descr:  Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.            #
+# Name: dggen                                                                                      #
+# Auth: Randy Johnson                                                                              #
+# Desc: Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.              #
 #         This script supports RAC as well as single instance primary/standby                      #
 #         configurations. Testing was performed on Exadata V2, X2 and Oracle v11g - 12c.           #
 #                                                                                                  #
@@ -18,8 +18,6 @@
 #                                                                                                  #
 # Wish List:                                                                                       #
 #  - Add configurable Listener Name                                                                #
-#                                                                                                  #
-# History:                                                                                         #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -86,7 +84,6 @@ def IsReadable(Filepath):
 # End IsReadable()
 # ---------------------------------------------------------------------------
 
-
 # ---------------------------------------------------------------------------
 # Def : LoadConfig()
 # Desc: Loads dictionary structure with key/value pairs from a config
@@ -133,7 +130,6 @@ if __name__ == '__main__':
   VersionDate           = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState              = 'Production'
   Banner                = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
-  ArgParser             = OptionParser()
   #DbaEtc                = '/home/oracle/dba/etc'
   DbaEtc                = pathsplit(argv[0])[0]
   Now                   = datetime.now().strftime('%m/%d/%Y %H:%M:%S')

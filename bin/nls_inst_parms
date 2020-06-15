@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   nls_inst_parms                                                                           #
-# Author: Randy Johnson                                                                            #
-# Descr:  Prints contents of the nls_instance_parameters table.                                    #
+# Name: nls_inst_parms                                                                             #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints contents of the nls_instance_parameters table.                                      #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

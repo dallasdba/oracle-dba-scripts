@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   asmfiles                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  ASM Storage by Diskgroup, by Database, by Type, by File                                  #
+# Name: asmfiles                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: ASM Storage by Diskgroup, by Database, by Type, by File                                    #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   sgadc                                                                                    #
-# Author: Randy Johnson                                                                            #
-# Descr:  Reports on v$sga_dynamic_components and gv$sga_dynamic_components.                       #
+# Name: sgadc                                                                                      #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports on v$sga_dynamic_components and gv$sga_dynamic_components.                         #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -41,7 +41,6 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   ConnStr        = ''
   InstList       = []

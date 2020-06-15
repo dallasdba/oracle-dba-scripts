@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   walletmgr                                                                                #
-# Author: Randy Johnson                                                                            #
-# Descr:  wrapper for mkstore, Oracles wallet management command.                                  #
+# Name: walletmgr                                                                                  #
+# Auth: Randy Johnson                                                                              #
+# Desc: wrapper for mkstore, Oracles wallet management command.                                    #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- --------------------------------------------------------------- #

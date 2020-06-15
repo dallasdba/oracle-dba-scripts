@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   backup_spfile                                                                            #
-# Author: Randy Johnson                                                                            #
-# Descr:  Creates a pfile from spfile.                                                             #
+# Name: backup_spfile                                                                              #
+# Auth: Randy Johnson                                                                              #
+# Desc: Creates a pfile from spfile.                                                               #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

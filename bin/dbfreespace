@@ -1,11 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dbfreespace                                                                              #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report unused space at table, partition, subpartition level.                             #
-#                                                                                                  #
-# History:                                                                                         #
+# Name: dbfreespace                                                                                #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report unused space at table, partition, subpartition level.                               #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

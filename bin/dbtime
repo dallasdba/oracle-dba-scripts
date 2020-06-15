@@ -1,11 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dbtime                                                                                   #
-# Author: Randy Johnson                                                                            #
-# Descr:  Find busiest time periods in AWR.                                                        #
-#                                                                                                  #
-# History:                                                                                         #
+# Name: dbtime                                                                                     #
+# Auth: Randy Johnson                                                                              #
+# Desc: Find busiest time periods in AWR.                                                          #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -16,6 +14,7 @@
 #                                  3000-01-01 00:00:00                                             #
 # 06/12/2020 2.11 Randy Johnson    Reset header formatting.                                        #
 #--------------------------------------------------------------------------------------------------#
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------

@@ -1,11 +1,11 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   install_spfile                                                                           #
-# Author: Randy Johnson                                                                            #
-# Descr:  Starts the database on the local node using the pfile (from the -p option) then          #
-#         creates an spfile in ASM from the pfile. Checks the database state before                #
-#         starting the operation and after each startup/shutdown command is executed.              #
+# Name: install_spfile                                                                             #
+# Auth: Randy Johnson                                                                              #
+# Desc: Starts the database on the local node using the pfile (from the -p option) then            #
+#       creates an spfile in ASM from the pfile. Checks the database state before                  #
+#       starting the operation and after each startup/shutdown command is executed.                #
 #                                                                                                  #
 # Date       Ver. Who          on the local node.    Change Description                            #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -129,6 +129,7 @@ def InstallSpfile(Pfile):
 # --------------------------------------
 # ---- End Function Definitions --------
 # --------------------------------------
+
 
 # --------------------------------------
 # ---- Main Program --------------------

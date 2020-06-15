@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:   sysmetric                                                                               #
-#  Author: Randy Johnson                                                                           #
-#  Descr:  Reports contents of v$sysmetric and gv$sysmetric.                                       #
+# Name: sysmetric                                                                                  #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports contents of v$sysmetric and gv$sysmetric.                                          #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

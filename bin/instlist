@@ -1,13 +1,14 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:   instlist                                                                                #
-#  Author: Randy Johnson                                                                           #
-#  Descr:  Prints a list of all Oracle database instances running on the local machine.            #
-#          Two reports available: 1) instance name only (sorted by instance name)                  #
+# Name: instlist                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints a list of all Oracle database instances running on the local machine.               #
+#       Two reports available:                                                                     #
+#          1) instance name only (sorted by instance name)                                         #
 #          2) instance name, pmon process id (sorted by instance name).                            #
-#          This script has only been tested on Red Hat / Oracle Linux and may fail on other        #
-#          Unix types due to dependency on the output format of the ps command.                    #
+#       This script has only been tested on Red Hat / Oracle Linux and may fail on other           #
+#       Unix types due to dependency on the output format of the ps command.                       #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

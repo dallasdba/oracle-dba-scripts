@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   sendfile                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  Sends a simple text file as attachment using sendmail. Returns the return code           #
+# Name: sendfile                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Sends a simple text file as attachment using sendmail. Returns the return code             #
 #         from the sendmail session. Any return code not equal to 0 is an error.                   #
 #                                                                                                  #
 # sendfile.py  File Address [[-v][--verbose]]                                                      #
@@ -137,7 +137,7 @@ def splitThousands( s, tSep=',', dSep='.'):
 # ---- Main Program --------------------
 # --------------------------------------
 if (__name__ == '__main__'):
-  Cmd = basename(argv[0])
+  Cmd            = basename(argv[0])
   CmdDesc        = 'Send a File as a MIME Attachment'
   Version        = '1.02'
   VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'

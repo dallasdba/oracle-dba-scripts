@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   spdo                                                                                     #
-# Author: Randy Johnson                                                                            #
-# Descr:  Prints a report of DBA_SQL_PLAN_DIR_OBJECTS.                                             #
+# Name: spdo                                                                                       #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints a report of DBA_SQL_PLAN_DIR_OBJECTS.                                               #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -42,7 +42,6 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   ConnStr        = ''
   OwnerList      = []

@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   asmattr                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report ASM Attributes                                                                    #
+# Name: asmattr                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report ASM Attributes                                                                      #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

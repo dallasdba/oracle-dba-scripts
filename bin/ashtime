@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   ashtime                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report db time from ash history.                                                         #
+# Name: ashtime                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report db time from ash history.                                                           #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

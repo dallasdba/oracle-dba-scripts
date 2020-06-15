@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dbattrs                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Flips v$database on its side and prints all name, value pairs.                           #
+# Name: dbattrs                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Flips v$database on its side and prints all name, value pairs.                             #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

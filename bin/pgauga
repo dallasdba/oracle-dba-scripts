@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:   pgauga                                                                                  #
-#  Author: Randy Johnson                                                                           #
-#  Descr:  Reports PGA & UGA memory information by process.                                        #
+# Name: pgauga                                                                                     #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports PGA & UGA memory information by process.                                           #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

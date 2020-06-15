@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   props                                                                                    #
-# Author: Randy Johnson                                                                            #
-# Descr:  Prints contents of the props$ table (aka database_properties view).                      #
+# Name: props                                                                                      #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints contents of the props$ table (aka database_properties view).                        #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -45,7 +45,6 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   TnsName        = ''
   Username       = ''

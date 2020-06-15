@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   fs                                                                                       #
-# Author: Randy Johnson                                                                            #
-# Descr:  This script can be used to locate statements in the shared pool and                      #
+# Name: fs                                                                                         #
+# Auth: Randy Johnson                                                                              #
+# Desc: This script can be used to locate statements in the shared pool and                        #
 #         determine whether they have been executed via Smart Scans.                               #
 #                                                                                                  #
 #         It is based on the observation that the IO_CELL_OFFLOAD_ELIGIBLE_BYTES                   #

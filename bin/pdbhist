@@ -1,11 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:        pdbhist                                                                             #
-# Author:      Randy Johnson                                                                       #
-# Description: Reports the history of pluggable databases.                                         #
-#                                                                                                  #
-# History:                                                                                         #
+# Name: pdbhist                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports the history of pluggable databases.                                                #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

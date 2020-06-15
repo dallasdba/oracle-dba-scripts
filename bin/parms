@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   parms                                                                                    #
-# Author: Randy Johnson                                                                            #
-# Descr:  Prints a list of all instance parameters (including hidden parms). If you                #
+# Name: parms                                                                                      #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints a list of all instance parameters (including hidden parms). If you                  #
 #         provide a parameter or part of a parameter on the command line then all                  #
 #         parameters not LIKE %parameter% will be filtered out.                                    #
 #                                                                                                  #
@@ -56,9 +56,6 @@ from Oracle       import RunSqlplus
 from Oracle       import ResultSet2
 from Oracle       import SetOracleEnv
 from Oracle       import ParseConnectString
-
-# For handling termination in stdout pipe, ex: when you run: oerrdump | head
-signal(SIGPIPE, SIG_DFL)
 
 #---------------------------------------------------------------------------
 # Def : IsCdb()
@@ -209,6 +206,7 @@ def GenSql(Cdb, ColSep):
 #---------------------------------------------------------------------------
 # End GenSql()
 #---------------------------------------------------------------------------
+
 
 # --------------------------------------
 # ---- Main Program --------------------

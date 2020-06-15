@@ -1,24 +1,24 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   genddl                                                                                   #
-# Author: Randy Johnson                                                                            #
-# Descr:  Generates DDL for an object using DBMS_METADATA.GET_DDL. Types known to be supported:    #
-#           *CONTEXT                                                                               #
-#           *DIRECTORY                                                                             #
-#           CLUSTER                                                                                #
-#           FUNCTION                                                                               #
-#           INDEX                                                                                  #
-#           LIBRARY                                                                                #
-#           OPERATOR                                                                               #
-#           PACKAGE                                                                                #
-#           PROCEDURE                                                                              #
-#           SEQUENCE                                                                               #
-#           SYNONYM                                                                                #
-#           TABLE                                                                                  #
-#           TRIGGER                                                                                #
-#           TYPE                                                                                   #
-#           VIEW                                                                                   #
+# Name: genddl                                                                                     #
+# Auth: Randy Johnson                                                                              #
+# Desc: Generates DDL for an object using DBMS_METADATA.GET_DDL. Types known to be supported:      #
+#         *CONTEXT                                                                                 #
+#         *DIRECTORY                                                                               #
+#          CLUSTER                                                                                 #
+#          FUNCTION                                                                                #
+#          INDEX                                                                                   #
+#          LIBRARY                                                                                 #
+#          OPERATOR                                                                                #
+#          PACKAGE                                                                                 #
+#          PROCEDURE                                                                               #
+#          SEQUENCE                                                                                #
+#          SYNONYM                                                                                 #
+#          TABLE                                                                                   #
+#          TRIGGER                                                                                 #
+#          TYPE                                                                                    #
+#          VIEW                                                                                    #
 #                                                                                                  # 
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -56,7 +56,6 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   ConnStr        = ''
 

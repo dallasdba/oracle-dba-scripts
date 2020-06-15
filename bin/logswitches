@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   logswitches                                                                              #
-# Author: Randy Johnson                                                                            #
-# Descr:  Reports count of log switches for each hour of the day/week.                             #
+# Name: logswitches                                                                                #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports count of log switches for each hour of the day/week.                               #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -27,6 +27,7 @@ from Oracle       import ParseConnectString
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 
+
 # --------------------------------------
 # ---- Main Program --------------------
 # --------------------------------------
@@ -40,7 +41,6 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   TnsName        = ''
   Username       = ''

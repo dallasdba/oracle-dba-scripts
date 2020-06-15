@@ -1,10 +1,10 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dbcomps                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Prints database component version information from product_component_version,            #
-#         and dba_registry_history.                                                                #
+# Name: dbcomps                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints database component version information from product_component_version, and          #
+#       dba_registry_history.                                                                      #
 #                                                                                                  #
 # History:                                                                                         #
 #                                                                                                  #
@@ -44,7 +44,6 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   ConnStr        = ''
 

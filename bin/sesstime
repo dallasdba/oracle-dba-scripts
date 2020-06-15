@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   sesstime                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  This script prints a report from V$SESS_TIME_MODEL and GV$SESS_TIME_MODEL.               #
+# Name: sesstime                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: This script prints a report from V$SESS_TIME_MODEL and GV$SESS_TIME_MODEL.                 #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -41,7 +41,6 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   Sid            = 0
   InStr          = ''
   ConnStr        = ''

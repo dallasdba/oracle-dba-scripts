@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   cdbstorage                                                                               #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report tablespace storage utilization for multitenant (container) databases.             #
+# Name: cdbstorage                                                                                 #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report tablespace storage utilization for multitenant (container) databases.               #
 #                                                                                                  #
 # History:                                                                                         #
 #                                                                                                  #
@@ -43,18 +43,8 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   ConnStr        = ''
-
-  # Check/setup the Oracle environment
-  if (not('ORACLE_SID' in list(environ.keys()))):
-    print('ORACLE_SID is required.')
-    exit(1)
-  else:
-    # Set the ORACLE_HOME just in case it isn't set already.
-    if (not('ORACLE_HOME' in list(environ.keys()))):
-      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
 
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)

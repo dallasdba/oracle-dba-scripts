@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   unstable_plans                                                                           #
-# Author: Randy Johnson                                                                            #
-# Descr:  Attempts to find SQL statements with plan instability.                                   #
+# Name: unstable_plans                                                                             #
+# Auth: Randy Johnson                                                                              #
+# Desc: Attempts to find SQL statements with plan instability.                                     #
 #         This scripts prompts for two values, both of which can be left blank.                    #
 #           min_stddev: the minimum "normalized" standard deviation between plans                  #
 #                       (the default is 2)                                                         #

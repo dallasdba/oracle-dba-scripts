@@ -1,11 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   otherxml                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  Dumps the OTHER_XML column from v$sqltext                                                #
-#                                                                                                  #
-# History:                                                                                         #
+# Name: otherxml                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Dumps the OTHER_XML column from v$sqltext                                                  #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -29,6 +27,7 @@ from signal       import signal
 from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 from Oracle       import ParseConnectString
+
 
 # --------------------------------------
 # ---- Main Program --------------------

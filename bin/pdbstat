@@ -1,11 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   pdbstat                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Reports the status, GUID, etc. of pluggable databases.                                   #
-#                                                                                                  #
-# History:                                                                                         #
+# Name: pdbstat                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports the status, GUID, etc. of pluggable databases.                                     #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

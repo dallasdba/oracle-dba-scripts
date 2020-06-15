@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   profiles                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  Prints a report of dba_profiles.                                                         #
+# Name: profiles                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints a report of dba_profiles.                                                           #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

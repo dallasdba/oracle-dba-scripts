@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   imsegs                                                                                   #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report In Memory Segments.                                                               #
+# Name: imsegs                                                                                     #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report In Memory Segments.                                                                 #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -42,7 +42,6 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   ConnStr        = ''
 
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head

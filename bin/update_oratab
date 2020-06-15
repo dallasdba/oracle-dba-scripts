@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   update_oratab                                                                            #
-# Author: Randy Johnson                                                                            #
-# Descr:  Adds new instance names the the oratab file on all nodes in the cluster.                 #
+# Name: update_oratab                                                                              #
+# Auth: Randy Johnson                                                                              #
+# Desc: Adds new instance names the the oratab file on all nodes in the cluster.                   #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

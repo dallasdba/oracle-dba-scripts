@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   awr_plan_change                                                                          #
-# Author: Randy Johnson                                                                            #
-# Descr:  Reports SQL execution plan changes for a SQL ID.                                         #
+# Name: awr_plan_change                                                                            #
+# Auth: Randy Johnson                                                                              #
+# Desc: Reports SQL execution plan changes for a SQL ID.                                           #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

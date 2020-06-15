@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-#  Name:   statsdefault                                                                            #
-#  Author: Randy Johnson                                                                           #
-#  Descr:  Report default settings for dbms_stats package.                                         #
+# Name: statsdefault                                                                               #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report default settings for dbms_stats package.                                            #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   cbostats                                                                                 #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report tables/partitions/subpartitions with missing or stale CBO statistics.             #
+# Name: cbostats                                                                                   #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report tables/partitions/subpartitions with missing or stale CBO statistics.               #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -70,15 +70,6 @@ if (__name__ == '__main__'):
   ExcludeList.append('WMSYS')
   ExcludeList.append('XDB')
   ExcludeList.append('XS$NULL')
-
-  # Check/setup the Oracle environment
-  if (not('ORACLE_SID' in list(environ.keys()))):
-    print('ORACLE_SID is required.')
-    exit(1)
-  else:
-    # Set the ORACLE_HOME just in case it isn't set already.
-    if (not('ORACLE_HOME' in list(environ.keys()))):
-      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
 
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)

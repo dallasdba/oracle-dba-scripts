@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   asmfree                                                                                  #
-# Author: Randy Johnson                                                                            #
-# Descr:  Report ASM Attributes                                                                    #
+# Name: asmfree                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report ASM Attributes                                                                      #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #

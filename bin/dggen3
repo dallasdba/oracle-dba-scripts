@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dggen3                                                                                   #
-# Author: Randy Johnson                                                                            #
-# Descr:  Generates Step-Byt-Step Commands for Configuring 2 Data Guard Standby Databases.         #
+# Name: dggen3                                                                                     #
+# Auth: Randy Johnson                                                                              #
+# Desc: Generates Step-Byt-Step Commands for Configuring 2 Data Guard Standby Databases.           #
 #                                                                                                  #
 #         This includes the following:                                                             #
 #           1) RMAN Duplicate from Backup                                                          #
@@ -15,8 +15,6 @@
 #                                                                                                  #
 # Wish List:                                                                                       #
 #  - Add configurable Listener Name                                                                #
-#                                                                                                  #
-# History:                                                                                         #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -81,7 +79,6 @@ def IsReadable(Filepath):
 # End IsReadable()
 # ---------------------------------------------------------------------------
 
-
 # ---------------------------------------------------------------------------
 # Def : LoadConfig()
 # Desc: Loads dictionary structure with key/value pairs from a config
@@ -133,6 +130,7 @@ def LoadConfig(ConfigFile):
 # End LoadConfig()
 # ---------------------------------------------------------------------------
 
+
 # --------------------------------------
 # ---- Main Program --------------------
 # --------------------------------------
@@ -143,7 +141,6 @@ if (__name__ == '__main__'):
   VersionDate           = 'Fri Jun 12 22:00:50 CDT 2020'
   DevState              = 'Production'
   Banner                = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
-  ArgParser             = OptionParser()
   #DbaEtc                = '/home/oracle/dba/etc'
   DbaEtc                = pathsplit(argv[0])[0]
   Now                   = datetime.now().strftime('%m/%d/%Y %H:%M:%S')

@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   usrmgt                                                                                   #
-# Author: Randy Johnson                                                                            #
-# Descr:  Creates roles, user accounts, grants roles, grants privileges to the SYSADM              #
+# Name: usrmgt                                                                                     #
+# Auth: Randy Johnson                                                                              #
+# Desc: Creates roles, user accounts, grants roles, grants privileges to the SYSADM                #
 #         objects to SYSADM_SELECT_ROLE, and SYSADM_ADMIN_ROLE roles.                              #
 #                                                                                                  #
 #           User Table: PS_CCSF_USERS                                                              #
@@ -125,7 +125,6 @@ def LoadUserTable(UserTable):
 # End LoadUserTable()
 # ---------------------------------------------------------------------------
 
-
 # ---------------------------------------------------------------------------
 # Def : CheckTable()
 # Desc: Checks for the existance of a table.
@@ -172,7 +171,6 @@ def CheckTable(Table):
 # End CheckTable()
 # ---------------------------------------------------------------------------
 
-
 # ---------------------------------------------------------------------------
 # Def : CheckRole()
 # Desc: Checks for the existance of a role.
@@ -213,7 +211,6 @@ def CheckRole(Role):
 # End CheckRole()
 # ---------------------------------------------------------------------------
 
-
 # ---------------------------------------------------------------------------
 # Def : CreateRole()
 # Desc: Creates a custom role in the database.
@@ -242,7 +239,6 @@ def CreateRole(Role):
 # ---------------------------------------------------------------------------
 # End CreateRole()
 # ---------------------------------------------------------------------------
-
 
 # ---------------------------------------------------------------------------
 # Def : LoadMissingPrivileges()
@@ -523,7 +519,6 @@ def LoadMissingUsers():
 # ---------------------------------------------------------------------------
 # End LoadMissingUsers()
 # ---------------------------------------------------------------------------
-
 
 # ---------------------------------------------------------------------------
 # Def : LoadDbaRoleGrants()

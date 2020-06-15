@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #------------------------------------------------------------------------------------------------#
-# Name:   what_changed                                                                           #
-# Author: Randy Johnson                                                                          #
-# Descr:  Report SQL Plan Changes                                                                #
+# Name: what_changed                                                                             #
+# Auth: Randy Johnson                                                                            #
+# Desc: Report SQL Plan Changes                                                                  #
 #                                                                                                #
 # Date       Ver. Who              Change Description                                            #
 # ---------- ---- ---------------- -----------------------------------------------------------   #
@@ -41,7 +41,6 @@ if (__name__ == '__main__'):
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
-  ArgParser      = OptionParser()
   InStr          = ''
   TnsName        = ''
   Username       = ''

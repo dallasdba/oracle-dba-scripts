@@ -1,9 +1,9 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name:   dggen2                                                                                   #
-# Author: Randy Johnson                                                                            #
-# Descr:  Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.            #
+# Name: dggen2                                                                                     #
+# Auth: Randy Johnson                                                                              #
+# Desc: Generates a Step-By-Step Guide for Configuring a Data Guard Standby Database.              #
 #                                                                                                  #
 #         This includes the following:                                                             #
 #           1) RMAN Duplicate from Active Database                                                 #
@@ -17,8 +17,6 @@
 # Wish List:                                                                                       #
 #  - Add configurable Listener Name                                                                #
 #  - Parameterize DBNAME for mass build of mutiple config files.                                   #
-#                                                                                                  #
-# History:                                                                                         #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -83,7 +81,6 @@ def IsReadable(Filepath):
 # ---------------------------------------------------------------------------
 # End IsReadable()
 # ---------------------------------------------------------------------------
-
 
 # ---------------------------------------------------------------------------
 # Def : LoadConfig()
@@ -281,6 +278,10 @@ def CreateSampleConfig(ConfigFile):
     cf.close()
     print('\nConfiguration file created with sample values: %s' % ConfigFile)
     exit(0)
+# ---------------------------------------------------------------------------
+# End CreateSampleConfig()
+# ---------------------------------------------------------------------------
+
 
 # --------------------------------------
 # ---- Main Program --------------------
