@@ -8,15 +8,15 @@
 #         starting the operation and after each startup/shutdown command is executed.              #
 #                                                                                                  #
 # Date       Ver. Who          on the local node.    Change Description                            #
-# ---------- ---- ---------------- --------------------------------------------------------------  #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
 # 02/16/2014 1.00 Randy Johnson    Initial release.                                                #
 # 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
 # 09/19/2015 3.00 Randy Johnson    Updated fairly heavily in order to improve flexibility. Added   #
 #                                  -g (diskgroup) option, -u (db_unique_name) option, eliminated   #
-#                                  the -e (ext) option. Removed GetClustername(), GetClusterInfo() #
-#                                  and switched GetNodes() from a local definition to the          #
-#                                  Oracle.py module. Cleaned up a lot of print statements that     #
-#                                  were still of the < Python3.4 style.                            #
+#                                  the -e (ext) option. Removed GetClustername(),                  #
+#                                  GetClusterInfo() and switched GetNodes() from a local           #
+#                                  definition to the Oracle.py module. Cleaned up a lot of print   #
+#                                  statements that were still of the < Python3.4 style.            #
 # 10/09/2015 3.01 Randy Johnson    Removed Pid, getpgid()                                          #
 # 07/11/2017 3.02 Randy Johnson    Replaced PythonStackTrace() with traceback.format_exc()         #
 # 07/13/2017 3.10 Randy Johnson    Added program description to Usage. Removed                     #
