@@ -1,0 +1,1368 @@
+#!/bin/env python
+
+#--------------------------------------------------------------------------------------------------#
+# Name: migration_collector                                                                        #
+# Auth: Randy Johnson                                                                              #
+# Desc: Collects migration related data from an Oracle database and saves it to a Pickle file.     #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 09/22/2019 1.00 Randy Johnson    Initial write.                                                  #
+# 09/26/2019 1.10 Randy Johnson    Added some additional validation logic and error handling.      #
+# 10/01/2019 1.20 Randy Johnson    Changed set heading to off and pagesize to 0                    #
+# 10/07/2019 1.21 Randy Johnson    Fixed bug in ResultSet in GetBackupSize()                       #
+# 10/10/2019 1.22 Randy Johnson    Fixed bug in Get() causing unwnated logic when --s used.        #
+#                                  Added debug statements (print & exit) at line 917.              #
+#--------------------------------------------------------------------------------------------------#
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from datetime     import datetime
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from platform     import platform
+from signal       import SIG_DFL
+from signal       import SIGPIPE
+from signal       import signal
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from subprocess   import PIPE
+from subprocess   import Popen
+from subprocess   import STDOUT
+
+import sys
+
+if (version_info[0] >= 3):
+  import pickle
+else:
+  import cPickle as pickle
+
+# --------------------------------------
+# ---- Function Definitions ------------
+# --------------------------------------
+# ---------------------------------------------------------------------------
+# Clas: Logger()
+# Desc: Tee's print output to a file.
+# ---------------------------------------------------------------------------
+class Logger(object):
+  def __init__(self,text):
+    from sys import stdout
+    self.logfile = text
+    self.terminal = stdout
+    self.log = open(self.logfile, "w")
+
+    if (version_info[0] >= 3):
+      self.encoding = stdout.encoding
+      self.flush = stdout.flush
+      self.errors = stdout.errors
+
+  def write(self, message):
+    self.terminal.write(message)
+    self.log.write(message)
+# ---------------------------------------------------------------------------
+# End Logger()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetSummaryInfo()
+# Desc: Retrieves high level information about the database, OS, hardware.
+# Args: <none>
+# Retn: ResultSet
+# ---------------------------------------------------------------------------
+def GetSummaryInfo():
+  ResultSet = []
+  Sql  = "SET HEAD OFF\n"
+
+  Sql +="WITH\n"
+  Sql +="  rac      AS (SELECT /*+  MATERIALIZE NO_MERGE  */ COUNT(*) instances, CASE COUNT(*) WHEN 1 THEN 'Single-instance' ELSE COUNT(*)||'-node RAC cluster' END db_type FROM gv$instance),\n"
+  Sql +="  mem      AS (SELECT /*+  MATERIALIZE NO_MERGE  */ SUM(value) target FROM gv$system_parameter2 WHERE name = 'memory_target'),\n"
+  Sql +="  sga      AS (SELECT /*+  MATERIALIZE NO_MERGE  */ SUM(value) target FROM gv$system_parameter2 WHERE name = 'sga_target'),\n"
+  Sql +="  pga      AS (SELECT /*+  MATERIALIZE NO_MERGE  */ SUM(value) target FROM gv$system_parameter2 WHERE name = 'pga_aggregate_target'),\n"
+  Sql +="  db_block AS (SELECT /*+  MATERIALIZE NO_MERGE  */ value bytes FROM v$system_parameter2 WHERE name = 'db_block_size'),\n"
+  Sql +="  db       AS (SELECT /*+  MATERIALIZE NO_MERGE  */ name, platform_name FROM v$database),\n"
+  Sql +="  inst     AS (SELECT /*+  MATERIALIZE NO_MERGE  */ host_name, version db_version FROM v$instance),\n"
+  Sql +="  data     AS (SELECT /*+  MATERIALIZE NO_MERGE  */ SUM(bytes) bytes, COUNT(*) files, COUNT(DISTINCT ts#) tablespaces FROM v$datafile),\n"
+  Sql +="  temp     AS (SELECT /*+  MATERIALIZE NO_MERGE  */ SUM(bytes) bytes FROM v$tempfile),\n"
+  Sql +="  log      AS (SELECT /*+  MATERIALIZE NO_MERGE  */ SUM(bytes) * MAX(members) bytes FROM v$log),\n"
+  Sql +="  control  AS (SELECT /*+  MATERIALIZE NO_MERGE  */ SUM(block_size * file_size_blks) bytes FROM v$controlfile),\n"
+  Sql +="   cell    AS (SELECT /*+  MATERIALIZE NO_MERGE  */ COUNT(DISTINCT cell_name) cnt FROM v$cell_state),\n"
+  Sql +="  core     AS (SELECT /*+  MATERIALIZE NO_MERGE  */ SUM(value) cnt FROM gv$osstat WHERE stat_name = 'NUM_CPU_CORES'),\n"
+  Sql +="  cpu      AS (SELECT /*+  MATERIALIZE NO_MERGE  */ SUM(value) cnt FROM gv$osstat WHERE stat_name = 'NUM_CPUS'),\n"
+  Sql +="  pmem     AS (SELECT /*+  MATERIALIZE NO_MERGE  */ SUM(value) bytes FROM gv$osstat WHERE stat_name = 'PHYSICAL_MEMORY_BYTES')\n"
+  Sql +="SELECT /*+  NO_MERGE  */ " + SqlComment + "\n"
+  Sql +="       'DB_NAME~' system_item, db.name system_value\n"
+  Sql +="  FROM db\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'DB_VERSION~', inst.db_version\n"
+  Sql +="  FROM inst\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'DB_BLOCK_SIZE~', TRIM(TO_CHAR(db_block.bytes / POWER(2,10), '90'))||' KiB'\n"
+  Sql +="  FROM db_block\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'DATABASE_SIZE~', TRIM(TO_CHAR(ROUND((data.bytes + temp.bytes + log.bytes + control.bytes) / POWER(2,40), 3), '999,999,990.000'))||' TiB'\n"
+  Sql +="  FROM db, data, temp, log, control\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'DATAFILES~', data.files||' (on '||data.tablespaces||' tablespaces)'\n"
+  Sql +="  FROM data\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'DB_CONFIGURATION~', rac.db_type FROM rac\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'DB_MEMORY~',\n"
+  Sql +="  CASE WHEN mem.target > 0 THEN 'MEMORY '||TRIM(TO_CHAR(ROUND(mem.target / POWER(2,30), 1), '999,990.0'))||' GiB, ' END||\n"
+  Sql +="  CASE WHEN sga.target > 0 THEN 'SGA '   ||TRIM(TO_CHAR(ROUND(sga.target / POWER(2,30), 1), '999,990.0'))||' GiB, ' END||\n"
+  Sql +="  CASE WHEN pga.target > 0 THEN 'PGA '   ||TRIM(TO_CHAR(ROUND(pga.target / POWER(2,30), 1), '999,990.0'))||' GiB, ' END||\n"
+  Sql +="  CASE WHEN mem.target > 0 THEN 'AMM' ELSE CASE WHEN sga.target > 0 THEN 'ASMM' ELSE 'MANUAL' END END\n"
+  Sql +="  FROM mem, sga, pga\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'HARDWARE~', CASE WHEN cell.cnt > 0 THEN 'Engineered System '||\n"
+  Sql +="  CASE WHEN 'Intel(R) Xeon(R) CPU           E5540  @ 2.53GHz' LIKE '%5675%' THEN 'X2-2 ' END||\n"
+  Sql +="  CASE WHEN 'Intel(R) Xeon(R) CPU           E5540  @ 2.53GHz' LIKE '%2690%' THEN 'X3-2 ' END||\n"
+  Sql +="  CASE WHEN 'Intel(R) Xeon(R) CPU           E5540  @ 2.53GHz' LIKE '%2697%' THEN 'X4-2 ' END||\n"
+  Sql +="  CASE WHEN 'Intel(R) Xeon(R) CPU           E5540  @ 2.53GHz' LIKE '%2699%' THEN 'X5-2 ' END||\n"
+  Sql +="  CASE WHEN 'Intel(R) Xeon(R) CPU           E5540  @ 2.53GHz' LIKE '%8870%' THEN 'X3-8 ' END||\n"
+  Sql +="  CASE WHEN 'Intel(R) Xeon(R) CPU           E5540  @ 2.53GHz' LIKE '%8895%' THEN 'X4-8 or X5-8 ' END||\n"
+  Sql +=" 'with '||cell.cnt||' storage servers'\n"
+  Sql +="  ELSE 'Unknown' END FROM cell\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'PROCESSOR~', 'Intel(R) Xeon(R) CPU           E5540  @ 2.53GHz'\n"
+  Sql +="  FROM DUAL\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'PHYSICAL_CPU_COUNT~', core.cnt||' cores'||CASE WHEN rac.instances > 0 THEN ', on '||rac.db_type END\n"
+  Sql +="  FROM rac, core\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'ORACLE_CPU_COUNT~', cpu.cnt||' CPUs (threads)'||CASE WHEN rac.instances > 0 THEN ', on '||rac.db_type END\n"
+  Sql +="  FROM rac, cpu\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'PHYSICAL_RAM~', TRIM(TO_CHAR(ROUND(pmem.bytes / POWER(2,30), 1), '999,990.0'))||' GiB'||CASE WHEN rac.instances > 0 THEN ', on '||rac.db_type END\n"
+  Sql +="  FROM rac, pmem\n"
+  Sql +=" UNION ALL\n"
+  Sql +="SELECT 'OPERATING_SYSTEM~', db.platform_name\n"
+  Sql +="  FROM db;"
+  Sql = Sql.strip()
+  if Show:
+    print("---\n%s" % Sql)
+  else:
+    # Execute The SQL
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+
+    ResultSet = [['NAME', 'VALUE']]
+    for line in Stdout.strip().split('\n'):
+      line = [ x.strip() for x in line.split(Colsep) ]
+      ResultSet.append(line)
+
+  return(ResultSet)
+# ---------------------------------------------------------------------------
+# End GetSummaryInfo()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetDbId()
+# Desc: Retrieves the dbid from v$database.
+# Args: <none>
+# Retn: DbId
+# ---------------------------------------------------------------------------
+def GetDbId():
+  DbId = ''
+  Sql  = "SELECT " + SqlComment + "\n"
+  Sql += "       dbid\n"
+  Sql += "  FROM v$database;"
+
+  if Show:
+    print("\n---%s" % Sql)
+  else:
+    # Execute The SQL
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+
+    DbId = Stdout.strip()
+
+  return(DbId)
+# ---------------------------------------------------------------------------
+# End GetDbId()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : IsCDB()
+# Desc: Retrieves the dbid from v$database.
+# Args: <none>
+# Retn: DbId
+# ---------------------------------------------------------------------------
+def IsCDB():
+  CDB = ''
+  Sql  = "SELECT " + SqlComment + "\n"
+  Sql += "       upper(cdb)\n"
+  Sql += "  FROM v$database;"
+
+  if Show:
+    print("---\n%s" % Sql)
+
+  Tab = GetTableDef2('V$DATABASE')
+  if 'CDB' in Tab:
+    # Execute The SQL
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+    if Stdout.strip() == 'YES':
+      return(True)
+    else:
+      return(False)
+  else:
+    return(False)
+# ---------------------------------------------------------------------------
+# End IsCDB()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetTableDef()
+# Desc: Returns table/view definition
+# Args: Table/View
+# Retn: 0 or exit(1)
+# ---------------------------------------------------------------------------
+def GetTableDef(Tab):
+  TabDef = []
+
+  # Hostname
+  Sql  = "SET LINES 80\n"
+  Sql += "DESCRIBE " + Tab
+
+  if Show:
+    print("---\n%s" % Sql)
+  else:
+    # Execute the SQL
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+    Stdout = Stdout.strip()
+    for line in Stdout.split('\n')[2:]:
+      x = line.strip().split()
+      TabDef.append([x[0], x[-1]])
+  return(TabDef)
+# ---------------------------------------------------------------------------
+# End GetTableDef()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetTableDef2()
+# Desc: Returns table/view definition
+# Args: Table/View
+# Retn: 0 or exit(1)
+# ---------------------------------------------------------------------------
+def GetTableDef2(Tab):
+  TabDef = {}
+
+  # Hostname
+  Sql  = "SET LINES 80\n"
+  Sql += "DESCRIBE " + Tab
+
+  if Show:
+    print("---\n%s" % Sql)
+  else:
+    # Execute the SQL
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+    Stdout = Stdout.strip()
+    for line in Stdout.split('\n')[2:]:
+      x = line.strip().split()
+      if len(x) == 2:
+        TabDef[x[0]] = x[1]
+      elif len(x) == 3:
+        TabDef[x[0]] = x[2]
+  return(TabDef)
+# ---------------------------------------------------------------------------
+# End GetTableDef2()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : QueryTable()
+# Desc: Dumps a table
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def QueryTable(TabName, TabDef):
+  SqlSet  = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS';\n\n"
+  csep    = " ||'" + Colsep + "'||\n"
+
+  clist = [ "       %-30s" % coldef[0] for coldef in TabDef ]
+  ResultSet = [[ coldef[0] for coldef in TabDef ]]
+  cols = csep.join(clist)
+  Sql = cols.lower() + "\n  FROM " + TabName + ";"
+  Sql = SqlSet + "" + "SELECT " + SqlComment + "\n       " + Sql.strip()
+
+  if Show:
+    print("---\n%s" % "SET COLSEP ~\nSET LINESIZE 2000\nSET TRIMSPOOL ON\nSELECT " + SqlComment + " \n       * \n  FROM " + TabName + ";")
+  else:
+    # Execute the SQL
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+
+    for line in Stdout.strip().split('\n'):
+      ResultSet.append(line.split(Colsep))
+
+  return(ResultSet)
+# ---------------------------------------------------------------------------
+# End QueryTable()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetAllFileStorage()
+# Desc: Returns total of all file storage internal to the database.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetAllFileStorage(SrcAttrs):
+  SqlSet  = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS';\n\n"
+  csep       = " ||'" + Colsep + "'||"
+  Sql        = ""
+  ResultSet  = []
+
+  Sql += "SELECT " + SqlComment + "\n"
+  Sql += "       ROUND((df.gb + tf.gb + cf.gb + rdo.gb),2)\n"
+  Sql += "  FROM (SELECT SUM(bytes/1024/1024/1024) gb FROM v$datafile) df,\n"
+  Sql += "       (SELECT SUM(bytes/1024/1024/1024) gb FROM v$tempfile) tf,\n"
+  Sql += "       (SELECT (SUM(file_size_blks) * block_size)/1024/1024/1024 gb FROM v$controlfile GROUP BY block_size) cf,\n"
+  Sql += "       (SELECT SUM(bytes)/1024/1024/1024 gb FROM v$log) rdo;"
+
+  Sql = SqlSet + Sql.strip()
+
+  if Show:
+    print("---\n%s" % Sql)
+  else:
+    # Execute the SQL
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+
+    SrcAttrs['SRC_STORAGE_ALLFILES_GB'] = Stdout.strip()
+
+  return(SrcAttrs)
+# ---------------------------------------------------------------------------
+# End GetAllFileStorage()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetProps()
+# Desc: Returns information from the database_properties table.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetProps():
+  SqlSet  = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS';\n\n"
+  csep       = " ||'" + Colsep + "'||"
+  Sql        = ""
+  ResultSet  = []
+
+  Sql += "  SELECT " + SqlComment + "\n"
+  Sql += "         name" + csep + "\n"
+  Sql += "         value$\n"
+  Sql += "    FROM sys.props$\n"
+  Sql += "   WHERE UPPER(name) IN( 'NLS_CHARACTERSET'\n"
+  Sql += "                        ,'NLS_LANGUAGE'\n"
+  Sql += "                        ,'NLS_NCHAR_CHARACTERSET'\n"
+  Sql += "                        ,'NLS_TERRITORY'\n"
+  Sql += "                        ,'DBTIMEZONE'\n"
+  Sql += "                        ,'GLOBAL_DB_NAME'\n"
+  Sql += "                        ,'NLS_CALENDAR'\n"
+  Sql += "                       )\n"
+  Sql += "ORDER BY name\n"
+  Sql += "       , value$;"
+
+  Sql = SqlSet + Sql.strip()
+
+  if Show:
+    print("---\n%s" % Sql)
+  else:
+    # Execute the SQL
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+
+    ResultSet = [['NAME', 'VALUE']]
+    for line in Stdout.strip().split('\n'):
+      ResultSet.append(line.split(Colsep))
+
+  return(ResultSet)
+# ---------------------------------------------------------------------------
+# End GetProps()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetSrcAttrs()
+# Desc: Returns source attributes from a result set.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetSrcAttrs(ResultSet, SrcAttrs):
+  ColSet = (
+    'NLS_CHARACTERSET',
+    'NLS_LANGUAGE',
+    'NLS_NCHAR_CHARACTERSET',
+    'NLS_TERRITORY',
+    'DBTIMEZONE',
+    'GLOBAL_DB_NAME',
+    'NLS_CALENDAR'
+  )
+
+  for row in ResultSet:
+    if row[0] in sorted(ColSet):
+      SrcAttrs['SRC_' + row[0]] = row[1]
+
+  return(SrcAttrs)
+# ---------------------------------------------------------------------------
+# End GetSrcAttrs()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetTde()
+# Desc: Returns source attributes from a result set.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetTde(ResultSet, SrcAttrs):
+  TbspSet = {}
+
+  # Validation...
+  for col in ('TABLESPACE_NAME','ENCRYPTED'):
+    try:
+      version = ResultSet[0].index(col)
+    except:
+      print("\n<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      print("Error: %s not found in dba_tablespaces." % col)
+      print("Columns in dba_tablespaces:")
+      for col in ResultSet[0]:
+        print("  %-30s" % col)
+      print("<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      exit(1)
+
+  encrypted = ResultSet[0].index('ENCRYPTED')
+  tbsp_name = ResultSet[0].index('TABLESPACE_NAME')
+  for row in ResultSet[1:]:
+    if row[encrypted].upper() != 'NO':
+      TbspSet[row[tbsp_name]] = row[encrypted].upper()
+  
+  if TbspSet != {}:
+    SrcAttrs['SRC_TDE'] = 'YES'
+  else: 
+    SrcAttrs['SRC_TDE'] = 'NO'
+
+  return(SrcAttrs)
+# ---------------------------------------------------------------------------
+# End GetTde()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetDbVersion()
+# Desc: Returns source attributes from a result set.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetDbVersion(ResultSet):
+  DbVersion = ''
+
+  # Conditional logic for differences between 12.1 and lover versions.
+  try:
+    version = ResultSet[0].index('VERSION_FULL')
+  except:
+    try:
+      version = ResultSet[0].index('VERSION')
+    except:
+      print("\n<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      print("Error: VERSION not found in gv$instance.")
+      print("Columns in gv$instance:")
+      for col in ResultSet[0]:
+        print("  %-30s" % col)
+      print("<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      exit(1)
+
+  for row in ResultSet[1:]:
+    DbVersion = row[version].upper()
+
+  return(DbVersion)
+# ---------------------------------------------------------------------------
+# End GetDbVersion()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetNodeNames()
+# Desc: Returns source attributes from a result set.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetNodeNames(ResultSet, SrcAttrs):
+  Nodes = {}
+  Count = 0
+
+  # Validation...
+  for col in ('HOST_NAME','INST_ID'):
+    try:
+      version = ResultSet[0].index(col)
+    except:
+      print("\n<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      print("Error: %s not found in gv$instance." % col)
+      print("Columns in gv$instance:")
+      for col in ResultSet[0]:
+        print("  %-30s" % col)
+      print("<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      exit(1)
+
+  node_name = ResultSet[0].index('HOST_NAME')
+  node_id   = ResultSet[0].index('INST_ID')
+  for row in ResultSet[1:]:
+    Nodes[row[node_id]] = row[node_name]
+    Count += 1
+
+  for nid in sorted(Nodes):
+    SrcAttrs['SRC_NODE' + nid] = Nodes[nid]
+
+  SrcAttrs['SRC_NODE_COUNT'] = str(Count)
+
+  if Count >= 2:
+    SrcAttrs['SRC_RAC'] = 'YES'
+
+  return(SrcAttrs)
+# ---------------------------------------------------------------------------
+# End GetNodeNames()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetNodeRes()
+# Desc: Returns source attributes from a result set.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetNodeRes(ResultSet, SrcAttrs):
+  Nodes = {}
+  Count = 0
+
+  # Validation...
+  for col in ('INST_ID', 'STAT_NAME', 'VALUE'):
+    try:
+      version = ResultSet[0].index(col)
+    except:
+      print("\n<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      print("Error: %s not found in gv$osstat." % col)
+      print("Columns in gv$osstat:")
+      for col in ResultSet[0]:
+        print("  %-30s" % col)
+      print("<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      exit(1)
+
+  inst_id   = ResultSet[0].index('INST_ID')
+  stat_name = ResultSet[0].index('STAT_NAME')
+  value     = ResultSet[0].index('VALUE')
+  for row in ResultSet[1:]:
+    if row[inst_id] not in Nodes:
+      Nodes[row[inst_id]] = {}
+    if row[stat_name] == 'PHYSICAL_MEMORY_BYTES':
+      Nodes[row[inst_id]]['NODE_MEMORY_GB'] = str(round(float(row[value])/1024/1024/1024,2))
+    if row[stat_name] == 'NUM_CPUS':
+      Nodes[row[inst_id]]['NODE_CPU'] = row[value]
+
+  for nid in sorted(Nodes):
+    SrcAttrs['SRC_NODE' + nid + '_MEMORY_GB'] = Nodes[nid]['NODE_MEMORY_GB']
+    SrcAttrs['SRC_NODE' + nid + '_CPU']    = Nodes[nid]['NODE_CPU']
+
+  return(SrcAttrs)
+# ---------------------------------------------------------------------------
+# End GetNodeRes()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetPdbInfo()
+# Desc: Returns source attributes from a result set.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetPdbInfo(ResultSet, SrcAttrs):
+  Pdbs  = {}
+  Count = 0
+
+  # Validation...
+  for col in ('PDB_ID','PDB_NAME','FORCE_LOGGING'):
+    try:
+      version = ResultSet[0].index(col)
+    except:
+      print("\n<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      print("Error: %s not found in dba_pdbs." % col)
+      print("Columns in dba_pdbs:")
+      for col in ResultSet[0]:
+        print("  %-30s" % col)
+      print("<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      exit(1)
+
+  pdb_id    = ResultSet[0].index('PDB_ID')
+  pdb_name  = ResultSet[0].index('PDB_NAME')
+  force_log = ResultSet[0].index('FORCE_LOGGING')
+  
+  for row in ResultSet[1:]:
+    if row[pdb_id] not in Pdbs:
+      Pdbs[row[pdb_id]] = {}
+      if row[pdb_name] != 'PDB$SEED':
+        Pdbs[row[pdb_id]]['NAME'] = row[pdb_name]
+        Pdbs[row[pdb_id]]['FORCE_LOGGING'] = row[force_log]
+
+  for pid in sorted(Pdbs):
+    for key in Pdbs[pid]:
+      SrcAttrs['SRC_PDB' + pid + '_' + key ] = Pdbs[pid][key]
+  return(SrcAttrs)
+# ---------------------------------------------------------------------------
+# End GetPdbInfo()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetInstParms()
+# Desc: Returns source attributes from a result set.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetInstParms(ResultSet, SrcAttrs):
+  Parms = {}
+  Count = 0
+  ParmList = []
+  
+  ParmList.append('SGA_MAX_SIZE')
+  ParmList.append('SGA_TARGET')
+  ParmList.append('PGA_AGGREGATE_TARGET')
+  ParmList.append('PGA_AGGREGATE_LIMIT')
+  ParmList.append('SHARED_POOL_SIZE')
+  ParmList.append('JAVA_POOL_SIZE')
+  ParmList.append('LARGE_POOL_SIZE')
+  ParmList.append('STREAMS_POOL_SIZE')
+  ParmList.append('MEMORY_TARGET')
+  ParmList.append('MEMORY_MAX_TARGET')
+  ParmList.append('INMEMORY_SIZE')
+  ParmList.append('INMEMORY_XMEM_SIZE')
+
+  # Validation...
+  for col in ('INST_ID','NAME','VALUE'):
+    try:
+      version = ResultSet[0].index(col)
+    except:
+      print("\n<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      print("Error: %s not found in gv$system_parameter2." % col)
+      print("Columns in gv$system_parameter2:")
+      for col in ResultSet[0]:
+        print("  %-30s" % col)
+      print("<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      exit(1)
+
+  inst_id   = ResultSet[0].index('INST_ID')
+  stat_name = ResultSet[0].index('NAME')
+  value     = ResultSet[0].index('VALUE')
+  for row in ResultSet[1:]:
+    if row[inst_id] not in Parms:
+      Parms[row[inst_id]] = {}
+    for parm in ParmList:
+      if row[stat_name].upper() == parm:
+        Parms[row[inst_id]][parm] = row[value]
+
+  for iid in sorted(Parms):
+    for key in sorted(Parms[iid]):
+      SrcAttrs['SRC_INST' + iid + '_' + key] = Parms[iid][key]
+
+  return(SrcAttrs)
+# ---------------------------------------------------------------------------
+# End GetInstParms()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetDbAttrs()
+# Desc: Returns source attributes from a result set.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetDbAttrs(ResultSet, SrcAttrs):
+  DbAttrs = {}
+  Endian = {
+    1  : 'Big',
+    2  : 'Big',
+    3  : 'Big',
+    4  : 'Big',
+    5  : 'Little',
+    6  : 'Big',
+    7  : 'Little',
+    8  : 'Little',
+    9  : 'Big',
+    10 : 'Little',
+    11 : 'Little',
+    12 : 'Little',
+    13 : 'Little',
+    15 : 'Little',
+    16 : 'Big',
+    17 : 'Little',
+    18 : 'Big',
+    19 : 'Little',
+    20 : 'Little',
+    21 : 'Little',
+    22 : 'Big'
+  }
+
+  # Validation...
+  for col in ('DBID','NAME','DB_UNIQUE_NAME','LOG_MODE','PROTECTION_MODE','DATABASE_ROLE','DATAGUARD_BROKER','GUARD_STATUS','PLATFORM_ID','PLATFORM_NAME','FORCE_LOGGING'):
+    try:
+      version = ResultSet[0].index(col)
+    except:
+      print("\n<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      print("Error: %s not found in v$database." % col)
+      print("Columns in v$database:")
+      for col in ResultSet[0]:
+        print("  %-30s" % col)
+      print("<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>")
+      exit(1)
+
+  dbid      = ResultSet[0].index('DBID')
+  dbname    = ResultSet[0].index('NAME')
+  dbuname   = ResultSet[0].index('DB_UNIQUE_NAME')
+  logmode   = ResultSet[0].index('LOG_MODE')
+  protmode  = ResultSet[0].index('PROTECTION_MODE')
+  dbrole    = ResultSet[0].index('DATABASE_ROLE')
+  dgbroker  = ResultSet[0].index('DATAGUARD_BROKER')
+  dgstatus  = ResultSet[0].index('GUARD_STATUS')
+  platid    = ResultSet[0].index('PLATFORM_ID')
+  platname  = ResultSet[0].index('PLATFORM_NAME')
+  forcelog  = ResultSet[0].index('FORCE_LOGGING')
+  for row in ResultSet[1:]:
+    SrcAttrs['SRC_DBID']             = row[dbid]
+    SrcAttrs['SRC_DB_NAME']          = row[dbname]
+    SrcAttrs['SRC_DB_UNIQUE_NAME']   = row[dbuname]
+    SrcAttrs['SRC_LOG_MODE']         = row[logmode]
+    SrcAttrs['SRC_PROTECTION_MODE']  = row[protmode]
+    SrcAttrs['SRC_DATABASE_ROLE']    = row[dbrole]
+    SrcAttrs['SRC_DATAGUARD_BROKER'] = row[dgbroker]
+    SrcAttrs['SRC_GUARD_STATUS']     = row[dgstatus]
+    SrcAttrs['SRC_PLATFORM_ID']      = row[platid]
+    SrcAttrs['SRC_PLATFORM_NAME']    = row[platname]
+    SrcAttrs['SRC_FORCE_LOGGING']    = row[forcelog]
+    SrcAttrs['SRC_ENDIAN']           = Endian[int(row[platid])]
+  return(SrcAttrs)
+# ---------------------------------------------------------------------------
+# End GetDbAttrs()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetBackupSize()
+# Desc: Returns backup sizes.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetBackupSize(SrcAttrs):
+  SqlSet  = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS';\n\n"
+  csep       = " ||'" + Colsep + "'||"
+  Sql        = ""
+  ResultSet  = [['COMPLETION_TIME','TYPE','GB','MINUTES']]
+
+  Sql += "  SELECT " + SqlComment + "\n"
+  Sql += "         TO_CHAR(completion_time, 'YYYY-MON-DD HH24:MI')" + csep + "\n"
+  Sql += "         type"                                            + csep + "\n"
+  Sql += "         round(sum(bytes)/1024/1024/1024,2)"              + csep + "\n"
+  Sql += "         round(sum(elapsed_seconds)/60)\n"
+  Sql += "    FROM (     SELECT CASE\n"
+  Sql += "                        WHEN s.backup_type='L'                                 THEN 'ARCHIVELOG'\n"
+  Sql += "                        WHEN s.controlfile_included='YES'                      THEN 'CONTROLFILE'\n"
+  Sql += "                        WHEN s.backup_type='D' AND s.incremental_level=0       THEN 'LEVEL0'\n"
+  Sql += "                        WHEN s.backup_type='I' AND s.incremental_level=1       THEN 'LEVEL1'\n"
+  Sql += "                        WHEN s.backup_type='D' AND s.incremental_level is null THEN 'FULL'\n"
+  Sql += "                      END type\n"
+  Sql += "                    , TRUNC(s.completion_time) completion_time\n"
+  Sql += "                    , p.bytes\n"
+  Sql += "                    , s.elapsed_seconds\n"
+  Sql += "                 FROM v$backup_piece p, v$backup_set s\n"
+  Sql += "                WHERE p.status='A' AND p.recid=s.recid\n"
+  Sql += "            UNION ALL\n"
+  Sql += "               SELECT 'DATAFILECOPY' type\n"
+  Sql += "                    , TRUNC(completion_time)\n"
+  Sql += "                    , output_bytes\n"
+  Sql += "                    , 0 elapsed_seconds\n"
+  Sql += "                 FROM v$backup_copy_details\n"
+  Sql += "         )\n"
+  Sql += "GROUP BY TO_CHAR(completion_time, 'YYYY-MON-DD HH24:MI')\n"
+  Sql += "       , type\n"
+  Sql += "ORDER BY TO_CHAR(completion_time, 'YYYY-MON-DD HH24:MI') ASC\n"
+  Sql += "       , type;"
+
+  Sql = SqlSet + Sql.strip()
+
+  if Show:
+    print("---\n%s" % Sql)
+  else:
+    # Execute the SQL
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+
+    for line in Stdout.strip().split('\n'):
+      line = [ x.strip() for x in line.split(Colsep) ]
+      if line != ['']:
+        ResultSet.append(line)
+
+    if len(ResultSet) > 1:
+      for row in ResultSet[1:]:
+        if row[1] == 'FULL':
+          SrcAttrs['SRC_BACKUP_GB'] = row[2]
+          print(SrcAttrs['SRC_BACKUP_GB'])
+          break
+  
+  return(SrcAttrs, ResultSet)
+# ---------------------------------------------------------------------------
+# End GetBackupSize()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : GetDataFileStorage()
+# Desc: Returns total of data file storage internal to the database.
+# Args:
+# Retn:
+# ---------------------------------------------------------------------------
+def GetDataFileStorage(SrcAttrs):
+  SqlSet  = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS';\n\n"
+  csep       = " ||'" + Colsep + "'||"
+  Sql        = ""
+  Stdout     = ""
+  ResultSet  = []
+
+  if Cdb:
+    Sql += "WITH x AS (  SELECT c1.con_id\n"
+    Sql += "                  , SUM(cf1.bytes)/1024/1024/1024 fsg\n"
+    Sql += "               FROM cdb_free_space cf1\n"
+    Sql += "                  , v$containers   c1\n"
+    Sql += "              WHERE cf1.con_id = c1.con_id\n"
+    Sql += "           GROUP BY c1.con_id\n"
+    Sql += "          ),\n"
+    Sql += "     y AS (  SELECT c2.con_id\n"
+    Sql += "                  , SUM(cd.bytes)/1024/1024/1024 apg\n"
+    Sql += "               FROM cdb_data_files cd\n"
+    Sql += "                  , v$containers   c2\n"
+    Sql += "              WHERE cd.con_id = c2.con_id\n"
+    Sql += "           GROUP BY c2.con_id\n"
+    Sql += "          ),\n"
+    Sql += "     z AS (   SELECT vc2.con_id\n"
+    Sql += "                   , vc2.name\n"
+    Sql += "                   , 0\n"
+    Sql += "                   , SUM(tf.bytes)/1024/1024/1024 apg\n"
+    Sql += "                FROM v$containers vc2\n"
+    Sql += "                   , cdb_temp_files tf\n"
+    Sql += "               WHERE vc2.con_id = tf.con_id\n"
+    Sql += "            GROUP BY vc2.con_id\n"
+    Sql += "                   , vc2.name\n"
+    Sql += "           )\n"
+    Sql += "   SELECT " + SqlComment + "\n"
+    Sql += "          x.con_id"       + csep + "\n"
+    Sql += "          z.name"         + csep + "\n"
+    Sql += "          ROUND(x.fsg,2)" + csep + "\n"
+    Sql += "          ROUND(y.apg + z.apg,2)\n"
+    Sql += "     FROM x\n"
+    Sql += "        , y\n"
+    Sql += "        , z\n"
+    Sql += "    WHERE x.con_id = y.con_id\n"
+    Sql += "      AND z.con_id = y.con_id\n"
+    Sql += "ORDER BY x.con_id\n"
+    Sql += "       , z.name;"
+  else:
+    Sql += "SELECT " + SqlComment + "\n"
+    Sql += "       'SRC_STORAGE_ALLOCATED_GB'" + csep + "\n"
+    Sql += "       ROUND((df.gb + tf.gb),2)\n"
+    Sql += "  FROM (SELECT ROUND(SUM(bytes/1024/1024/1024),2) gb FROM dba_data_files) df,\n"
+    Sql += "       (SELECT ROUND(SUM(bytes/1024/1024/1024),2) gb FROM dba_temp_files) tf;\n"
+
+    Sql += "SELECT " + SqlComment + "\n"
+    Sql += "       'SRC_STORAGE_USED_GB'" + csep + "\n"
+    Sql += "       ROUND((SUM(bytes)/1024/1024/1024),2)\n"
+    Sql += "  FROM dba_segments;"
+
+  Sql = SqlSet + Sql.strip()
+  if Show:
+    print("---\n%s" % Sql)
+    exit()
+  else:
+    # Execute the SQL
+    if (ConnStr != ''):
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
+
+    Stdout = Stdout.strip()
+  
+    if Cdb:
+      for line in Stdout.split('\n'):
+        pid   = line.split(Colsep)[0]
+        pname = line.split(Colsep)[1]
+        free  = line.split(Colsep)[2]
+        alloc = line.split(Colsep)[3]
+        SrcAttrs['SRC_PDB' + pid + '_NAME'] = pname
+        SrcAttrs['SRC_PDB' + pid + '_STORAGE_USED_GB']      = str(float(alloc) - float(free))
+        SrcAttrs['SRC_PDB' + pid + '_STORAGE_FREE_GB']      = free 
+        SrcAttrs['SRC_PDB' + pid + '_STORAGE_ALLOCATED_GB'] = alloc 
+    else:
+      for line in Stdout.split('\n'):
+        try:
+          key = line.split(Colsep)[0]
+          value = line.split(Colsep)[1]
+          SrcAttrs[key] = value
+        except:
+          print(">>>>>>>>>><<<<<<<<<<<\n%s\n\n%s\n>>>>>>>>>><<<<<<<<<<<" % (Sql,Stdout))
+          exit()
+      if 'SRC_STORAGE_USED_GB' in SrcAttrs and 'SRC_STORAGE_ALLOCATED_GB' in SrcAttrs:
+        SrcAttrs['SRC_STORAGE_FREE_GB'] = str(float(SrcAttrs['SRC_STORAGE_ALLOCATED_GB']) - float(SrcAttrs['SRC_STORAGE_USED_GB']))
+      
+  return(SrcAttrs)
+# ---------------------------------------------------------------------------
+# End GetDataFileStorage()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : RunSqlplus()
+# Desc: Calls sqlplus and runs a sql script passed in in the Sql parameter.
+#       Optionally calls ErrorCheck() to scan for errors then calls PrintError
+#       if any are found. The call stack looks like this...
+#       CallingRoutine
+#          ^    +-----> RunSqlplus()
+#          |                +-----> ErrorCheck()
+#          |                +-----> PrintError()
+#          |                            +-----> LookupError()
+#          |                                          |
+#          |                +--> if error exit(rc)    |
+#          +------------------------------------------+
+#
+#          1) Calling routing calls RunSqlplus
+#                - 1 parameter. SQL to run (string)
+#                - Returns Result Set (1 string)
+#          2) RunSqlplus calls ErrorCheck
+#                - 2 parameters. Stdout (string), and ComponentList (List of components for looking up potential errors)
+#                - Returns 2 values. Return code (int), and ErrorStack which is a list of lists ([ErrorString, line]
+#          3) RunSqlplus calls PrintError
+#                - Only if return code from ErrorCheck != 0 (an error was found)
+#                - Calls PrintError with three parameters:
+#                    Sql       = the original SQL statement run.
+#                    Stdout    = the output generated by the sqlplus session.
+#                    ErrorList = the list of error codes and lines containing the errors (see #2 above).
+#                - Returns Stdout to calling routine.
+#
+# Args: Sql, string containing SQL to execute.
+#       ErrChk, True/False determines whether or not to check output for errors.
+#       ConnectString, used for connecting to the database
+# Retn: If ErrChk=True then return:
+#          rc (return code, integer, 0=no errors)
+#          Output (string, stdout+stderr)
+#          ErrorList (list, error stack)
+#       If ErrChk=False then return Stdout only
+# ---------------------------------------------------------------------------
+def RunSqlplus(Sql, ErrChk=False, ConnectString='/ as sysdba'):
+  SqlHeader = ''
+
+  SqlHeader += "btitle                          off\n"
+  SqlHeader += "repfooter                       off\n"
+  SqlHeader += "repheader                       off\n"
+  SqlHeader += "ttitle                          off\n"
+  SqlHeader += "set appinfo                     off\n"
+  SqlHeader += "set arraysize                   500\n"
+  SqlHeader += "set autocommit                  off\n"
+  SqlHeader += "set autoprint                   off\n"
+  SqlHeader += "set autorecovery                off\n"
+  SqlHeader += "set autotrace                   off\n"
+  SqlHeader += "set blockterminator             \".\"\n"
+  SqlHeader += "set cmdsep                      off\n"
+  SqlHeader += "set colsep                      \" \"\n"
+  SqlHeader += "set concat                      \".\"\n"
+  SqlHeader += "set copycommit                  0\n"
+  SqlHeader += "set copytypecheck               on\n"
+  SqlHeader += "set define                      \"&\"\n"
+  SqlHeader += "set describe                    depth 1 linenum off indent on\n"
+  SqlHeader += "set document                    off\n"
+  SqlHeader += "set echo                        off\n"
+  SqlHeader += "set embedded                    off\n"
+  SqlHeader += "set escape                      off\n"
+  SqlHeader += "set escchar                     off\n"
+  SqlHeader += "set feedback                    off\n"
+  SqlHeader += "set flush                       on\n"
+  SqlHeader += "set heading                     off\n"
+  SqlHeader += "set headsep                     \"|\"\n"
+  SqlHeader += "set linesize                    32767\n"
+  SqlHeader += "set loboffset                   1\n"
+  SqlHeader += "set logsource                   \"\"\n"
+  SqlHeader += "set long                        10000000\n"
+  SqlHeader += "set longchunksize               10000000\n"
+  SqlHeader += "set markup html                 off \n"
+  SqlHeader += "set newpage                     1\n"
+  SqlHeader += "set null                        \"\"\n"
+  SqlHeader += "set numformat                   \"\"\n"
+  SqlHeader += "set numwidth                    15\n"
+  SqlHeader += "set pagesize                    0\n"
+  SqlHeader += "set pause                       off\n"
+  SqlHeader += "set pno                         0\n"
+  SqlHeader += "set recsep                      wrap\n"
+  SqlHeader += "set recsepchar                  \" \"\n"
+  SqlHeader += "set serveroutput                on size unlimited\n"
+  SqlHeader += "set shiftinout                  invisible\n"
+  SqlHeader += "set showmode                    off\n"
+  SqlHeader += "set space                       1\n"
+  SqlHeader += "set sqlblanklines               off\n"
+  SqlHeader += "set sqlcase                     mixed\n"
+  SqlHeader += "set sqlcontinue                 \"> \"\n"
+  SqlHeader += "set sqlnumber                   on\n"
+  SqlHeader += "set sqlprefix                   \"#\"\n"
+  SqlHeader += "set sqlterminator               \";\"\n"
+  SqlHeader += "set suffix                      sql\n"
+  SqlHeader += "set tab                         off\n"
+  SqlHeader += "set termout                     on\n"
+  SqlHeader += "set time                        off\n"
+  SqlHeader += "set timing                      off\n"
+  SqlHeader += "set trimout                     on\n"
+  SqlHeader += "set trimspool                   on\n"
+  SqlHeader += "set underline                   \"-\"\n"
+  SqlHeader += "set verify                      off\n"
+  SqlHeader += "set wrap                        on\n"
+  SqlHeader += "\n"
+
+  Sql = SqlHeader + Sql
+
+  # Unset the SQLPATH environment variable.
+  if ('SQLPATH' in environ.keys()):
+    del environ['SQLPATH']
+
+  if (ConnectString == '/ as sysdba'):
+    if (not('ORACLE_SID' in environ.keys())):
+      print('ORACLE_SID must be set if connect string is:' + ' \'' + ConnectString + '\'')
+      return (1, '', [])
+    if (not('ORACLE_HOME' in environ.keys())):
+      OracleSid, OracleHome = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Set the location of the ORACLE_HOME. If ORACLE_HOME is not set
+  # then we'll use the first one we find in the oratab file.
+  if ('ORACLE_HOME' in environ.keys()):
+    OracleHome = environ['ORACLE_HOME']
+    Sqlplus = OracleHome + '/bin/sqlplus'
+  else:
+    OratabDict = LoadOratab()
+    if (len(Oratab) >= 1):
+      SidList = OratabDict.keys()
+      OracleSid  = SidLit[0]
+      OracleHome = OratabDict[SidList[0]]
+      environ['ORACLE_HOME'] = OracleHome
+      Sqlplus = OracleHome + '/bin/sqlplus'
+    else:
+      print('ORACLE_HOME is not set')
+      return (1, '', [])
+
+  # Start Sqlplus and login
+  Sqlproc = Popen([Sqlplus, '-S', '-L', ConnectString], stdin=PIPE, stdout=PIPE, stderr=STDOUT, \
+   shell=False, universal_newlines=True, close_fds=True)
+
+  # Execute the SQL
+  Sqlproc.stdin.write(Sql)
+
+  # Fetch the output
+  Stdout, SqlErr = Sqlproc.communicate()
+  Stdout = Stdout.rstrip()
+  ###! Stdout = Stdout.strip()
+
+  # Check for sqlplus errors
+  if (ErrChk):
+    ###! from Migration import ErrorCheck, LookupError
+    # Components are installed applications/components such as sqlplus, import, export, rdbms, network, ...
+    # ComponentList contains a list of all components for which the error code will be searched.
+    # For example a component of rdbms will result in ORA-nnnnn errors being included in the search.
+    # ALL_COMPONENTS is an override in the ErrorCheck function that results in *all* installed components
+    # being selected. Searching all component errors is pretty fast so for now we'll just search them all.
+    # -------------------------------------------------------------------------------------------------------
+    #ComponentList = ['sqlplus','rdbms','network','crs','css','evm','has','oracore','plsql','precomp','racg','srvm','svrmgr']
+    #ComponentList = ['ALL_COMPONENTS']
+    ComponentList = ['sqlplus','rdbms', 'oracore']
+
+    # Brief explanation of what is returned by ErrorCheck()
+    # ------------------------------------------------------
+    # rc is the return code (0 is good, anything else is bad). ErrorList is a list of list structures
+    # (a 2 dimensional arrray in other languages). Each outer element of the array represents 1 error found
+    # Sql output. Each inner element has two parts (2 fields), element[0] is the Oracle error code and
+    # element[1] is the full line of text in which the error was found.
+    # For example an ErrorList might look like this:
+    # [['ORA-00001', 'ORA-00001: unique constraint...'],['ORA-00018', 'ORA-00018, 00000, "maximum number of..."']]
+    (rc, ErrorList) = ErrorCheck(Stdout, ComponentList)
+    return(rc,Stdout,ErrorList)
+  else:
+    return(Stdout)
+# ---------------------------------------------------------------------------
+# End RunSqlplus()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : ParseConnectString()
+# Desc: Parses a connect string
+#       Expected input strings follow:
+#         1) tnsname
+#         2) username@tnsname
+#         3) username/password
+#         4) username@tnsname
+#         3) username/password@tnsname.
+# Args: string representing a complete/partitial connect string.
+# Retn: tuple of Username, Password, TnsName
+# ---------------------------------------------------------------------------
+def ParseConnectString(InStr):
+  TnsName  = ''
+  Username = ''
+  Password = ''
+  ConnStr  = ''
+
+  if ('@' in InStr and '/' in InStr):
+    (junk, TnsName)  = InStr.split('@')
+    (Username, Password) = junk.split('/')
+  else:
+    if ('@' not in InStr and '/' not in InStr):
+      TnsName = InStr
+    else:
+      if ('@' in InStr and '/' not in InStr):
+        (Username, TnsName) = InStr.split('@')
+
+      if ('/' in InStr and '@' not in InStr):
+        (Username, Password) = InStr.split('/')
+
+    if (Username == ''):
+      if (version_info[0] >= 3):
+        Username = input('\nEnter user name: ')
+      else:
+        Username = raw_input('\nEnter user name: ')
+
+    if (Password == ''):
+      Password = getpass('\nEnter password: ')
+
+    if (Username == '' or Password == '') :
+      print('Username and password are required when specifying a connect string.')
+      print('Connect string: %s' % InStr)
+      exit(1)
+
+   # Formulate the connect string.
+  if (TnsName == ''):
+    ConnStr = Username + '/' + Password
+  else:
+    ConnStr = Username + '/' + Password + '@' + TnsName
+
+  if (Username.upper() == 'SYS'):
+    ConnStr = ConnStr + ' as sysdba'
+
+  return(ConnStr)
+# ---------------------------------------------------------------------------
+# End ParseConnectString()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Def : SetOracleEnv()
+# Desc: Setup your environemnt, eg. ORACLE_HOME, ORACLE_SID. (Parses oratab
+#       file).
+# Args: Sid = The ORACLE_SID of the home you want to configure for
+#       Oratab = FQN of the oratab file (optional)
+# Retn: OracleSid = $ORACLE_SID
+#       OracleHome = $ORACLE_HOME
+# ---------------------------------------------------------------------------
+def SetOracleEnv(Sid, Oratab='/etc/oratab'):
+  OracleSid = ''
+  OracleHome = ''
+
+  OratabDict = LoadOratab()
+  SidCount = len(OratabDict.keys())
+
+  if (SidCount > 0):
+    if (Sid in OratabDict.keys()):
+      OracleSid  = Sid
+      OracleHome = OratabDict[OracleSid]
+      environ['ORACLE_SID']  = OracleSid
+      environ['ORACLE_HOME'] = OracleHome
+
+      if ('LD_LIBRARY_PATH' in environ.keys()):
+        if (environ['LD_LIBRARY_PATH'] != ''):
+          environ['LD_LIBRARY_PATH'] = OracleHome + '/lib' + ':' + environ['LD_LIBRARY_PATH']       # prepend to LD_LIBRARY_PATH
+        else:
+          environ['LD_LIBRARY_PATH'] = OracleHome + '/lib'
+      else:
+        environ['LD_LIBRARY_PATH'] = OracleHome + '/lib'
+
+  return(OracleSid, OracleHome)
+# ---------------------------------------------------------------------------
+# End SetOracleEnv()
+# ---------------------------------------------------------------------------
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Database Migration Collector'
+  Version        = '1.22'
+  VersionDate    = 'Fri Oct 11 09:27:00 CDT 2019'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  SqlComment     = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  InStr          = ''
+  TnsName        = ''
+  Username       = ''
+  Password       = ''
+  ConnStr        = ''
+  Colsep         = '~'
+  Tables         = []
+  DateTimeFormat = ''
+  TableDefs      = {}
+  DataSets       = {}
+  SrcAttrs       = {}
+  Cdb            = False
+  LogFile        = Cmd + '.log'
+
+  # Data sources -- for documentation only
+  Tables.append('V$DATABASE')
+  Tables.append('DATABASE_PROPERTIES')
+  Tables.append('DBA_TABLESPACES')
+  Tables.append('GV$INSTANCE')
+  Tables.append('GV$OSSTAT')
+  Tables.append('GV$SYSTEM_PARAMETER2')
+  Tables.append('DBA_PDBS')
+
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n----------------------------------------------------------------------------------'
+  Usage += '\nCollect metrics and attributes from the database useful for migration planning.'
+  Usage += '\n\nThe following database sources are queried for this collection:'
+  for Table in Tables:
+    Usage += '\n   - %s' % Table
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('--s', dest='Show',     action='store_true', default=False,                  help="print all SQL")
+  ArgParser.add_option('--v', dest='ShowVer',  action='store_true', default=False,                  help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  Show     = Options.Show
+  ShowVer  = Options.ShowVer
+
+  if (ShowVer == True):
+    print('\n%s' % Banner)
+    exit()
+
+  # Attach stdout to LogFile
+  # ---------------------------
+  sys.stdout = Logger(LogFile)
+
+  Now = datetime.now()
+  Now = (Now.strftime('%m/%d/%Y %H:%M'))
+  if not Show:
+    print("\n============================================================================================")
+    print("%-s                                                %s" % (CmdDesc, Now))
+    print("============================================================================================")
+
+  
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  SummaryInfo = GetSummaryInfo()
+  if not Show:
+    print("System Summary")
+    print("\n%-30s  %-60s" % (SummaryInfo[0][0].title(), SummaryInfo[0][1].title()))
+    print("%-30s %-60s" % ('-'*31, '-'*60))
+  
+  Cdb = IsCDB()
+
+  SrcAttrs['SRC_OS_VERSION'] = platform()
+  
+  # Select * from the tables we're interested in.
+  for TableName in Tables:
+    TableDefs[TableName] = GetTableDef(TableName)
+
+  if not Show:
+    print('')
+
+  print("Collecting Metrics...")
+  print("\n%-30s  %-60s" % ('Table/View', 'Rows'))
+  print("%-30s %-60s" % ('-'*31, '-'*60))
+  for TableName in TableDefs:
+    DataSets[TableName] = QueryTable(TableName, TableDefs[TableName])
+    if not Show:
+      print("%-30s  %-20s" % (TableName, len(DataSets[TableName])))
+
+  SrcAttrs = GetAllFileStorage(SrcAttrs)
+  SrcAttrs = GetDataFileStorage(SrcAttrs)
+  
+  SrcAttrs, BackupSize = GetBackupSize(SrcAttrs)
+
+  if not Show:
+    # Get database properties
+    SrcAttrs = GetSrcAttrs(DataSets['DATABASE_PROPERTIES'], SrcAttrs)
+    
+    # Get tablespace encryption attributes
+    SrcAttrs = GetTde(DataSets['DBA_TABLESPACES'], SrcAttrs)
+    
+    # Get database version
+    SrcAttrs['SRC_DB_VERSION'] = GetDbVersion(DataSets['GV$INSTANCE'])
+    
+    # Get instance/node info
+    SrcAttrs = GetNodeNames(DataSets['GV$INSTANCE'], SrcAttrs)
+    
+    # Get node resources
+    SrcAttrs = GetNodeRes(DataSets['GV$OSSTAT'], SrcAttrs)
+    
+    # Get inst parameters
+    SrcAttrs = GetInstParms(DataSets['GV$SYSTEM_PARAMETER2'], SrcAttrs)
+    
+    # Get inst parameters
+    SrcAttrs = GetDbAttrs(DataSets['V$DATABASE'], SrcAttrs)
+    
+    # Get PDB Info
+    if Cdb:
+      PdbInfo = GetPdbInfo(DataSets['DBA_PDBS'], SrcAttrs)
+
+    print("\nMetrics Detail")
+    print("\n%-30s  %-60s" % ('Attribute', 'Value'))
+    print("%-30s %-60s" % ('-'*31, '-'*60))
+    for key in sorted(SrcAttrs):
+      print("%-30s  %-60s" % (key, SrcAttrs[key]))
+
+  
+    # Save Data
+    # --------------------------
+    Data = [SrcAttrs, DataSets]
+    Now = datetime.now()
+    FileTime = (Now.strftime('%Y-%m-%d_%H%M'))
+    PickleFile     = Cmd + '_' + SrcAttrs['SRC_DB_UNIQUE_NAME'] + '_' + FileTime + '.dat'
+    try:
+      hPickleFile = open(PickleFile,'wb')
+    except:
+       print('Cannot open the datafile file for write:', PickleFile)
+    pickle.dump(Data, hPickleFile)
+    hPickleFile.close()
+
+  Now = datetime.now()
+  Now = (Now.strftime('%m/%d/%Y %H:%M'))
+  print("============================================================================================")
+  print("%-s                                                         %s" % ("Collection complete", Now))
+  print("============================================================================================")
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
