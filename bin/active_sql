@@ -4,7 +4,7 @@
 # Name: active_sql                                                                                 #
 # Auth: Randy Johnson                                                                              #
 # Desc: Prints a report of currently executing SQL. The report includes:                           #
-#         SQL_ID, CHILD, PLAN_HASH, EXECS, AVG_ETIME, AVG_LIO, and SQL_TEXT.                       #
+#       SQL_ID, CHILD, PLAN_HASH, EXECS, AVG_ETIME, AVG_LIO, and SQL_TEXT.                         #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
