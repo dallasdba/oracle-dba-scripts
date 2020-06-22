@@ -1,0 +1,954 @@
+#!/usr/bin/env python
+
+#--------------------------------------------------------------------------------------------------#
+# Name: oswps                                                                                      #
+# Auth: Randy Johnson                                                                              #
+# Desc: Searches for oswatcher ps files, colates all the data from the files and prints a          #
+#       report.                                                                                    #
+#                                                                                                  #
+#  Wish List:   - Process gz, bzip, bz2 files.                                                     #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 12/03/2018 1.00 Randy Johnson    Initial release.                                                #
+# 06/22/2020 1.01 Randy Johnson    First commit.                                                   #
+#--------------------------------------------------------------------------------------------------#
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse   import OptionParser
+from os         import stat
+from os         import walk
+from os.path    import basename
+from os.path    import join as pathjoin
+from pprint     import PrettyPrinter
+from re         import MULTILINE
+from re         import compile
+from re         import finditer
+from re         import match
+from re         import search
+from sqlite3    import connect
+from sys        import argv
+from sys        import exit
+
+# --------------------------------------
+# -- Function/Class Definitions --------
+# --------------------------------------
+
+# ------------------------------------------------------------
+# Function: input_files()
+# Desc    : Walks the directories starting at
+#           "starting_directory". Searches for files matching
+#           the regex pattern and returns a Dictionary of
+#           files using FQN, attrs, etc.
+# Args    : 1-Starting Directory (starting_directory)
+#           2-file type (file_type)
+# Retn    : 1-Dictionary of fully qualified file names
+#           & attributes
+# ------------------------------------------------------------
+def input_files(starting_directory, file_type):
+  file_dict     = {}
+  fhost         = ''
+  ftype         = ''
+  fdt           = ''
+  fyear         = ''
+  fmon          = ''
+  fday          = ''
+  ftime         = ''
+  pattern       = r'(^\S+)_(' + file_type + r')_([0-9]+).([0-9]+).([0-9]+).([0-9]+)\.dat$'
+
+  for (path, dirs, files) in walk(starting_directory):
+    for file in files:
+      found = search(pattern, file)
+      if found:
+        ###~ s = found.start()
+        ###~ e = found.end()
+        ###~ print('')
+        ###~ print('    Found: %s'    % (found.re.pattern))
+        ###~ print('       in: %s'    % (found.string))
+        ###~ print(' Position: %d-%d' % (s,e))
+        ###~ print('')
+        ###~ print(found.groups())
+        try:
+          (fhost, ftype, fyear, fmon, fday, ftime) = found.groups()
+        except:
+          print("Cannot parse filename pattern for host, type, date, time: %s" % file)
+
+        if ftype == file_type:
+          filepath = pathjoin(path,file)
+          (mode,inode,dev,nlink,uid,gid,bytes,atime,mtime,ctime) = stat(filepath)
+          file_dict[filepath] = {
+           'name'  : file,
+           'type'  : ftype,
+           'mode'  : mode,
+           'inode' : inode,
+           'dev'   : dev,
+           'nlink' : nlink,
+           'uid'   : uid,
+           'gid'   : gid,
+           'bytes' : bytes,
+           'atime' : atime,
+           'mtime' : mtime,
+           'ctime' : ctime
+          }
+
+  return(file_dict)
+# ------------------------------------------------------------
+# End input_files()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: create_table()
+# Desc    : Creates a Sqlite in memory table based on an array
+#           of column names and data types derrived from the
+#           data read in from the parsed file.
+# Args    : 1-Cursor (curs)
+#           2-List of column names from the raw data. For
+#             example: ['file_name', 'os_name', 'name',
+#                       'version', 'location', 'hostname',
+#                       'timestamp', 'int', 'cpu', 'sn', ...]
+#           3-list containing one row of sample data (used in
+#             derriving the data types of the table columns
+# Retn    : 1-dictionary of data definitions defined as:
+#             data_def[col_id]['raw_name']     = str
+#             data_def[col_id]['column_name']  = str
+#             data_def[col_id]['type']         = str
+#             data_def[col_id]['order']        = str
+#             data_def[col_id]['filter']       = [oper,val]
+# ------------------------------------------------------------
+def create_table(curs, header, data):
+  sql      = ""
+  data_def = {}
+
+  # Determine column data type definitions for the table...
+  for idx, col in enumerate(header):
+    name = col
+    col = prefix.upper() + col.upper()
+    col = col.replace(':', "")
+    col = col.replace('/', "PER")
+    col = col.replace('%', "PCT")
+    col = col.replace('-', "_")
+    data_def[idx] = { 'column_name' : col, 'raw_name' : name, 'type' : None, 'order' : None, 'filter' : [None,None] }
+
+  key = 0
+  for col in data:
+    t = type_check(col)
+    if (t in ('REAL','INTEGER')):
+      if (data_def[key]['type'] == 'TEXT'):
+        continue
+      else:
+        data_def[key]['type'] = t
+    else:
+      data_def[key]['type'] = 'TEXT'
+    key += 1
+
+  # Assemble the sql statement...
+  col_set = []
+  for key in sorted(data_def) :
+    col_set.append("%-25s%s" % (data_def[key]['column_name'], data_def[key]['type']))
+
+  sql  = 'CREATE TABLE ' + table_name + ' (\n   '
+  sql += ',\n   '.join(col_set)
+  sql += '\n);'
+
+  try:
+    curs.execute(sql)
+  except:
+    print("Cannot create table: %s" % sql)
+    exit(1)
+
+  return(data_def)
+# ------------------------------------------------------------
+# End create_table()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: print_data_definition()
+# Desc    : Prints the data definition.
+# Args    : dictionary of data definitions defined as:
+#             data_def[id]['raw_name']
+#             data_def[id]['column_name']
+#             data_def[id]['type']
+# Return:   <None>
+# ------------------------------------------------------------
+def print_data_definition(data_def):
+  print("%-3s  %-20s  %-20s  %-10s" % ('ID','Heading','Column','Type'))
+  print("%-3s  %-20s  %-20s  %-10s" % ('-'*2,'-'*20,'-'*20,'-'*10))
+  for id in sorted(data_def):
+      print("%-3s  %-20s  %-20s  %-10s" % (id, data_def[id]['raw_name'], data_def[id]['column_name'],data_def[id]['type']))
+# ------------------------------------------------------------
+# End print_data_definition()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: parse_filter()
+# Desc    : Prepares the sort order from the command line.
+# Args    : 1-order (from command line option)
+#           2-data_def (date definition dictionary).
+# Retn    : 1-updated dictionary of data definitions:
+#             data_def[col_id]['raw_name']     = str
+#             data_def[col_id]['column_name']  = str
+#             data_def[col_id]['type']         = str
+#             data_def[col_id]['order']        = str
+#             data_def[col_id]['filter']       = [oper,val]
+# ------------------------------------------------------------
+def parse_filter(filter, data_def):
+
+  # Formulate filter criteria (where clause)
+  # -----------------------------------------
+  filters = []
+  operators = ['<','>','=']
+  for t in filter.replace(' ', '').split(','):
+    count = 0
+    for oper in operators:
+      count += t.count(oper)
+    if (count > 1 or count == 0):
+      print("Malformed filter specified: %s" % t)
+      print("\nValid operators for filter are: < >")
+      print("  Ex: %s -f 'b>20,r>10,sys>20'"  % (cmd))
+      print("  Ex: %s -f 'id>20'"             % (cmd))
+      print("  Ex: %s -f 'wa > 30'"           % (cmd))
+      print("  Ex: %s -f 'so > 20'"           % (cmd))
+      exit(1)
+
+    for oper in operators:
+      if (len(t.split(oper)) == 2):
+        col,val = t.split(oper)
+        filters.append([col, oper, val])
+
+  # Validate filter column name and map to database column name.
+  for idx, row in enumerate(filters):
+    valid = False
+    col   = row[0]
+    oper  = row[1]
+    val   = row[2]
+    for key in data_def:
+      if col.upper() == data_def[key]['column_name'].upper():
+        valid = True
+        data_def[key]['filter'] = [oper, val]
+      elif col.upper() == data_def[key]['raw_name'].upper():
+        valid = True
+        filters[idx][0] = data_def[key]['column_name'].upper()
+        data_def[key]['filter'] = [oper, val]
+    if not valid:
+      print("\nInvalid filter column specified: %s\n" % col)
+      print("Filter column must be one or more of Heading/Column below, (case insensitive)...\n")
+      print_data_definition(data_def)
+      exit(1)
+
+  # Finalize the filter criteria and add it to the data definition
+  for row in filters:
+    col  = row[0]
+    oper = row[1]
+    val  = row[2]
+    for key in data_def:
+      if col == data_def[key]['column_name']:
+        dtype = data_def[key]['type']
+        val = val.replace("'",'').replace("'",'').strip()  # remove quotes and leading/trailing spaces...
+        if dtype == 'TEXT':
+          data_def[key]['filter'] = [ oper, "'" + val + "'" ]
+
+  return(data_def)
+# ------------------------------------------------------------
+# End parse_filter()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: parse_order()
+# Desc    : Prepares the sort order from the command line.
+# Args    : 1) order (from command line option)
+#           2) data_def (date definition dictionary).
+# Retn    : 1-updated dictionary of data definitions:
+#             data_def[col_id]['raw_name']     = str
+#             data_def[col_id]['column_name']  = str
+#             data_def[col_id]['type']         = str
+#             data_def[col_id]['order']        = str
+#             data_def[col_id]['filter']       = [oper,val]
+# ------------------------------------------------------------
+def parse_order(order, data_def):
+
+  # Formulate sort order (order by)
+  # --------------------------------
+  if (order == ''):  # default sort order
+    for idx,col in enumerate(default_order):
+      for key in data_def:
+        if col == data_def[key]['column_name']:
+          data_def[key]['order'] = idx + 1
+  else:  # custom sort order
+    # Validate sort column names and map to database column name.
+    order = ''.join(order.split()).split(',')
+    for idx,col in enumerate(order):
+      valid = False
+      for key in data_def:
+        if col.upper() == data_def[key]['column_name'].upper() or col.upper() == data_def[key]['raw_name'].upper():
+          valid = True
+          data_def[key]['order'] = idx + 1
+      if not valid:
+        print("\nInvalid sort column specified: %s\n" % col)
+        print("Sort column must be one or more of Heading/Column below, (case insensitive)...\n")
+        print_data_definition(data_def)
+        exit(1)
+
+  return(data_def)
+# ------------------------------------------------------------
+# End parse_order()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: insert_table()
+# Desc    : Inserts data records into the table
+# Args    : 1-Cursor (curs)
+#           2-two dimensional List of data (stats)
+# Retn    : table_name
+# ------------------------------------------------------------
+def insert_table(curs, stats):
+
+  # Create top half of the SQL insert statement (the top half has the column names).
+  col_names = ",\n   ".join([data_def[key]['column_name'].upper() for key in data_def])
+
+  # Create bottom half of the SQL insert statement (? placeholder for each data element to insert).
+  col_values = ",\n   ".join(['?' for col in range(len(data_def.keys()))])
+
+  # Assemble the sql statement...
+  sql   = "INSERT INTO " + table_name + " (\n"
+  sql  += "   " + col_names + "\n"
+  sql  += ") VALUES (\n   " + col_values + "\n);"
+
+  try:
+    curs.executemany(sql, stats)
+  except:
+  	print("Failure occured inserting data: %s" % sql)
+  	exit(1)
+
+  try:
+    db.commit()
+  except:
+  	print("Failure occured commiting inserted data: %s" % sql)
+  	exit(1)
+# ------------------------------------------------------------
+# End insert_table()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: type_check()
+# Desc    : Determines the likely data type of a value.
+# Args    : 1-value to evaluate (val)
+# Retn    : 1-data type or None
+# ------------------------------------------------------------
+def type_check(val):
+  rex_float = r'^\d+\.\d+$'
+  rex_int   = r'^\d+$'
+
+  if (type(val) == int):
+    return('INTEGER')
+  elif(type(val) == float):
+    return('REAL')
+  else:
+    if (type(val) == str):
+      if (match(rex_float, val)):
+        return('REAL')
+      if (match(rex_int, val)):
+        return('INTEGER')
+      else:
+        return('TEXT')
+    else:
+      return('TEXT')
+    return(None)
+# ------------------------------------------------------------
+# End type_check()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: default_report()
+# Desc    : Prints the default report
+# Args    : 1-Cursor for database operations (curs)
+#           2-List of columns to sort by (order_by)
+# Retn    : None
+# ------------------------------------------------------------
+def default_report(curs, data_def):
+  pagesize = 30
+  sql      = ""
+
+  # Determine the appropriate max width for each column using
+  # the width of the longest value for each column.
+  # ------------------------------------------------------------
+  sql  = '  SELECT '
+  sql += ',\n         '.join([ "max(length(" + data_def[key]['column_name'].upper() + ")) as MAX_WIDTH" for key in sorted(data_def) ])
+  sql += "\n    FROM " + table_name + ";"
+
+  # Execute the query and return the result set...
+  # ------------------------------------------------------------
+  try:
+    rs = curs.execute(sql)
+    all_rows = curs.fetchall()
+    max_width = list(all_rows[0])
+  except:
+    print("Error in execution of max_width SQL: %s\n" % sql)
+    exit(1)
+
+  # Generate column names and aliases for the select statement.
+  # for examle: column AS "mycol"
+  # ------------------------------------------------------------
+  col_set = []
+  for key in sorted(data_def):
+    hname = data_def[key]['raw_name'].upper()
+    cname = data_def[key]['column_name'].upper()
+    alias = ' AS "' + hname + '"'
+    col_set.append("%-25s %-s" % (cname, alias))
+
+  # Generate where clause...
+  where_set = []
+  for key in sorted(data_def):
+    if data_def[key]['filter'] != [None, None]:
+      col = data_def[key]['column_name']
+      oper, val = data_def[key]['filter']
+      where_set.append("%s %s %s" % (col, oper, val))
+  where = '\n     AND '.join(where_set)
+
+  # Generate order by clause...
+  order_dict = {}
+  sort_cols  = []
+  for key in sorted(data_def):
+    if data_def[key]['order']:
+      order_dict[data_def[key]['order']] = key
+  for key in sorted(order_dict):
+    key2 = order_dict[key]
+    sort_cols.append(data_def[key2]['column_name'])
+  order = ',\n         '.join(sort_cols)
+
+  # Assemble the sql statement...
+  sql  = '  SELECT '
+  sql += ',\n         '.join(col_set)
+  sql += "\n    FROM " + table_name
+  if (where != ''):
+    sql += "\n   WHERE " + where
+  if (order != ''):
+    sql += "\nORDER BY " + order + ";"
+
+  # Execute the query and return the result set...
+  # ------------------------------------------------------------
+  try:
+    rs = curs.execute(sql)
+    all_rows = curs.fetchall()
+  except:
+    print("Error in execution of report SQL: %s\n" % sql)
+    exit(1)
+
+  # Create a list of column names for the report...
+  header = [ data_def[key]['raw_name'] for key in sorted(data_def) ]
+
+  # Expand column widths if column header is longer than max width of data.
+  # ------------------------------------------------------------------------
+  i = 0
+  for col in header:
+    if (len(col) > max_width[i]):
+      max_width[i] = len(col)
+    i += 1
+
+  # Generate a string format for the output. Number columns will
+  # be right justified and strings will be left justified.
+  # -------------------------------------------------------------
+  i = 0
+  fmtstr = ""
+  for key in sorted(data_def):
+    col = data_def[key]['raw_name']
+    if (data_def[key]['type'] in ('INTEGER','REAL')):
+      fmtstr += "%" + str(max_width[i]) + 's '
+    else:
+      fmtstr += "%-" + str(max_width[i]) + 's '
+    i += 1
+
+  # Print the report
+  # ------------------
+  dash_line = [ '-' * width for width in max_width ]
+  lc = 0
+  # Print header
+  print(fmtstr % tuple((header)))
+  print(fmtstr % tuple((dash_line)))
+  for row in all_rows:
+    # Print page header
+    if (lc > pagesize):
+      print('\n' + fmtstr % tuple((header)))
+      print(fmtstr % tuple((dash_line)))
+      lc = 0
+    # Print a data row
+    print(fmtstr % row)
+    lc += 1
+# ------------------------------------------------------------
+# End default_report()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: csv_report()
+# Desc    : Prints a report in CSV format
+# Args    : 1-Cursor for database operations (curs)
+#           2-List of columns to sort by (order_by)
+# Retn    : None
+# ------------------------------------------------------------
+def csv_report(curs, data_def):
+  sql = ""
+
+  # Generate column names and aliases for the select statement.
+  # for examle: column AS "mycol"
+  # ------------------------------------------------------------
+  col_set = []
+  for key in sorted(data_def):
+    hname = data_def[key]['raw_name'].upper()
+    cname = data_def[key]['column_name'].upper()
+    alias = ' AS "' + hname + '"'
+    col_set.append("%-25s %-s" % (cname, alias))
+
+  # Generate where clause...
+  where_set = []
+  for key in sorted(data_def):
+    if data_def[key]['filter'] != [None, None]:
+      col = data_def[key]['column_name']
+      oper, val = data_def[key]['filter']
+      where_set.append("%s %s %s" % (col, oper, val))
+  where = '\n     AND '.join(where_set)
+
+  # Generate order by clause...
+  order_dict = {}
+  sort_cols  = []
+  for key in sorted(data_def):
+    if data_def[key]['order']:
+      order_dict[data_def[key]['order']] = key
+  for key in sorted(order_dict):
+    key2 = order_dict[key]
+    sort_cols.append(data_def[key2]['column_name'])
+  order = ',\n         '.join(sort_cols)
+
+  # Assemble the sql statement...
+  sql  = '  SELECT '
+  sql += ',\n         '.join(col_set)
+  sql += "\n    FROM " + table_name
+  if (where != ''):
+    sql += "\n   WHERE " + where
+  if (order != ''):
+    sql += "\nORDER BY " + order + ";"
+
+  # Execute the query and return the result set...
+  # ------------------------------------------------------------
+  try:
+    rs = curs.execute(sql)
+    all_rows = curs.fetchall()
+  except:
+    print("Error in execution of report SQL: %s\n" % sql)
+    exit(1)
+
+  # Create a list of column names for the report...
+  header = [ data_def[key]['raw_name'].upper() for key in sorted(data_def) ]
+
+  # Print the CSV report...
+  # -------------------------
+  print('\n"' + '","'.join(header) + '"')
+  for row in all_rows:
+    row = list(row)
+    i = 0
+    for i in range(len(row)):
+      if (type(row[i]) != str):
+        row[i] = str(row[i])
+      else:
+        row[i] = '"' + row[i] + '"'
+    print(','.join(row))
+# ------------------------------------------------------------
+# End csv_report()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: generate_graph()
+# Desc    : Prints a report for use in graphing usage
+# Args    : 1-Cursor for database operations (curs)
+# Retn    : Data
+# ------------------------------------------------------------
+def generate_graph(curs, data_def):
+  sql      = ""
+  col_set  = []
+  order_by = []
+
+  # Generate column names and aliases for the select statement.
+  # for examle: column AS "mycol"
+  # ------------------------------------------------------------
+  columns = ['timestamp','us','sy','id','wa','st']
+  for key in sorted(data_def):
+    if (data_def[key]['raw_name'] in columns):
+      hname = data_def[key]['raw_name'].upper()
+      cname = data_def[key]['column_name'].upper()
+      alias = ' AS "' + hname + '"'
+      col_set.append("%-25s" % (cname + '%25s' % alias))
+
+  # Generate where clause...
+  where_set = []
+  for key in sorted(data_def):
+    if data_def[key]['filter'] != [None, None]:
+      col = data_def[key]['column_name']
+      oper, val = data_def[key]['filter']
+      where_set.append("%s %s %s" % (col, oper, val))
+  where = '\n     AND '.join(where_set)
+
+  # Generate order by clause...
+  order_dict = {}
+  sort_cols  = []
+  for key in sorted(data_def):
+    if data_def[key]['order']:
+      order_dict[data_def[key]['order']] = key
+  for key in sorted(order_dict):
+    key2 = order_dict[key]
+    sort_cols.append(data_def[key2]['column_name'])
+  order = ',\n         '.join(sort_cols)
+
+  # Assemble the sql statement...
+  sql  = '  SELECT '
+  sql += ',\n         '.join(col_set)
+  sql += "\n    FROM " + table_name
+  if (where != ''):
+    sql += "\n   WHERE " + where
+  if (order != ''):
+    sql += "\nORDER BY " + order + ";"
+
+  # Execute the query and return the result set...
+  # ------------------------------------------------------------
+  try:
+    rs = curs.execute(sql)
+    all_rows = curs.fetchall()
+  except:
+    print("Error in execution of report SQL: %s\n" % sql)
+    exit(1)
+
+  # Print the report
+  # -------------------------
+  output = []
+  for row in all_rows:
+    output.append(list(row))
+
+  x = [ ln[0] for ln in output ]
+  y = [ [ ln[1] for ln in output], [ ln[2] for ln in output], [ ln[3] for ln in output], [ ln[4] for ln in output], [ ln[5] for ln in output] ]
+
+  plt.stackplot(x,y, labels=['User','Sys','Idle','Wait','Stolen'])
+  plt.legend(loc='upper left')
+  ###! plt.savefig('/Users/randall.w.johnson/Desktop/test.png')
+  plt.show()
+# ------------------------------------------------------------
+# End generate_graph()
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Function: parse_file()
+# Desc    : Returns a list of lines from source files.
+# Args    : Name of file to parse.
+# Retn    : 1-A list of data (stats), 2-A list of header names
+#           (header), 3-Hostname found in data set (hostname).
+# ------------------------------------------------------------
+def parse_file(file_name):
+  header            = ''
+  data              = []
+  nl                = '?:\n|\r\n?'
+  rex_day           = r'Sun|Mon|Tue|Wed|Thu|Fri|Sat'
+  rex_month         = r'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec'
+  rex_timestamp     = r'^zzz \*\*\*(' + rex_day + ') +(' + rex_month + ') +([0-9]|[0-9][0-9]) +([0-9][0-9]:[0-9][0-9]:[0-9][0-9]) +(\S+) +(\d+)\s*'
+  rex_data1         = r'(USER +PID +PPID +PRI \%CPU +\%MEM +VSZ +RSS +WCHAN +S +STARTED +TIME +COMMAND)\s*'
+  rex_data2         = r'((?:\w+ +\d+ +\d+ +\d+ +\d+\.\d+ +\d+\.\d+ +\S+ +\d+ +\S+ +\S +(?:(Jan [0-9][0-9]|Feb [0-9][0-9]|Mar [0-9][0-9]|Apr [0-9][0-9]|May [0-9][0-9]|Jun [0-9][0-9]|Jul [0-9][0-9]|Aug [0-9][0-9]|Sep [0-9][0-9]|Oct [0-9][0-9]|Nov [0-9][0-9]|Dec [0-9][0-9]|[0-9][0-9]:[0-9][0-9]:[0-9][0-9])) +(?:(\d-)*)[0-9][0-9]:[0-9][0-9]:[0-9][0-9] +\S+.*\n)+)'
+  rex_fheader       = compile(r'(^\S+) (\S+) (v[0-9].[0-9].[0-9])\s*('+nl+')', MULTILINE)
+  rex_sample        = compile(rex_timestamp + rex_data1 + rex_data2, MULTILINE)
+  data_dict         = {}
+  header_pt1        = ['file_name','os_name','name','version','hostname','timestamp','sn','ln']
+  header_pt2        = []
+  hostname          = basename(file_name).split('_')[0]
+
+  try:
+    f = open(file_name, 'r+')
+  except:
+    print("Cannot open file for read: %s" % file_name)
+    exit(1)
+
+  # Load the file and close it...
+  file_contents = f.read()
+  f.close()
+
+  # Sample data follows.
+  # ----------------------------------------------------------------------
+  # Linux OSWbb v7.3.3                                                                                    <------- rex_fheader
+  #
+  # zzz ***Mon Dec 10 14:00:26 CST 2018                                                                   <---- rex_timestamp --+- rex_sample
+  # USER       PID  PPID PRI %CPU %MEM    VSZ   RSS WCHAN  S  STARTED     TIME COMMAND                    <---- rex_data1 ------+
+  # root      4280     1  19 81.1  0.5 1736828 377372 ep_pol S   Dec 08 1-15:51:56 splunkd -p 8089 start  <---- rex_data2 ------+
+  # oracle   61933     1  19 25.5  0.3 457792 232740 -     R   Dec 09 06:42:25 oracleLPMXPRD1 (LOCAL=NO)
+  # oracle   55411     1  19 21.8  0.3 474160 232428 -     R 09:29:35 00:59:12 oracleLPMXPRD1 (LOCAL=NO)
+  # oracle   40968     1  19 25.9  0.3 457536 231344 sys_se S   Dec 09 06:52:35 oracleLPMXPRD1 (LOCAL=NO)
+  # oracle   36363     1  19 22.4  0.3 473920 234444 -     R 10:09:34 00:51:47 oracleLPMXPRD1 (LOCAL=NO)
+  # oracle   34892     1  19 21.6  0.3 457536 229228 -     R 09:09:34 01:02:56 oracleLPMXPRD1 (LOCAL=NO)
+
+  # Need to organize and store data for each ps collection. That is, all data from
+  # one header record to the next header record. The start position of the data is given
+  # but we must ascertain the ending position (defined as the last character before the
+  # start of the next header record (or EOF). We will then extract the data between
+  # start and end and store it in the 'data' key of the dictionary.
+  # --------------------------------------------------------------------------------------
+  header_set = [ h for h in rex_fheader.finditer(file_contents) ]
+  i = 1
+  for h in header_set:
+    if (h):
+      data_dict[i] = {
+         'header_start'  : h.start(),
+         'header_end'    : h.end(),
+         'header_groups' : h.groups(),
+         'start'         : h.end(),
+         'end'           : -1,
+         'data'          : '',
+      }
+      # Must calculate the end pos of the data body as  next header_start-1
+      if i > 1 :
+        data_dict[i-1]['end']  = (data_dict[i]['header_start']-1)
+        data_dict[i-1]['data'] = file_contents[data_dict[i-1]['start']:data_dict[i-1]['end']]
+      i += 1
+    data_dict[i-1]['end']  = (len(file_contents))
+    data_dict[i-1]['data'] = file_contents[data_dict[i-1]['start']:len(file_contents)]
+
+  for key in sorted(data_dict):
+    sn = 0
+
+    # Formulate the output header from ps output headers...
+    # Expecting:
+    #   ('Linux', 'OSWbb', 'v7.3.3')
+    # ------------------------------------------------------------------------------------------------
+    os_name, name, version = data_dict[key]['header_groups']
+
+    # Now, finally, search for ps samples in each set of data and load up the
+    # data, header, and hostname variables we will be returning.
+    # ----------------------------------------------------------------------------
+    for sample_set in rex_sample.finditer(data_dict[key]['data']):
+      sn += 1
+      # Each sample_set should look something like ...
+      # -------------------------------------------------------------------------------------------------------------
+
+      # sample_set.groups()[0]  : Mon
+      # sample_set.groups()[1]  : Dec
+      # sample_set.groups()[2]  : 10
+      # sample_set.groups()[3]  : 13:00:16
+      # sample_set.groups()[4]  : CST
+      # sample_set.groups()[5]  : 2018
+      # sample_set.groups()[6]  : USER       PID  PPID PRI %CPU %MEM    VSZ   RSS WCHAN  S  STARTED     TIME COMMAND
+      # sample_set.groups()[7]  : root      4280     1  19 81.1  0.5 1734780 336540 ep_pol S   Dec 08 1-15:03:32 splunkd -p 8089 start
+      #                           oracle    7426     1 139  0.8  0.3 1973308 215724 futex_ S   Dec 08 00:24:07 /u01/app/12.1.0.2/grid/bin/ocssd.bin
+      #                           oracle   43820     1  19  0.8  0.2 408924 172448 poll_s S   Dec 09 00:16:06 oracleLPMXPRD1 (LOCAL=NO)
+      #                           root     10762     1 139  2.8  0.1 1086472 121684 hrtime S   Dec 08 01:21:01 /u01/app/12.1.0.2/grid/bin/osysmond.bin
+      #                           root      7401     1 139  0.2  0.1 1016168 116496 futex_ S   Dec 08 00:07:51 /u01/app/12.1.0.2/grid/bin/cssdagent
+      #                           root      7378     1 139  0.2  0.1 1083048 118100 futex_ S   Dec 08 00:07:37 /u01/app/12.1.0.2/grid/bin/cssdmonitor
+      # -------------------------------------------------------------------------------------------------------------
+      #    *** the ones we're interested in...
+      dname         = sample_set.groups()[0]
+      mname         = sample_set.groups()[1]
+      sample_day    = sample_set.groups()[2]
+      sample_time   = sample_set.groups()[3]
+      sample_tz     = sample_set.groups()[4]
+      sample_year   = sample_set.groups()[5]
+      sample_header = sample_set.groups()[6].strip().lower().split()
+      sample_data   = sample_set.groups()[7]
+      sample_header.append('cmd')
+
+      # Convert sample data into a two dimensional List (like a table of rows & columns.
+      rex_data = r'(\w+) +(\d+) +(\d+) +(\d+) +(\d+\.\d+) +(\d+\.\d)+ +(\S+) +(\d+) +(\S+) +(\S) +(Jan [0-9][0-9]|Feb [0-9][0-9]|Mar [0-9][0-9]|Apr [0-9][0-9]|May [0-9][0-9]|Jun [0-9][0-9]|Jul [0-9][0-9]|Aug [0-9][0-9]|Sep [0-9][0-9]|Oct [0-9][0-9]|Nov [0-9][0-9]|Dec [0-9][0-9]|[0-9][0-9]:[0-9][0-9]:[0-9][0-9]) +(?:\d-)*([0-9][0-9]:[0-9][0-9]:[0-9][0-9]) +(\S+.*)\n'
+      sample_data2 = []
+      for row in list(finditer(rex_data, sample_data)):
+        row = list(row.groups())
+        try:
+          row[1] = int(row[1])
+        except:
+          pass
+        try:
+          row[2] = int(row[2])
+        except:
+          pass
+        try:
+          row[3] = int(row[3])
+        except:
+          pass
+        try:
+          row[4] = float(row[4])
+        except:
+          pass
+        try:
+          row[5] = float(row[5])
+        except:
+          pass
+        try:
+          row[6] = int(row[6])
+        except:
+          pass
+        try:
+          row[7] = int(row[7])
+        except:
+          pass
+        # Add a custom column called cmd that is a substring of command.
+        row.append(row[12][0:50])
+        sample_data2.append(row)
+
+      timestamp = sample_year + '-' + month_map[mname] + '-' + sample_day + ' ' + sample_time
+
+      # Formulate the metadata portion of the record...
+      metadata = [
+        basename(file_name),
+        os_name,
+        name,
+        version,
+        hostname,
+        timestamp,
+      ]
+
+      ln = 0
+      ts = metadata[5]    # TimeStamp
+      for rec in sample_data2:
+        ln += 1
+        data.append(metadata + [sn] + [ln] + rec)
+    header = header_pt1 + sample_header
+  return(data, header, hostname)
+# ------------------------------------------------------------
+# End parse_file()
+# ------------------------------------------------------------
+
+# --------------------------------------
+# ---- End Function Definitions --------
+# --------------------------------------
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  cmd            = basename(argv[0])
+  version        = '1.01'
+  version_date   = 'Mon Jun 22 12:25:11 CDT 2020'
+  dev_state      = 'Production'
+  cmd_desc       = 'OSWatcher PS Parser'
+  banner         = cmd_desc + ': Release ' + version + ' '  + dev_state + '. Last updated: ' + version_date
+  file_type      = 'ps'
+  month_map      = {'Jan':'1','Feb':'2','Mar':'3','Apr':'4','May':'5','Jun':'6','Jul':'7','Aug':'8','Sep':'9','Oct':'10','Nov':'11','Dec':'12'}
+  stats          = []
+  header         = []
+  data_def        = {}
+  table_name     = 'OSW'
+  prefix         = table_name.upper() + '_'
+  pp             = PrettyPrinter(indent=4,width=200)
+  data_found     = False
+  default_order  = ['file_name','os_name','name','version','hostname','timestamp','sn','ln']
+  default_order  = [ prefix + cn.upper() for cn in default_order ]
+
+  # Experimenting with catching Ctl+C and quiet exit.
+  # --------------------------------------------------
+  from signal import signal, SIGINT
+  signal(SIGINT, lambda x,y: exit(0))
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % cmd
+  Usage += '\n\n%s'         % cmd_desc
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nSearch for oswatcher ps files and print a colatated report.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("-c",         action="store_true",  dest="csv",         default=False,           help="csv report format")
+  ArgParser.add_option("-d",                               dest="start_dir",   default='.',   type=str, help="starting directory")
+  ArgParser.add_option("-f",                               dest="filter",      default='',    type=str, help="filter (ex: -f '%util>20')")
+  ArgParser.add_option("-g",         action="store_true",  dest="graph",       default=False,           help="generate a graph on svctm")
+  ArgParser.add_option("-o",                               dest="order",       default='',    type=str, help="sort by ... (ex: -o 'timestamp,%util')")
+  ArgParser.add_option("-s",         action="store_true",  dest="show",        default=False,           help="show data/table definition")
+  ArgParser.add_option("-v",         action="store_true",  dest="verbose",     default=False,           help="verbose")
+  ArgParser.add_option("--v",        action="store_true",  dest="show_ver",    default=False,           help="print version info.")
+
+  Option, Args = ArgParser.parse_args()
+  filter      = Option.filter
+  order       = Option.order
+  graph       = Option.graph
+  csv         = Option.csv
+  show        = Option.show
+  verbose     = Option.verbose
+  show_ver    = Option.show_ver
+  start_dir   = Option.start_dir
+
+  if show_ver:
+    print('\n' + banner)
+    exit(0)
+
+  file_dict = input_files(start_dir, file_type)
+  if file_dict != {}:
+    print("\nFiles found: %s\n" % len(file_dict))
+  else:
+    print("\nNo files found.")
+    exit(1)
+
+  # Create an in-memory Sqlite database (db) and connect to it (curs)
+  db = connect(':memory:')
+  curs = db.cursor()
+
+  first_loop = True
+  prev_hostname = ''
+  for file_name in sorted(file_dict):
+    if (verbose):
+      print("Parsing file: %s" %  file_name)
+    (stats, header, hostname) = parse_file(file_name)
+    if (prev_hostname != hostname and first_loop is False):
+      print("Error: Hostname change from previous file.")
+      print("  Previous hostname: %s" % prev_hostname)
+      print("  New hostname     : %s" % hostname)
+      print("\nThis condition is usually caused by OSWatcher files being mixed together from different")
+      print("host sources. Depending on the version of OSWatcher the hostname may come from the file")
+      print("header or from the file name itsef. Older versions of OSWatcher did not store the hostname")
+      print("in the file header and must be derrived from the file name.")
+      exit(1)
+    else:
+      prev_hostname = hostname
+
+    # Process files until you find some data...
+    # -------------------------------------------
+    if (stats):
+      data_found = True
+      # We only need to do these things once and only need a small sample.
+      # -------------------------------------------------------------------
+      if (first_loop):
+        # Create the table...
+        data_def = create_table(curs, header, stats[0])
+
+        # Print the data definition and exit.
+        # ------------------------------------
+        if show:
+          print_data_definition(data_def)
+          exit(0)
+
+        # If a filter was specified (-f option) then update the
+        # data definition with filter criteria for columns specified.
+        # --------------------------------------------------------------
+        if filter != '':
+          parse_filter(filter, data_def)
+
+        # Process the sort order (custom or default) and updat the
+        # data definition with filter criteria for columns specified.
+        # ----------------------------------------------------------------
+        sort_order = parse_order(order, data_def)
+
+        first_loop = False
+      insert_table(curs, stats)
+
+  # Run the Report
+  # ---------------
+  if (data_found):
+    del data_def[20]       # remove the full length command for reporting purposes will  use the abbvcmd column instead.
+    #pp.pprint(data_def)
+    if (csv):
+      csv_report(curs, data_def)
+    elif (graph):
+      import numpy as np
+      import matplotlib.pyplot as plt
+      import seaborn as sns
+      generate_graph(curs, data_def)
+    else:
+      default_report(curs, data_def)
+  else:
+    print("\nNo data found.")
+    exit()
+
+  exit()
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
