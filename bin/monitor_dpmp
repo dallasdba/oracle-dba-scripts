@@ -1,0 +1,125 @@
+#!/bin/env python
+
+#--------------------------------------------------------------------------------------------------#
+#  Name: monitor_dpmp                                                                              #
+#  Auth: Randy Johnson                                                                             #
+#  Desc: Monitors the progress Datapump jobs.                                                      #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 12/13/2019 1.00 Randy Johnson    Initial write.                                                  #
+# 06/22/2020 1.01 Randy Johnson    First commit.                                                   #
+#--------------------------------------------------------------------------------------------------#
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse   import OptionParser
+from os         import environ
+from os.path    import basename
+from sys        import argv
+from sys        import exit
+from Oracle     import RunSqlplus
+from Oracle     import PrintError
+from Oracle     import SetOracleEnv
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0])
+  CmdPrefix      = Cmd.split('.')[0]
+  CmdDesc        = 'Monitor Datapump Jobs (' + Cmd + ')'
+  VersionDate    = 'Mon Jun 22 09:57:36 CDT 2020'
+  Version        = '1.01'
+  Sql            = ''
+  ErrChk         = False
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ConnStr        = ''
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nMonitors the progress of Datapump Export/Import Jobs'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("--s", dest="Show",    default=False, action="store_true",           help="print SQL query.")
+  ArgParser.add_option("--v", dest="Version", default=False, action="store_true",           help="print version info.")
+
+  Options, args = ArgParser.parse_args()
+  argc = len(args)
+
+  if (Options.Version):
+    Banner = CmdDesc + ', Release ' + Version + ' Production, ' + VersionDate
+    print('\n%s' % Banner)
+    exit()
+
+  Show = Options.Show
+
+  # Check/set the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('Set your ORACLE_SID to the database you want to search.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  Sql += "col sid                         format 99999999           heading 'Sid'\n"
+  Sql += "col serial                      format 99999999           heading 'Serial'\n"
+  Sql += "col sofar                       format 999,999,999,999.99 heading 'So Far'\n"
+  Sql += "col totalwork                   format 999,999,999,999.99 heading 'Total Work'\n"
+  Sql += "col owner_name                  format a30                heading 'Owner'\n"
+  Sql += "col state                       format a20                heading 'State'\n"
+  Sql += "col job_mode                    format a30                heading 'Mode'\n"
+  Sql += "\n"
+  Sql += "SELECT " + SqlHeader + "\n"
+  Sql += "       sl.sid\n"
+  Sql += "     , sl.serial#\n"
+  Sql += "     , sl.sofar\n"
+  Sql += "     , sl.totalwork\n"
+  Sql += "     , dp.owner_name\n"
+  Sql += "     , dp.state\n"
+  Sql += "     , dp.job_mode\n"
+  Sql += "  FROM v$session_longops sl\n"
+  Sql += "     , v$datapump_job    dp\n"
+  Sql += " WHERE sl.opname = dp.job_name\n"
+  Sql += "   AND sl.sofar != sl.totalwork;"
+  Sql += "\n"
+  Sql += "select name, sql_text, error_msg from dba_resumable;"
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+

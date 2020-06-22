@@ -1,0 +1,137 @@
+#!/bin/env python
+
+#--------------------------------------------------------------------------------------------------#
+#  Name: monitor_dpmp2                                                                             #
+#  Auth: Randy Johnson                                                                             #
+#  Desc: Monitors the progress Datapump jobs.                                                      #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 12/13/2019 1.00 Randy Johnson    Initial write.                                                  #
+# 06/22/2020 1.01 Randy Johnson    First commit.                                                   #
+#--------------------------------------------------------------------------------------------------#
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse   import OptionParser
+from os         import environ
+from os.path    import basename
+from sys        import argv
+from sys        import exit
+from Oracle     import RunSqlplus
+from Oracle     import PrintError
+from Oracle     import SetOracleEnv
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0])
+  CmdPrefix      = Cmd.split('.')[0]
+  CmdDesc        = 'Monitor Datapump Jobs 2 (' + Cmd + ')'
+  VersionDate    = 'Mon Jun 22 09:57:36 CDT 2020'
+  Version        = '1.01'
+  Sql            = ''
+  ErrChk         = False
+  ArgParser      = OptionParser()
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ConnStr        = ''
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nMonitors the progress of Datapump Export/Import Jobs'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option("--s", dest="Show",    default=False, action="store_true",           help="print SQL query.")
+  ArgParser.add_option("--v", dest="Version", default=False, action="store_true",           help="print version info.")
+
+  Options, args = ArgParser.parse_args()
+  argc = len(args)
+
+  if (Options.Version):
+    Banner = CmdDesc + ', Release ' + Version + ' Production, ' + VersionDate
+    print('\n%s' % Banner)
+    exit()
+
+  Show = Options.Show
+
+  # Check/set the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('Set your ORACLE_SID to the database you want to search.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  Sql += "col degree                      format 9999               heading 'Deg.'\n"
+  Sql += "col sid                         format 99999999           heading 'Sid'\n"
+  Sql += "col serial                      format 99999999           heading 'Serial'\n"
+  Sql += "col sofar                       format 999,999,999,999.99 heading 'So Far'\n"
+  Sql += "col done                        format 999.99             heading 'Done'\n"
+  Sql += "col totalwork                   format 999,999,999,999.99 heading 'Total Work'\n"
+  Sql += "col owner_name                  format a30                heading 'Owner'\n"
+  Sql += "col state                       format a20                heading 'State'\n"
+  Sql += "col sql_text                    format a30                heading 'SQL Text'\n"
+  Sql += "col message                     format a30                heading 'Message'\n"
+  Sql += "col job_mode                    format a30                heading 'Job Mode'\n"
+  Sql += "col job_name                    format a30                heading 'Job Name'\n"
+
+  Sql += "\n"
+  Sql += "SELECT " + SqlHeader + "\n"
+  Sql += "            x.job_name\n"
+  Sql += "          , b.state\n"
+  Sql += "          , b.job_mode\n"
+  Sql += "          , b.degree\n"
+  Sql += "          , x.owner_name\n"
+  Sql += "          , z.sql_text\n"
+  Sql += "          , p.message\n"
+  Sql += "          , p.totalwork\n"
+  Sql += "          , p.sofar\n"
+  Sql += "          , round((p.sofar / p.totalwork) * 100, 2) done\n"
+  Sql += "          , p.time_remaining\n"
+  Sql += "       FROM dba_datapump_jobs b\n"
+  Sql += "  LEFT JOIN dba_datapump_sessions x ON (x.job_name = b.job_name)\n"
+  Sql += "  LEFT JOIN v$session y             ON (y.saddr    = x.saddr)\n"
+  Sql += "  LEFT JOIN v$sql z                 ON (y.sql_id   = z.sql_id)\n"
+  Sql += "  LEFT JOIN v$session_longops p     ON (p.sql_id = y.sql_id)\n"
+  Sql += "      WHERE y.module = 'Data Pump Worker'\n"
+  Sql += "        AND p.time_remaining > 0;"
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
+
