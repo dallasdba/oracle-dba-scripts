@@ -1,0 +1,140 @@
+#!/usr/bin/env python
+
+#--------------------------------------------------------------------------------------------------#
+# Name: template.py                                                                                #
+# Auth: Randy Johnson                                                                              #
+# Desc: A good starting point for any Python propgram. See end of file for sample output.          #
+#                                                                                                  #
+# Date       Ver. Who              Notes                                                           #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 06/25/2020 1.00 Randy Johnson    First commit.                                                   #
+#--------------------------------------------------------------------------------------------------#
+
+# ---------------------------------------------------------
+# ---- Import Python Modules ------------------------------
+# ---------------------------------------------------------
+from argparse     import ArgumentParser
+from os.path      import basename
+from sys          import argv
+from sys          import exit
+
+
+# ---------------------------------------------------------
+# --- Class/Function Definitions --------------------------
+# ---------------------------------------------------------
+
+
+
+# ---------------------------------------------------------
+# --- Main Program ----------------------------------------
+# ---------------------------------------------------------
+if (__name__ == '__main__'):
+  cmd_name       = basename(argv[0]).split('.')[0]
+  cmd_long       = cmd_name.title()
+  vsn            = '1.00'
+  vsn_date       = 'Thu Jun 25 16:11:31 CDT 2020'
+  dev_state      = 'Development'
+  banner         = cmd_long + ': Release ' + vsn + ' '  + dev_state + '. Last updated: ' + vsn_date
+
+  # Process command line options
+  # ----------------------------------
+  cmd_usage  =  '%s [options]'  % cmd_name
+  cmd_usage += '\n\n%s'         % cmd_long
+  cmd_usage += '\n-------------------------------------------------------------------------------'
+  cmd_usage += '\nSample program description...'
+
+  ap = ArgumentParser(prog=cmd_name, usage=cmd_usage, epilog='Enjoy the program! :)')
+  ap.version=banner
+
+  # --- Option Action (action=xxxxx) Definitions ---------------------------------------------------------------------------------
+  # store        stores the input value to the Namespace object. (This is the default action.)
+  # store_const  stores a constant value when the corresponding optional arguments are specified.
+  # store_true   stores the Boolean value True when the corresponding optional argument is specified and stores a False elsewhere.
+  # store_false  stores the Boolean value False when the corresponding optional argument is specified and stores True elsewhere.
+  # append       stores a list, appending a value to the list each time the option is provided.
+  # append_const stores a list appending a constant value to the list each time the option is provided.
+  # count        stores an int that is equal to the times the option has been provided.
+  # help         shows a help text and exits.
+  # version      shows the version of the program and exits.
+  # -------------------------------------------------------------------------------------------------------------------------------
+
+  ap.add_argument('filename',   action='store',                    default='infile.txt',  type=str,          help='name of input file')
+  ap.add_argument('-teststr',   action='store',                    default='test_string', type=str,          help='value for teststr')
+  ap.add_argument('-testint',   action='store',                    default=0,             type=int,          help='value for testint')
+  ap.add_argument('-a',         action='store_const',  const=42,                                             help='value for a')
+  ap.add_argument('-b',         action='store_true',                                                         help='value for b')
+  ap.add_argument('-c',         action='store_false',                                                        help='value for c')
+  ap.add_argument('-d',         action='append',                                          type=str,          help='value for d')
+  ap.add_argument('-e',         action='append_const', const=42,                                             help='value for e')
+  ap.add_argument('-f',         action='count',                                                              help='value for f')
+  ap.add_argument('-g',         action='store',                    default=0,             type=int, nargs=3, help='value for g')
+  ap.add_argument('-v',         action='version',                                                            help='print version information')
+
+  # Parse command line arguments
+  args = ap.parse_args()
+
+  filename = args.filename
+  teststr  = args.teststr
+  testint  = args.testint
+
+  opts = vars(args)
+  print('\n\nParsed Input Options:')
+  print('\n------------ -----------------------------------')
+  for opt in opts:
+    print('%-10s   %-30s' % (opt, opts[opt]) )
+
+  exit()
+# ---------------------------------------------------------
+# --- End Main Program ------------------------------------
+# ---------------------------------------------------------
+
+# ---------------------------------------------------------
+# -------- Test Output ------------------------------------
+# ---------------------------------------------------------
+# template.py -h                                                                                                                                            
+# usage: template [options]
+#
+# Template
+# -------------------------------------------------------------------------------
+# Sample program description...
+#
+# positional arguments:
+#   filename          name of input file
+#
+# optional arguments:
+#   -h, --help        show this help message and exit
+#   -teststr TESTSTR  value for teststr
+#   -testint TESTINT  value for testint
+#   -a                value for a
+#   -b                value for b
+#   -c                value for c
+#   -d D              value for d
+#   -e                value for e
+#   -f                value for f
+#   -g G G G          value for g
+#   -v                print version information
+#
+# Enjoy the program! :)
+#
+#  template.py -v                                                                                                                                            
+# Template: Release 1.00 Development. Last updated: Mon Jun 15 13:22:43 CDT 2020
+#
+#  template.py -teststr my_string -testint 99  myfile.out -a -b -c -d append1 -d append2 -d append3 -eeee -fffffff -g 1 2 3                                  
+#
+#
+# Parsed Input Options:
+# 
+# ------------ -----------------------------------
+# filename     myfile.out
+# teststr      my_string
+# testint      99
+# a            42
+# b            True
+# c            False
+# d            ['append1', 'append2', 'append3']
+# e            [42, 42, 42, 42]
+# f            7
+# g            [1, 2, 3]
+# ---------------------------------------------------------
+# -------- End Test Output --------------------------------
+# ---------------------------------------------------------
