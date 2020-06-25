@@ -14,6 +14,7 @@
 # ---------- ---- ---------------- -------------------------------------------------------------   #
 # 12/03/2018 1.00 Randy Johnson    Initial release.                                                #
 # 06/22/2020 1.01 Randy Johnson    First commit.                                                   #
+# 06/25/2020 1.10 Randy Johnson    Fix to type_check function.                                     #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -338,22 +339,22 @@ def insert_table(curs, stats):
 # ------------------------------------------------------------
 # Function: type_check()
 # Desc    : Determines the likely data type of a value.
-# Args    : 1-value to evaluate (val)
+# args    : 1-value to evaluate (val)
 # Retn    : 1-data type or None
 # ------------------------------------------------------------
 def type_check(val):
   rex_float = r'^\d+\.\d+$'
   rex_int   = r'^\d+$'
 
-  if (type(val) == int):
+  if type(val) == int:
     return('INTEGER')
   elif(type(val) == float):
     return('REAL')
   else:
-    if (type(val) == str):
-      if (match(rex_float, val)):
+    if type(val) == str:
+      if match(rex_float, val):
         return('REAL')
-      if (match(rex_int, val)):
+      if match(rex_int, val):
         return('INTEGER')
       else:
         return('TEXT')
@@ -843,8 +844,8 @@ def parse_file(file_name):
 # --------------------------------------
 if (__name__ == '__main__'):
   cmd            = basename(argv[0])
-  version        = '1.01'
-  version_date   = 'Mon Jun 22 12:25:11 CDT 2020'
+  version        = '1.10'
+  version_date   = 'Thu Jun 25 10:01:17 CDT 2020'
   dev_state      = 'Production'
   cmd_desc       = 'OSWatcher VMSTAT Parser'
   banner         = cmd_desc + ': Release ' + version + ' '  + dev_state + '. Last updated: ' + version_date
