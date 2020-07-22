@@ -4,11 +4,13 @@
 # Name: loginfo                                                                                    #
 # Auth: Randy Johnson                                                                              #
 # Desc: Reports redolog information.                                                               #
-#                                                                                                  #                                                                                                  #
+#                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
 # 09/06/2016 1.00 Randy Johnson    Initial write.                                                  #
 # 06/12/2020 1.01 Randy Johnson    Reset header formatting.                                        #
+# 07/22/2020 1.20 Randy Johnson    Changed the V$LOGFILE query to join with V$LOGFILE view to      #
+#                                  bring in the filename of the logfile members.                   #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -28,20 +30,20 @@ from Oracle       import RunSqlplus
 from Oracle       import SetOracleEnv
 from Oracle       import ParseConnectString
 
-
 # --------------------------------------
 # ---- Main Program --------------------
 # --------------------------------------
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Redolog Info.'
-  Version        = '1.01'
-  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
+  Version        = '1.20'
+  VersionDate    = 'Wed Jul 22 15:35:30 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
   ErrChk         = False
+  ArgParser      = OptionParser()
   InStr          = ''
   ConnStr        = ''
 
@@ -75,100 +77,108 @@ if (__name__ == '__main__'):
   Sql += "column thread#        format 999              heading 'Thread'\n"
   Sql += "column group#         format 999              heading 'Group'\n"
   Sql += "column sequence#      format 999              heading 'Seq'\n"
-  Sql += "column bytes          format 999,999,999,999  heading 'Bytes'\n"
+  Sql += "column mbytes         format 999,999,999,999  heading 'Size (MB)'\n"
   Sql += "column blocksize      format 9999             heading 'Blocksize'\n"
   Sql += "column members        format 999              heading 'Members'\n"
   Sql += "column archived       format a8               heading 'Archived'\n"
   Sql += "column status         format a10              heading 'Status'\n"
-  Sql += "column first_change#  format 9999999999999999 heading 'First Change Num'\n"
+  Sql += "column first_change#  format 9999999999999999999999 heading 'First Change Num'\n"
   Sql += "column first_time     format a19              heading 'First Change Time'\n"
-  Sql += "column next_change#   format 9999999999999999 heading 'Next Change Num'\n"
+  Sql += "column next_change#   format 9999999999999999999999 heading 'Next Change Num'\n"
   Sql += "column next_time      format a19              heading 'Next Change Time'\n"
-  if Cdb:
-    Sql += "column con_id         format 99999            heading 'Con ID'\n"
+  Sql += "column dbid           format a12              heading 'Db ID'\n"
+  Sql += "column con_id         format 99999            heading 'Con ID'\n"
+
   Sql += "\n"
+  Sql += "set pages 1000\n"
+  Sql += "set lines 2000\n"
   Sql += "prompt V$LOG\n"
   Sql += "\n"
   Sql += "  SELECT " + SqlHeader + "\n"
-  Sql += "         thread#\n"
+  if Cdb:
+    Sql += "         con_id\n"
+    Sql += "       , thread#\n"
+  else:
+    Sql += "         thread#\n"
   Sql += "       , group#\n"
-  Sql += "       , sequence#\n"
-  Sql += "       , bytes\n"
+  Sql += "       , bytes/1024/1024 mbytes\n"
   Sql += "       , blocksize\n"
   Sql += "       , members\n"
   Sql += "       , archived\n"
   Sql += "       , status\n"
+  Sql += "       , sequence#\n"
   Sql += "       , first_change#\n"
-  Sql += "       , TO_CHAR(first_time, 'yyyy-mm-dd hh24:mi:ss') first_time\n"
   Sql += "       , next_change#\n"
+  Sql += "       , TO_CHAR(first_time, 'yyyy-mm-dd hh24:mi:ss') first_time\n"
   Sql += "       , TO_CHAR(next_time, 'yyyy-mm-dd hh24:mi:ss') next_time\n"
-  if Cdb:
-    Sql += "       , con_id\n"
   Sql += "    FROM v$log\n"
-  Sql += "ORDER BY thread#\n"
+  if Cdb:
+    Sql += "ORDER BY con_id\n"
+    Sql += "       , thread#\n"
+  else:
+    Sql += "ORDER BY thread#\n"
   Sql += "       , group#;\n\n\n"
 
-  Sql += "column thread#        format 999              heading 'Thread'\n"
-  Sql += "column group#         format 999              heading 'Group'\n"
-  Sql += "column sequence#      format 999              heading 'Seq'\n"
-  Sql += "column bytes          format 999,999,999,999  heading 'Bytes'\n"
-  Sql += "column blocksize      format 9999             heading 'Blocksize'\n"
-  Sql += "column used           format 999999           heading 'Used'\n"
-  Sql += "column archived       format a8               heading 'Archived'\n"
-  Sql += "column status         format a10              heading 'Status'\n"
-  Sql += "column first_change#  format 9999999999999999 heading 'First Change Num'\n"
-  Sql += "column first_time     format a19              heading 'First Change Time'\n"
-  Sql += "column next_change#   format 9999999999999999 heading 'Next Change Num'\n"
-  Sql += "column next_time      format a19              heading 'Next Change Time'\n"
-  Sql += "column con_id         format 99999            heading 'Con ID'\n"
-  if Cdb:
-    Sql += "column dbid           format a12              heading 'Db ID'\n"
   Sql += "\n"
   Sql += "prompt \n"
   Sql += "prompt \n"
   Sql += "prompt V$STANDBY_LOG\n"
   Sql += "\n"
   Sql += "  SELECT " + SqlHeader + "\n"
-  Sql += "         thread#\n"
+  if Cdb:
+    Sql += "         con_id\n"
+    Sql += "       , dbid\n"
+  else:
+    Sql += "         dbid\n"
+  Sql += "       , thread#\n"
   Sql += "       , group#\n"
-  Sql += "       , sequence#\n"
-  Sql += "       , bytes\n"
+  Sql += "       , bytes/1024/1024 mbytes\n"
   Sql += "       , blocksize\n"
   Sql += "       , used\n"
   Sql += "       , archived\n"
   Sql += "       , status\n"
+  Sql += "       , sequence#\n"
   Sql += "       , first_change#\n"
-  Sql += "       , TO_CHAR(first_time, 'yyyy-mm-dd hh24:mi:ss') first_time\n"
   Sql += "       , next_change#\n"
+  Sql += "       , TO_CHAR(first_time, 'yyyy-mm-dd hh24:mi:ss') first_time\n"
   Sql += "       , TO_CHAR(next_time, 'yyyy-mm-dd hh24:mi:ss') next_time\n"
-  if Cdb:
-    Sql += "       , con_id\n"
-  Sql += "       , dbid\n"
   Sql += "    FROM v$standby_log\n"
-  Sql += "ORDER BY thread#\n"
+  if Cdb:
+    Sql += "ORDER BY con_id\n"
+    Sql += "       , dbid\n"
+  else:
+    Sql += "ORDER BY dbid\n"
+  Sql += "       , thread#\n"
   Sql += "       , group#;\n\n\n"
 
-  Sql += "column group#                format 999   heading 'Group'\n"
-  Sql += "column type                  format a20   heading 'Type'\n"
-  Sql += "column members               format 999   heading 'Members'\n"
-  Sql += "column is_recovery_dest_file format a3    heading 'FRA'\n"
-  if Cdb:
-    Sql += "column con_id                format 99999 heading 'Con ID'\n"
-  Sql += "\n"
   Sql += "prompt \n"
   Sql += "prompt \n"
   Sql += "prompt V$LOGFILE\n"
   Sql += "\n"
+
   Sql += "  SELECT " + SqlHeader + "\n"
-  Sql += "         group#\n"
-  Sql += "       , status\n"
-  Sql += "       , type\n"
-  Sql += "       , member\n"
-  Sql += "       , is_recovery_dest_file\n"
+  Sql += "         l.con_id\n"
+  Sql += "       , l.thread#\n"
+  Sql += "       , l.group#\n"
+  Sql += "       , lf.member\n"
+  Sql += "       , l.bytes/1024/1024 mbytes\n"
+  Sql += "       , l.blocksize\n"
+  Sql += "       , l.archived\n"
+  Sql += "       , l.status\n"
+  Sql += "       , l.sequence#\n"
+  Sql += "       , l.first_change#\n"
+  Sql += "       , l.next_change#\n"
+  Sql += "       , TO_CHAR(l.first_time, 'yyyy-mm-dd hh24:mi:ss') first_time\n"
+  Sql += "       , TO_CHAR(l.next_time, 'yyyy-mm-dd hh24:mi:ss') next_time\n"
+  Sql += "    FROM v$log l\n"
+  Sql += "       , v$logfile lf\n"
+  Sql += "   WHERE l.group# = lf.group#\n"
   if Cdb:
-    Sql += "       , con_id\n"
-  Sql += "    FROM v$logfile\n"
-  Sql += "ORDER BY group#;\n"
+    Sql += "ORDER BY con_id\n"
+    Sql += "       , thread#\n"
+  else:
+    Sql += "        thread#\n"
+  Sql += "       , group#;"
 
   if(Show):
     print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
