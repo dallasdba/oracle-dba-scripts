@@ -399,9 +399,6 @@ def default_report(curs, data_def):
     alias = ' AS "' + hname + '"'
     col_set.append("%-25s %-s" % (cname, alias))
 
-  print(col_set)
-  exit()
-
   # Generate where clause...
   where_set = []
   for key in sorted(data_def):
