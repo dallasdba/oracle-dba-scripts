@@ -1,11 +1,11 @@
 #!/bin/env python
 
 #--------------------------------------------------------------------------------------------------#
-# Name: sqx (SQL Execute)                                                                          #
-# Auth: Randy Johnson                                                                              #
-# Desc: Takes a sql script file from the command line and executes it in the database.             #
-#       If no connect string provided ORACLE_SID is used and authentication defaults to            #
-#       sys / as sysdba.                                                                           #
+#  Name:    sqx (SQL Execute)                                                                      #
+#  Author:  Randy Johnson                                                                          #
+#  Descrip: Takes a sql script file from the command line and executes it in the database.         #
+#           If no connect string provided ORACLE_SID is used and authentication defaults to        #
+#           sys / as sysdba.                                                                       #
 #                                                                                                  #
 # Date       Ver. Who              Change Description                                              #
 # ---------- ---- ---------------- -------------------------------------------------------------   #
@@ -16,6 +16,7 @@
 # 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                             #
 # 02/12/2020 3.02 Randy Johnson    Simple syntax formatting changes.                               #
 # 06/12/2020 3.03 Randy Johnson    Reset header formatting.                                        #
+# 08/23/2020 3.04 Randy Johnson    Reformatted output to allow for ErrChk = True.                  #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -33,6 +34,7 @@ from signal       import SIGPIPE
 from signal       import SIG_DFL
 from signal       import signal
 from Oracle       import RunSqlplus
+from Oracle       import PrintError
 from Oracle       import SetOracleEnv
 from Oracle       import ParseConnectString
 
@@ -43,13 +45,13 @@ from Oracle       import ParseConnectString
 if __name__ == '__main__':
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'SQL Execute'
-  Version        = '3.03'
-  VersionDate    = 'Fri Jun 12 22:00:50 CDT 2020'
+  Version        = '3.04'
+  VersionDate    = 'Sun Aug 23 09:26:01 CDT 2020'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
   SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
-  ErrChk         = False
+  ErrChk         = True
   InStr          = ''
   ConnStr        = ''
 
@@ -143,13 +145,24 @@ if __name__ == '__main__':
     ConnStr = ParseConnectString(InStr)
 
   # Execute the report
+  rc        = 0
+  ErrorList = []
+  Stdoout   = ''
   if ConnStr != '':
-    Stdout = RunSqlplus(Sql, ErrChk, ConnStr)
+    if ErrChk:
+      (rc,Stdout,ErrorList) = RunSqlplus(Sql, ErrChk, ConnStr)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
   else:
-    Stdout = RunSqlplus(Sql, ErrChk)
+    if ErrChk:
+      (rc,Stdout,ErrorList) = RunSqlplus(Sql, ErrChk)
+    else:
+      (Stdout) = RunSqlplus(Sql, ErrChk)
 
   # Print the report
-  if Stdout != '':
+  if rc:
+    PrintError(Sql,Stdout,ErrorList)
+  else:
     print('\n%s' % Stdout)
 
   exit(0)

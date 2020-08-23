@@ -81,6 +81,7 @@
 # 01/04/2020 2.43 Randy Johnson    Added del environ['ORACLE_PATH'] to RunSqlplus.               #
 # 01/04/2020 2.44 Randy Johnson    Added classes SqlQuery() and SqlReport().                     #
 # 02/13/2020 2.45 Randy Johnson    Added PythonVersion handling for imports.                     #
+# 08/23/2020 2.46 Randy Johnson    Minor tweaks to PrintError. Cosmetic only.                    #
 #                                                                                                #
 ##################################################################################################
  
@@ -1833,7 +1834,7 @@ def LoadOratab(Oratab=''):
   OratabList = []
   OratabLoc  = ['/etc/oratab','/var/opt/oracle/oratab']
   otab       = ''
-
+  
   # If an oratab file name has been passed in...
   if (Oratab != ''):
     # If the oratab file name passed in is not already in the list of common locations...
@@ -2413,22 +2414,20 @@ def LookupError(Error):
 # Retn: <none>
 # ---------------------------------------------------------------------------
 def PrintError(Sql, Stdout, ErrorList=[]):
-  print('\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
-  print('%s\n' % Sql)
-  print('----')
-  print(Stdout)
-  print('----')
-  print
+  print('\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
+  #print('%s' % Sql.strip())
+  #print('\n----')
+  print(Stdout.strip())
   for Error in ErrorList:
     OracleError = Error[0]
     ErrorString = Error[1]
     Explanation = LookupError(OracleError)
     if (len(Explanation) > 0):
-      print('\nExplanation:')
-      print('---------------')
+      print('\nError Definition')
+      print('----------------------------------------------------')
       for line in Explanation:
         print(line)
-  print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n')
+  print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n')
   return
 # ---------------------------------------------------------------------------
 # End PrintError()
