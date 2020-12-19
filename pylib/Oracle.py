@@ -82,6 +82,8 @@
 # 01/04/2020 2.44 Randy Johnson    Added classes SqlQuery() and SqlReport().                     #
 # 02/13/2020 2.45 Randy Johnson    Added PythonVersion handling for imports.                     #
 # 08/23/2020 2.46 Randy Johnson    Minor tweaks to PrintError. Cosmetic only.                    #
+# 12/11/2020 2.47 Randy Johnson    Renamed class ResultSet2 to ResultSet. Fixed some unscoped    #
+#                                  class attributes in class ResultSet                           #
 #                                                                                                #
 ##################################################################################################
  
@@ -989,10 +991,10 @@ class SqlReport:
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Clas: ResultSet2()
+# Clas: ResultSet()
 # Desc: Runs a query in sqlplus
 # ---------------------------------------------------------------------------
-class ResultSet2:
+class ResultSet:
   def __init__(self, sql, colsep='~'):
     self.table     = []
     self.row_count = 0
@@ -1000,6 +1002,7 @@ class ResultSet2:
     self.rc        = 0
     self.stdout    = ''
     self.header    = ''
+    self.colsep    = colsep
 
     self.header += "set pagesize      0\n"
     self.header += "set heading     off\n"
@@ -1012,29 +1015,29 @@ class ResultSet2:
 
     (self.rc, self.stdout, self.errors) = RunSqlplus(self.sql, True, ConnectString = "/ as sysdba")
     if (self.rc == 0):
-      for row in self.stdout.strip().split('\n'):
-        row = row.strip()
-        columns = map(str.strip,row.split(colsep))
-        self.table.append(columns)
+      for self.row in self.stdout.strip().split('\n'):
+        self.row = self.row.strip()
+        self.columns = map(str.strip,self.row.split(self.colsep))
+        self.table.append(list(self.columns))
       self.row_count = len(self.table)
     else:
       self.table.append([])
       self.row_count = 0
 
   def print_set(self):
-    for row in self.table:
-      print(row)
+    for self.row in self.table:
+      print(self.row)
 
   def print_errors(self):
-    for row in self.errors:
-      print(row)
+    for self.row in self.errors:
+      print(self.row)
 
   def print_stdout(self):
-    for row in self.stdout.split('\n'):
-      print(row)
+    for self.row in self.stdout.split('\n'):
+      print(self.row)
 
   def get_set(self):
-      return self.table
+    return self.table
 
   def get_row_count(self):
     return self.row_count
@@ -1047,8 +1050,9 @@ class ResultSet2:
 
   def get_resultcode(self):
     return self.rc
+
 # ---------------------------------------------------------------------------
-# End ResultSet2()
+# End ResultSet()
 # ---------------------------------------------------------------------------
   
 # ---------------------------------------------------------------------------

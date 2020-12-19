@@ -81,7 +81,7 @@ def IsCdb():
   if rc:
     PrintError(Sql, Stdout, ErrorList)
     exit(rc)
-  else:  
+  else:
     Stdout = Stdout.strip()
     for line in Stdout.split('\n'):
       if (line.find('CDB ') == 1):
@@ -334,7 +334,7 @@ if __name__ == '__main__':
       if rc:
         PrintError(Sql, Stdout, ErrorList)
         exit(rc)
-      else:  
+      else:
         Stdout = Stdout.strip()
         RawParms[OracleSid] = Stdout.split('\n')
   else:
@@ -373,7 +373,7 @@ if __name__ == '__main__':
       orasid, pdb, parm, value, isdefault, ismodified, isset = [row[i] for i in range(len(row))]
     else:
       orasid, pdb, parm, value = [row[i] for i in range(len(row))]
-    
+
     if pdb == '':
       pdb = 'N/A'
 
@@ -418,7 +418,7 @@ if __name__ == '__main__':
         print("%-10s %-60s %-95s %-5s %-5s %-5s" % (pdb, parm, value, isdefault, ismodified, isset))
       else:
         print("%-10s %-60s %-95s" % (pdb, parm, value))
-  
+
   exit(rc)
 # --------------------------------------
 # ---- End Main Program ----------------
