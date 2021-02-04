@@ -28,10 +28,12 @@
 #               ParseConnectString(InStr)                                                        #
 #               ParseSqlout(Sqlout, Sqlkey, Colsep)                                              #
 #               PrintError(Sql, Stdout, ErrorList=[])                                            #
+#               PrintMessage(msg, tag='')                                                        #
 #               ProcessConfig(ConfigFile, Section)                                               #
 #               RunDgmgrl(DgbCmd, ErrChk=True, ConnectString='/')                                #
 #               RunRman(RCV, ErrChk=True, ConnectString='target /')                              #
 #               RunSqlplus(Sql, ErrChk=False, ConnectString='/ as sysdba')                       #
+#               RunSudo(cmdline)                                                                 #
 #               SetOracleEnv(Sid, Oratab='/etc/oratab')                                          #
 #               SqlQuery()                                                                       #
 #               SqlReport()                                                                      #
@@ -84,6 +86,7 @@
 # 08/23/2020 2.46 Randy Johnson    Minor tweaks to PrintError. Cosmetic only.                    #
 # 12/11/2020 2.47 Randy Johnson    Renamed class ResultSet2 to ResultSet. Fixed some unscoped    #
 #                                  class attributes in class ResultSet                           #
+# 01/28/2021 2.48 Randy Johnson    Added RunSudo() and PrintMessage().                           #
 #                                                                                                #
 ##################################################################################################
  
@@ -152,6 +155,66 @@ PyMinVer = 2.4
 # ------------------------------------------------
 # For handling termination in stdout pipe; ex: when you run: oerrdump | head
 signal(SIGPIPE, SIG_DFL)
+
+# --------------------------------------------------------------------------------------------------
+# Name: PrintMessage()
+# Desc: print a formatted message
+# Args: msg - the error message to be printed
+#       tag - the message tag
+# Retn: <none>
+# --------------------------------------------------------------------------------------------------
+def PrintMessage(msg, tag=''):
+  if tag:
+    tlen =len(tag)+6
+    leader  = '\n {} {} {}'.format('-'*3, tag.title(), '-'*(80-tlen))
+    trailer = ' {} {} {}'.format('-'*(80-tlen), tag.title(), '-'*3)
+  else:
+    leader = '\n ------------------------------------------------------------------------------'
+    trailer = ' ------------------------------------------------------------------------------ \n'
+  print(leader)
+  if not len(msg) > 0:
+    print('')
+  else:
+    if len(msg.split('\n')) > 1:
+      print(' ' + ' \n '.join(msg.split('\n')))
+    else:
+      print(' {}'.format(msg))
+  print(trailer)
+# --------------------------------------------------------------------------------------------------
+# End PrintMessage()
+# --------------------------------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------------------------------
+# Name: RunSudo()
+# Desc: Calls an external command/script with sudo.
+# Args: cmdline - command to run + arguments
+# Retn: rc - return code from call
+#       stdout - stdout + stderr returned from call
+# --------------------------------------------------------------------------------------------------
+def RunSudo(cmdline):
+  sudo = '/usr/bin/sudo'
+  rc = 1
+  stdout = ''
+  cmdline = cmdline.split(' ')
+  cmdline.insert(0, sudo)
+
+  proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=STDOUT)
+  try:
+    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=STDOUT)
+    stdout, stderr = proc.communicate()     # fetch output and close.
+    rc = proc.returncode
+  except:
+    if not rc:
+      rc = 1
+    exc_type, exc_value, exc_traceback = exc_info()
+    stdout  = stdout.strip()
+    stdout += repr(exc_value)
+    PrintMessage('Call to {} returned {}.\nStdout/stderr follows:\n\n{}'.format(cmdline, rc, stdout.strip()), 'error')
+
+  return rc, stdout
+# --------------------------------------------------------------------------------------------------
+# End: RunSudo()
+# --------------------------------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------
 # Def : IsCdb()
@@ -258,8 +321,8 @@ class SqlQuery:
 
   def print_sql(self):
     print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
-    for line in self.sql.split('\n'):
-      print(line)
+    for self.line in self.sql.split('\n'):
+      print(self.line)
     print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
   # End print_stdout()
 
@@ -349,6 +412,7 @@ class SqlQuery:
                 self.orahome = self.candidate
                 environ['ORACLE_HOME'] = self.orahome
                 break
+    
     if 'ORACLE_SID' not in environ or 'ORACLE_HOME' not in environ:
       self.msg = 'Unable to set ORACLE_HOME. Check ORACLE_SID and oratab file.'
       return 1, self.msg
