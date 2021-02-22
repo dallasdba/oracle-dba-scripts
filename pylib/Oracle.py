@@ -87,9 +87,17 @@
 # 12/11/2020 2.47 Randy Johnson    Renamed class ResultSet2 to ResultSet. Fixed some unscoped    #
 #                                  class attributes in class ResultSet                           #
 # 01/28/2021 2.48 Randy Johnson    Added RunSudo() and PrintMessage().                           #
-#                                                                                                #
+# 02/09/2021 2.49 Randy Johnson    Added SqlQueryInstCli class (derrived from SqlQuery) to run   #
+#                                  with Oracle Instant Client. Sqlplus is required to be         #
+#                                  installed in the Instant Client (just as it is for SqlQuery   #
+#                                  SqlReport classes).                                           #
+# 02/09/2021 2.50 Randy Johnson    Fixed bug in setting LD_LIBRARY_PATH environment variable.    #
+# 02/03/2021 2.51 Randy Johnson    Added SqlExec().                                              #
+# 02/19/2021 2.52 Randy Johnson    Fixed bug in execute_sql() where table list was not           #
+#                                  initialized.                                                  #
+# 02/22/2021 2.53 Randy Johnson    Changed table from list of lists to list of tuples.           #
 ##################################################################################################
- 
+
 # --------------------------------------
 # ---- Import Python Modules -----------
 # --------------------------------------
@@ -156,6 +164,292 @@ PyMinVer = 2.4
 # For handling termination in stdout pipe; ex: when you run: oerrdump | head
 signal(SIGPIPE, SIG_DFL)
 
+# ---------------------------------------------------------------------------
+# Clas: SqlQueryInstCli
+# Desc: Runs a query in sqlplus and parses it into a table (list of lists).
+#       other functionality like formulating row count and other useful
+#       stuff one would expect in a class like this.
+# ---------------------------------------------------------------------------
+class SqlQueryInstCli:
+  oratab_loc = ['/etc/oratab','/var/opt/oracle/oratab']
+  comp_list  = ['sqlplus','rdbms', 'oracore']
+
+  def __init__(self, sql='', colsep='~', connstr = "/ as sysdba"):
+    self.table         = []
+    self.row_count     = 0
+    self.error_stack   = []
+    self.rc            = 0
+    self.stdout        = ''
+    self.colsep        = colsep
+    self.connstr       = connstr
+    self.sql           = sql.rstrip() + ';'
+    self.orahome       = ''
+    self.orasid        = ''
+    self.facilities    = []
+    self.facilities_dd = {}
+    self.sqlplus       = ''
+
+    if self.orasid:
+      environ['ORACLE_SID'] =  self.orasid
+    else:
+      try:
+        self.orasid = environ['ORACLE_SID']
+      except:
+        pass
+
+    if self.orahome:
+      environ['ORACLE_HOME'] =  self.orahome
+    else:
+      try:
+        self.orahome = environ['ORACLE_HOME']
+      except:
+        pass
+  # End __init__()
+
+  def print_result_set(self):
+    for row in self.table:
+      print(row)
+  # End print_result_set()
+
+  def print_stdout(self):
+    for row in self.stdout.split('\n'):
+      print(row)
+  # End print_stdout()
+
+  def get_result_set(self):
+      return self.table
+  # End get_result_set()
+
+  def get_row_count(self):
+    return self.row_count
+  # End get_row_count()
+
+  def get_errors(self):
+    return self.error_stack
+  # End get_errors()
+
+  def get_sqlout(self):
+    return self.stdout
+  # End get_sqlout()
+
+  def get_resultcode(self):
+    return self.rc
+  # End get_resultcode()
+
+  def print_sql(self):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    for self.line in self.sql.split('\n'):
+      print(self.line)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+  # End print_stdout()
+
+  def is_exec(self, filepath):
+    if access(filepath, ReadOk) and access(filepath, ExecOk):
+      return True
+    else:
+      return False
+  # End is_exec()
+
+  def sql_execute(self, sql):
+    self.sql = sql
+    self.table = []
+    self.rc, self.stdout, self.error_stack = self.run_sqlplus()
+    if self.rc == 0:
+      # Create a list of lists (result set) from standard out.
+      if self.stdout.strip() != '':
+        for self.row in self.stdout.strip().split('\n'):
+          self.row = self.row.strip()
+          self.columns = tuple(self.row.split(self.colsep))
+          self.table.append(self.columns)
+          self.row_count += 1
+    return self.rc, self.stdout, self.error_stack
+  # End sql_execute()
+
+  def set_env(self, orasid='', orahome=''):
+    self.orasid  = orasid
+    self.orahome = orahome
+    self.msg     = ''
+
+    try:
+      del environ['SQLPATH']
+    except:
+      pass
+
+    if self.orasid:
+      environ['ORACLE_SID'] = self.orasid
+    else:
+      try:
+        self.orasid = environ['ORACLE_SID']
+      except:
+        pass
+
+    if self.orahome:
+      environ['ORACLE_HOME'] = self.orahome
+    else:
+      try:
+        self.orahome = environ['ORACLE_HOME']
+      except:
+        pass
+
+    if not self.orasid and self.connstr.strip().lower() == '/ as sysdba':
+      self.msg = 'ORACLE_SID must be set if connecting to local instance.'
+      return 1, self.msg
+
+    if self.orahome:
+      if not isdir(self.orahome):
+        self.msg = 'Invalid ORACLE_HOME: %s' % self.orahome
+        return 1, self.msg
+      else:
+        if not self.is_exec(self.orahome):
+          self.msg = 'Check permissions on ORACLE_HOME: %s' % self.orahome
+          return 1, self.msg
+
+      if not isfile(pathjoin(self.orahome, 'sqlplus')):
+        self.msg = 'Invalid ORACLE_HOME (sqlplus binary not found): %s' % pathjoin(self.orahome, 'sqlplus')
+        return 1, self.msg
+      if not self.is_exec(pathjoin(self.orahome, 'sqlplus')):
+        self.msg = 'Check permissions on: %s' % pathjoin(self.orahome, 'sqlplus')
+        return 1, self.msg
+      environ['ORACLE_HOME'] = self.orahome
+
+    # if we made it this far then we have a valid ORACLE_SID (orasid) and ORACLE_HOME (orahome)
+    if isdir(self.orahome):
+      try:
+        environ['LD_LIBRARY_PATH'] = self.orahome
+      except:
+        self.msg = 'Invalid LD_LIBRARY_PATH: %s' % self.orahome
+        return 1, self.msg
+    else:
+      self.msg = 'Invalid LD_LIBRARY_PATH: %s' % self.orahome
+      return 1, self.msg
+
+
+    self.sqlplus = pathjoin(environ['ORACLE_HOME'], 'sqlplus')
+    if not isfile(self.sqlplus):
+      self.msg = 'sqlplus not found: %s' % self.sqlplus
+      return 1, self.msg
+    return 0, ''
+  # End set_env()
+
+  def print_error(self):
+    # Print Stdin (Sql statement that caused the error)
+    print('\n-- Stdin -----------------------------------------------------------------------')
+    print(self.sql)
+    print('--------------------------------------------------------------------------------')
+
+    # Print Stdout...
+    print('\n-- Stdout ----------------------------------------------------------------------')
+    print(self.stdout)
+    print('--------------------------------------------------------------------------------')
+
+    return
+  # End print_error()
+
+  def run_sqlplus(self):
+    #       sql_execute()
+    #          ^    +-----> run_sqlplus()
+    #          |                |
+    #          |                +-----> error_check()
+    #          |                |           |
+    #          |                |           + --> load_facilities() -->+
+    #          |                +--> if error exit(rc) --> +           |
+    #          +-------------------------------------------+           |
+    #          +----------------------------+--------------------------+
+    self.stdout = ''
+    self.header = ''
+    self.rc     = 0
+
+    self.header += "btitle              off\n"
+    self.header += "repfooter           off\n"
+    self.header += "repheader           off\n"
+    self.header += "ttitle              off\n"
+    self.header += "set appinfo         off\n"
+    self.header += "set arraysize       500\n"
+    self.header += "set autocommit      off\n"
+    self.header += "set autoprint       off\n"
+    self.header += "set autorecovery    off\n"
+    self.header += "set autotrace       off\n"
+    self.header += "set blockterminator \".\"\n"
+    self.header += "set cmdsep          off\n"
+    self.header += "set colsep          \" \"\n"
+    self.header += "set concat          \".\"\n"
+    self.header += "set copycommit      0\n"
+    self.header += "set copytypecheck   on\n"
+    self.header += "set define          \"&\"\n"
+    self.header += "set describe        depth 1 linenum off indent on\n"
+    self.header += "set document        off\n"
+    self.header += "set echo            off\n"
+    self.header += "set embedded        off\n"
+    self.header += "set escape          off\n"
+    self.header += "set escchar         off\n"
+    self.header += "set feedback        off\n"
+    self.header += "set flush           on\n"
+    self.header += "set heading         off\n"
+    self.header += "set headsep         \"|\"\n"
+    self.header += "set linesize        32767\n"
+    self.header += "set loboffset       1\n"
+    self.header += "set logsource       \"\"\n"
+    self.header += "set long            10000000\n"
+    self.header += "set longchunksize   10000000\n"
+    self.header += "set markup html     off \n"
+    self.header += "set newpage         1\n"
+    self.header += "set null            \"\"\n"
+    self.header += "set numformat       \"\"\n"
+    self.header += "set numwidth        15\n"
+    self.header += "set pagesize        0\n"
+    self.header += "set pause           off\n"
+    self.header += "set pno             0\n"
+    self.header += "set recsep          wrap\n"
+    self.header += "set recsepchar      \" \"\n"
+    self.header += "set serveroutput    on size unlimited\n"
+    self.header += "set shiftinout      invisible\n"
+    self.header += "set showmode        off\n"
+    self.header += "set space           1\n"
+    self.header += "set sqlblanklines   off\n"
+    self.header += "set sqlcase         mixed\n"
+    self.header += "set sqlcontinue     \"> \"\n"
+    self.header += "set sqlnumber       on\n"
+    self.header += "set sqlprefix       \"#\"\n"
+    self.header += "set sqlterminator   \";\"\n"
+    self.header += "set suffix          sql\n"
+    self.header += "set tab             off\n"
+    self.header += "set termout         on\n"
+    self.header += "set time            off\n"
+    self.header += "set timing          off\n"
+    self.header += "set trimout         on\n"
+    self.header += "set trimspool       on\n"
+    self.header += "set underline       \"-\"\n"
+    self.header += "set verify          off\n"
+    self.header += "set wrap            on\n"
+    self.header += "\n"
+
+    self.runsql = self.header + self.sql
+
+    # Start sqlplus and login
+    self.proc = Popen([self.sqlplus, '-S', '-L', self.connstr], stdin=PIPE, stdout=PIPE, stderr=STDOUT, \
+     shell=False, universal_newlines=True, close_fds=True)
+
+    # Execute the SQL
+    self.proc.stdin.write(self.runsql)
+
+    # Fetch the output
+    self.stdout, self.stderr = self.proc.communicate()
+    self.stdout = self.stdout.strip()
+
+    # Check stdout for errors like ORA-01219, ...
+    for self.line in self.stdout.split('\n'):
+      self.match_obj = search('\w+-\d\d\d\d\d', self.line)
+      if self.match_obj:
+        self.error_string = self.match_obj.group()
+        self.rc = 1
+        self.error_stack.append(self.error_string)
+
+    return self.rc, self.stdout, self.error_stack
+  # End run_sqlplus()
+# ---------------------------------------------------------------------------
+# End SqlQueryInstCli()
+# ---------------------------------------------------------------------------
+
 # --------------------------------------------------------------------------------------------------
 # Name: PrintMessage()
 # Desc: print a formatted message
@@ -198,9 +492,9 @@ def RunSudo(cmdline):
   cmdline = cmdline.split(' ')
   cmdline.insert(0, sudo)
 
-  proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=STDOUT)
+  proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True,)
   try:
-    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=STDOUT)
+    proc = Popen(cmdline, stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True,)
     stdout, stderr = proc.communicate()     # fetch output and close.
     rc = proc.returncode
   except:
@@ -248,6 +542,345 @@ def IsCdb():
 #---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
+# Clas: SqlExec
+# Desc: Executes SQL statements (like 'create user...') and captures results,
+#       processes error messages.
+# ---------------------------------------------------------------------------
+class SqlExec:
+  oratab_loc = ['/etc/oratab','/var/opt/oracle/oratab']
+  comp_list  = ['sqlplus','rdbms', 'oracore']
+
+  def __init__(self, sql='', connstr = "/ as sysdba"):
+    self.table         = []
+    self.error_stack   = []
+    self.rc            = 0
+    self.stdout        = ''
+    self.sql           = sql
+    self.connstr       = connstr
+    self.orahome       = ''
+    self.orasid        = ''
+    self.facilities    = []
+    self.facilities_dd = {}
+    self.sqlplus       = ''
+
+    if self.orasid:
+      environ['ORACLE_SID'] =  self.orasid
+    else:
+      try:
+        self.orasid = environ['ORACLE_SID']
+      except:
+        pass
+
+    if self.orahome:
+      environ['ORACLE_HOME'] =  self.orahome
+    else:
+      try:
+        self.orahome = environ['ORACLE_HOME']
+      except:
+        pass
+  # End __init__()
+
+  def print_stdout(self):
+    for self.line in self.stdout.rstrip().split('\n'):
+      print(self.line)
+  # End print_stdout()
+
+  def get_result_set(self):
+      return self.table
+  # End get_result_set()
+
+  def get_errors(self):
+    return self.errors
+  # End get_errors()
+
+  def get_stdout(self):
+    return self.stdout
+  # End get_stdout()
+
+  def get_resultcode(self):
+    return self.rc
+  # End get_resultcode()
+
+  def print_sql(self):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    for self.line in self.sql.split('\n'):
+      print(self.line)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+  # End print_stdout()
+
+  def is_exec(self, filepath):
+    if access(filepath, ReadOk) and access(filepath, ExecOk):
+      return True
+    else:
+      return False
+  # End is_exec()
+
+  def sql_execute(self, sql):
+    self.sql = sql
+    self.rc, self.stdout, self.error_stack = self.run_sqlplus()
+    return self.rc, self.stdout, self.error_stack
+  # End sql_execute()
+
+  def set_env(self, orasid='', orahome=''):
+    self.orasid  = orasid
+    self.orahome = orahome
+    self.msg     = ''
+
+    try:
+      del environ['SQLPATH']
+    except:
+      pass
+
+    if self.orasid:
+      environ['ORACLE_SID'] = self.orasid
+    else:
+      try:
+        self.orasid = environ['ORACLE_SID']
+      except:
+        pass
+
+    if self.orahome:
+      environ['ORACLE_HOME'] = self.orahome
+    else:
+      try:
+        self.orahome = environ['ORACLE_HOME']
+      except:
+        pass
+
+    if not self.orasid and self.connstr.strip().lower() == '/ as sysdba':
+      self.msg = 'ORACLE_SID must be set if connecting to local instance.'
+      return 1, self.msg
+
+    if self.orahome:
+      if not isdir(self.orahome):
+        self.msg = 'Invalid ORACLE_HOME: %s' % self.orahome
+        return 1, self.msg
+      else:
+        if not self.is_exec(self.orahome):
+          self.msg = 'Check permissions on ORACLE_HOME: %s' % self.orahome
+          return 1, self.msg
+      if not isfile(pathjoin(self.orahome, 'bin', 'sqlplus')):
+        self.msg = 'Invalid ORACLE_HOME (sqlplus binary not found): %s' % pathjoin(self.orahome, 'bin', 'sqlplus')
+        return 1, self.msg
+      if not self.is_exec(pathjoin(self.orahome, 'bin', 'sqlplus')):
+        self.msg = 'Check permissions on: %s' % pathjoin(self.orahome, 'bin', 'sqlplus')
+        return 1, self.msg
+      environ['ORACLE_HOME'] = self.orahome
+    else: # try to find the ORACLE_HOME by looking up the ORACLE_SID in the oratab file...
+      if self.orasid:
+        self.oratab_contents = ''
+        for self.oratab in SqlQuery.oratab_loc:
+          try:
+            self.f = open(self.oratab)
+            self.oratab_contents = self.f.readlines()
+            break
+          except:
+            continue
+        for self.line in self.oratab_contents:
+          self.line = self.line.split('#', 1)[0].strip()
+          self.count = self.line.count(':')
+          if self.count >= 1:
+            if self.line.split(':')[0] == self.orasid:
+              self.candidate = self.line.split(':')[1]
+              if isdir(self.candidate) and isfile(pathjoin(self.candidate, 'bin', 'sqlplus')):
+                self.orahome = self.candidate
+                environ['ORACLE_HOME'] = self.orahome
+                break
+
+    if 'ORACLE_SID' not in environ or 'ORACLE_HOME' not in environ:
+      self.msg = 'Unable to set ORACLE_HOME. Check ORACLE_SID and oratab file.'
+      return 1, self.msg
+
+    # if we made it this far then we have a valid ORACLE_SID (orasid) and ORACLE_HOME (orahome)
+    if isdir(pathjoin(self.orahome, 'lib')):
+      try:
+        environ['LD_LIBRARY_PATH'] = pathjoin(self.orahome, 'lib') + ':' + environ['LD_LIBRARY_PATH']
+      except:
+        environ['LD_LIBRARY_PATH'] = pathjoin(self.orahome, 'lib')
+    else:
+      self.msg = 'Invalid LD_LIBRARY_PATH: %s' % pathjoin(self.orahome, 'lib')
+      return 1, self.msg
+
+    self.sqlplus = pathjoin(environ['ORACLE_HOME'], 'bin', 'sqlplus')
+    if not isfile(self.sqlplus):
+      self.msg = 'sqlplus not found: %s' % self.sqlplus
+      return 1, self.msg
+
+    self.facilities_file = pathjoin(self.orahome, 'lib', 'facility.lis')
+    if not isfile(self.facilities_file):
+      self.msg = 'Facilities file not found: %s' % self.facilities_file
+      return 1, self.msg
+    else:
+      try:
+        self.ff = open(self.facilities_file, 'r')
+        self.fac_file_contents = self.ff.read().split('\n')
+        self.ff.close()
+      except:
+        self.msg = 'Cannot open facilities file for read: %s' % self.facilities_file
+        return 1, self.msg
+    for self.line in self.fac_file_contents:
+      if not (search(r'^\s*$', self.line)):   # skip blank lines
+        if self.line.find('#') >= 0:
+          self.line = self.line[0:self.line.find('#')]
+        if self.line.count(':') == 3:   # ignore lines that do not contain 3 :'s
+          self.facility, self.component, self.rename, self.description = self.line.split(':')
+          if self.facility != '':
+            self.facilities_dd[self.facility.strip()] = {
+             'component'   : self.component.strip(),
+             'rename'      : self.rename.strip(),
+             'description' : self.description.strip()
+            }
+    return 0, ''
+  # End set_env()
+
+  def lookup_error(self, error):
+    # This function works like the Oracle script 'oraerr'. It looks up errors like
+    # "ORA-01219" in the Oracle messages files and returns something like the
+    # following ...
+    # ------------------------------------------------------------------------------
+    # 01219, 00000, "database not open: queries allowed on fixed tables/views only"
+    # // *Cause:  A query was issued against an object not recognized as a fixed
+    # //          table or fixed view before the database has been opened.
+    # // *Action: Re-phrase the query to include only fixed objects, or open the
+    # //          database.
+    # ------------------------------------------------------------------------------
+    self.message_list  = []
+    self.header_found  = False
+
+    try:
+      self.facility, self.error_code = self.error.lower().split('-')
+    except:
+      self.rc = 1
+      print('\nInvalid error code.')
+      return self.rc, []
+
+    if not self.facility in self.facilities_dd.keys():
+      self.rc = 1
+      print('\nInvalid facility:', self.facility)
+      return self.rc, []
+    else:
+      self.messages_file = pathjoin(self.orahome, self.facilities_dd[self.facility]['component'], 'mesg', self.facility + 'us.msg')
+
+    self.msg_file_contents = ''
+    try:
+      self.mf = open(self.messages_file, 'r')
+      self.msg_file_contents = self.mf.readlines()
+      self.mf.close()
+    except:
+      self.rc = 1
+      print('\nCannot open Messages file: ' + self.messages_file + ' for read.')
+      return self.rc, []
+
+    for self.line in self.msg_file_contents:
+      if self.header_found:
+        self.match_obj = match(r'//,*', self.line)
+        if self.match_obj:
+          self.message_list.append(self.line.strip())
+        else:
+          self.rc = 1
+          return self.rc, self.message_list
+      else:
+        self.match_obj = match('[0]*' + self.error_code + ',', self.line)
+        if self.match_obj:
+            self.error_code = self.match_obj.group()
+            self.error_code = self.error_code[0:self.error_code.find(',')]
+            self.message_list.append(self.line.strip())
+            self.header_found = True
+    if len(self.message_list) == 0:
+      # If error code could not be found let's trim off leading 0's and try again...
+      self.error_code = str(int(self.error_code))
+      for self.line in self.msg_file_contents:
+        if self.header_found:
+            self.match_obj = match(r'//,*', self.line)
+            if self.match_obj:
+              self.message_list.append(self.line.strip())
+            else:
+              return self.rc, self.message_list
+        else:
+          self.match_obj = match('[0]*' + self.error_code + ',', self.line)
+          if self.match_obj:
+              self.error_code = self.match_obj.group()
+              self.error_code = self.error_code[0:self.error_code.find(',')]
+              self.message_list.append(self.line.strip())
+              self.header_found = True
+
+    if len(self.message_list) == 0:
+      print('error not found  : ' + self.error_code)
+      print('Msg file         : ' + self.messages_file)
+
+    return self.rc, self.message_list
+  # End lookup_error()
+
+  def print_error(self):
+    # Print Stdin (Sql statement that caused the error)
+    print('\n-- Stdin -----------------------------------------------------------------------')
+    print(self.sql)
+    print('--------------------------------------------------------------------------------')
+
+    # Print Stdout...
+    print('\n-- Stdout ----------------------------------------------------------------------')
+    print(self.stdout)
+    print('--------------------------------------------------------------------------------')
+
+    # Print Explanation for error...
+    for self.error in self.error_stack:
+      self.rc, self.explain_list = self.lookup_error(self.error)
+      if len(self.explain_list) > 0:
+        print('\n-- Explanation -----------------------------------------------------------------')
+        for self.line in self.explain_list:
+          print(self.line)
+        print('--------------------------------------------------------------------------------')
+    return
+  # End print_error()
+
+  def run_sqlplus(self):
+    #       sql_execute()
+    #          ^    +-----> run_sqlplus()
+    #          |                |
+    #          |                +-----> error_check()
+    #          |                |           |
+    #          |                |           + --> load_facilities() -->+
+    #          |                +--> if error exit(rc) --> +           |
+    #          +-------------------------------------------+           |
+    #          +----------------------------+--------------------------+
+    self.stdout = ''
+    self.header = ''
+    self.rc     = 0
+
+    self.header += "set echo            off\n"
+    self.header += "set feedback        off\n"
+    self.header += "set pagesize          0\n"
+    self.header += "set arraysize      5000\n"
+    self.header += 'set serveroutput on size 1000000\n\n'
+
+    self.runsql = self.header + self.sql
+    # Start sqlplus and login
+    self.proc = Popen([self.sqlplus, '-S', '-L', self.connstr], stdin=PIPE, stdout=PIPE, stderr=STDOUT, \
+     shell=False, universal_newlines=True)
+
+    # Execute the SQL
+    self.proc.stdin.write(self.runsql)
+
+    # Fetch the output
+    self.stdout, self.junk = self.proc.communicate()
+    self.stdout = self.stdout.strip()
+
+    # Check stdout for errors like ORA-01219, ...
+    for self.line in self.stdout.split('\n'):
+      for self.facility in [ key.upper() for key in list(self.facilities_dd) ]:
+        self.match_obj = search(self.facility + '-\d\d\d\d\d', self.line)
+        if self.match_obj:
+          self.error_string = self.match_obj.group()
+          self.rc = 1
+          self.error_stack.append(self.error_string)
+
+    return self.rc, self.stdout, self.error_stack
+  # End run_sqlplus()
+# ---------------------------------------------------------------------------
+# End SqlExec()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # Clas: SqlQuery
 # Desc: Runs a query in sqlplus and parses it into a table (list of lists).
 #       other functionality like formulating row count and other useful
@@ -271,7 +904,7 @@ class SqlQuery:
     self.facilities    = []
     self.facilities_dd = {}
     self.sqlplus       = ''
-    
+
     if self.orasid:
       environ['ORACLE_SID'] =  self.orasid
     else:
@@ -290,13 +923,13 @@ class SqlQuery:
   # End __init__()
 
   def print_result_set(self):
-    for row in self.table:
-      print(row)
+    for self.row in self.table:
+      print(self.row)
   # End print_result_set()
 
   def print_stdout(self):
-    for row in self.stdout.split('\n'):
-      print(row)
+    for self.line in self.stdout.rstrip().split('\n'):
+      print(self.line)
   # End print_stdout()
 
   def get_result_set(self):
@@ -311,9 +944,9 @@ class SqlQuery:
     return self.errors
   # End get_errors()
 
-  def get_sqlout(self):
+  def get_stdout(self):
     return self.stdout
-  # End get_sqlout()
+  # End get_stdout()
 
   def get_resultcode(self):
     return self.rc
@@ -327,21 +960,23 @@ class SqlQuery:
   # End print_stdout()
 
   def is_exec(self, filepath):
-    if access(filepath, ReadOk) and access(filepath, ExecOk):
+    self.filepath = filepath
+    if access(self.filepath, ReadOk) and access(self.filepath, ExecOk):
       return True
     else:
       return False
   # End is_exec()
 
-  def sql_execute(self):
+  def sql_execute(self, sql):
+    self.sql = sql
+    self.table = []
     self.rc, self.stdout, self.error_stack = self.run_sqlplus()
     if self.rc == 0:
       # Create a list of lists (result set) from standard out.
       if self.stdout.strip() != '':
         for self.row in self.stdout.strip().split('\n'):
           self.row = self.row.strip()
-          ###! self.columns = map(str.strip, self.row.split(self.colsep))
-          self.columns = self.row.split(self.colsep)
+          self.columns = tuple(self.row.split(self.colsep))
           self.table.append(self.columns)
           self.row_count += 1
     return self.rc, self.stdout, self.error_stack
@@ -412,7 +1047,7 @@ class SqlQuery:
                 self.orahome = self.candidate
                 environ['ORACLE_HOME'] = self.orahome
                 break
-    
+
     if 'ORACLE_SID' not in environ or 'ORACLE_HOME' not in environ:
       self.msg = 'Unable to set ORACLE_HOME. Check ORACLE_SID and oratab file.'
       return 1, self.msg
@@ -460,8 +1095,8 @@ class SqlQuery:
   # End set_env()
 
   def lookup_error(self, error):
-    # This function works like the Oracle script 'oraerr'. It looks up errors like 
-    # "ORA-01219" in the Oracle messages files and returns something like the 
+    # This function works like the Oracle script 'oraerr'. It looks up errors like
+    # "ORA-01219" in the Oracle messages files and returns something like the
     # following ...
     # ------------------------------------------------------------------------------
     # 01219, 00000, "database not open: queries allowed on fixed tables/views only"
@@ -641,7 +1276,7 @@ class SqlQuery:
 
     # Start sqlplus and login
     self.proc = Popen([self.sqlplus, '-S', '-L', self.connstr], stdin=PIPE, stdout=PIPE, stderr=STDOUT, \
-     shell=False, universal_newlines=True, close_fds=True)
+     shell=False, universal_newlines=True)
 
     # Execute the SQL
     self.proc.stdin.write(self.runsql)
@@ -688,7 +1323,7 @@ class SqlReport:
     self.facilities    = []
     self.facilities_dd = {}
     self.sqlplus       = ''
-    
+
     if self.orasid:
       environ['ORACLE_SID'] =  self.orasid
     else:
@@ -722,9 +1357,9 @@ class SqlReport:
     return self.errors
   # End get_errors()
 
-  def get_sqlout(self):
+  def get_stdout(self):
     return self.stdout
-  # End get_sqlout()
+  # End get_stdout()
 
   def get_resultcode(self):
     return self.rc
@@ -849,8 +1484,8 @@ class SqlReport:
   # End set_env()
 
   def lookup_error(self, error):
-    # This function works like the Oracle script 'oraerr'. It looks up errors like 
-    # "ORA-01219" in the Oracle messages files and returns something like the 
+    # This function works like the Oracle script 'oraerr'. It looks up errors like
+    # "ORA-01219" in the Oracle messages files and returns something like the
     # following ...
     # ------------------------------------------------------------------------------
     # 01219, 00000, "database not open: queries allowed on fixed tables/views only"
@@ -1074,18 +1709,19 @@ class ResultSet:
     self.header += "set feedback    off\n"
     self.header += "set echo        off\n"
     self.header += "\n"
-    
+
     self.sql = self.header + sql + ';'
 
     (self.rc, self.stdout, self.errors) = RunSqlplus(self.sql, True, ConnectString = "/ as sysdba")
+    self.table = []
     if (self.rc == 0):
       for self.row in self.stdout.strip().split('\n'):
         self.row = self.row.strip()
         self.columns = map(str.strip,self.row.split(self.colsep))
-        self.table.append(list(self.columns))
+        self.table.append(tuple(self.columns))
       self.row_count = len(self.table)
     else:
-      self.table.append([])
+      self.table.append(())
       self.row_count = 0
 
   def print_set(self):
@@ -1109,7 +1745,7 @@ class ResultSet:
   def get_errors(self):
     return self.errors
 
-  def get_sqlout(self):
+  def get_stdout(self):
     return self.stdout
 
   def get_resultcode(self):
@@ -1118,7 +1754,7 @@ class ResultSet:
 # ---------------------------------------------------------------------------
 # End ResultSet()
 # ---------------------------------------------------------------------------
-  
+
 # ---------------------------------------------------------------------------
 # Def : GetOracleVersion()
 # Desc: Determines the version of the Oracle binaries.
@@ -1460,7 +2096,7 @@ def TnsCheck(TnsName):
   Tnsping      = pathjoin(environ['ORACLE_HOME'], 'bin', 'tnsping')
 
   try:
-    proc = Popen([Tnsping, TnsName], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False)
+    proc = Popen([Tnsping, TnsName], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True)
     (Tnsout, TnsErr) = proc.communicate()
   except:
     print('\n%s' % traceback.format_exc())
@@ -1741,7 +2377,7 @@ def GetNodes():
 
   # Execute olsnodes -n
   try:
-    GridProc = Popen([Olsnodes, '-n'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
+    GridProc = Popen([Olsnodes, '-n'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True)
   except:
     print('\n%s' % traceback.format_exc())
     print('Error in call to olsnodes -n')
@@ -1782,7 +2418,7 @@ def GetVips():
 
   # Execute olsnodes -i
   try:
-    GridProc = Popen([Olsnodes, '-i'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
+    GridProc = Popen([Olsnodes, '-i'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True)
   except:
     print('\n%s' % traceback.format_exc())
     print('Error in call to olsnodes -i')
@@ -1823,7 +2459,7 @@ def GetClustername():
 
   # Execute olsnodes -c
   try:
-    GridProc = Popen([Olsnodes, '-c'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
+    GridProc = Popen([Olsnodes, '-c'], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True)
   except:
     print('\n%s' % traceback.format_exc())
     print('Error in call to olsnodes -c')
@@ -1861,13 +2497,13 @@ def Olsnodes(Parm=''):
   if (Parm != ''):
     Parm = '-' + Parm
     try:
-      GridProc = Popen([Olsnodes, Parm], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
+      GridProc = Popen([Olsnodes, Parm], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True)
     except:
       print('\n%s' % traceback.format_exc())
       print('Error in call to olsnodes -%s' % Parm)
   else:
     try:
-      GridProc = Popen([Olsnodes], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True, close_fds=True)
+      GridProc = Popen([Olsnodes], stdin=PIPE, stdout=PIPE, stderr=STDOUT, shell=False, universal_newlines=True)
     except:
       print('\n%s' % traceback.format_exc())
       print('Error in call to olsnodes')
@@ -1902,7 +2538,7 @@ def LoadOratab(Oratab=''):
   OratabList = []
   OratabLoc  = ['/etc/oratab','/var/opt/oracle/oratab']
   otab       = ''
-  
+
   # If an oratab file name has been passed in...
   if (Oratab != ''):
     # If the oratab file name passed in is not already in the list of common locations...
@@ -1958,7 +2594,7 @@ def LoadOratab(Oratab=''):
   ###!         OratabDict[OraSid] = OraHome
   ###!       except:
   ###!         pass
-  
+
   return(OratabDict)
 # ---------------------------------------------------------------------------
 # End LoadOratab()
@@ -2211,7 +2847,7 @@ def RunSqlplus(Sql, ErrChk=False, ConnectString='/ as sysdba'):
 
   # Start Sqlplus and login
   Sqlproc = Popen([Sqlplus, '-S', '-L', ConnectString], stdin=PIPE, stdout=PIPE, stderr=STDOUT, \
-   shell=False, universal_newlines=True, close_fds=True)
+   shell=False, universal_newlines=True)
 
   # Execute the SQL
   Sqlproc.stdin.write(Sql)
@@ -2290,7 +2926,7 @@ def RunRman(RCV, ErrChk=True, ConnectString='target /'):
 
   # Start Rman and login
   proc = Popen([Rman, ConnectString], bufsize=-1, stdin=PIPE, stdout=PIPE, stderr=STDOUT, \
-   shell=False, universal_newlines=True, close_fds=True)
+   shell=False, universal_newlines=True)
 
   # Execute the Sql and fetch the output -
   # Stderr is just a placeholder. We redirected stderr to stdout as follows 'stderr=STDOUT'.
@@ -2739,7 +3375,7 @@ def RunDgmgrl(DgbCmd, ErrChk=True, ConnectString='/'):
 
   # Start Dgmgrl and login
   proc = Popen([Dgmgrl, '-silent', ConnectString], bufsize=-1, stdin=PIPE, stdout=PIPE, stderr=STDOUT, \
-   shell=False, universal_newlines=True, close_fds=True)
+   shell=False, universal_newlines=True)
 
   # Execute the Sql and fetch the output -
   # Stderr is just a placeholder. We redirected stderr to stdout as follows 'stderr=STDOUT'.
