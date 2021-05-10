@@ -1,19 +1,22 @@
 #!/bin/env python
 
-#--------------------------------------------------------------------------------------------------#
-# Name: dginfo                                                                                     #
-# Auth: Randy Johnson                                                                              #
-# Desc: Reports information on the Data Guard Status and Configuration.                            #
-#                                                                                                  #
-# Date       Ver. Who              Change Description                                              #
-# ---------- ---- ---------------- -------------------------------------------------------------   #
-# 07/10/2014 1.00 Randy Johnson    Initial write.                                                  #
-# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                       #
-# 08/09/2015 3.00 Randy Johnson    Added prompts for username, password, tnsname.                  #
-# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                             #
-# 07/13/2017 3.02 Randy Johnson    Minor formatting changes to reports.                            #
-# 06/14/2020 3.03 Randy Johnson    Minor formatting changes to header.                             #
-#--------------------------------------------------------------------------------------------------#
+##################################################################################################
+#  Name:        dginfo                                                                           #
+#  Author:      Randy Johnson                                                                    #
+#  Description: Reports information on the Data Guard Status and Configuration.                  #
+#                                                                                                #
+# History:                                                                                       #
+#                                                                                                #
+# Date       Ver. Who              Change Description                                            #
+# ---------- ---- ---------------- ------------------------------------------------------------- #
+# 07/10/2014 1.00 Randy Johnson    Initial write.                                                #
+# 07/17/2015 2.00 Randy Johnson    Updated for Python 2.4-3.4 compatibility.                     #
+# 08/09/2015 3.00 Randy Johnson    Added prompts for username, password, tnsname.                #
+# 07/13/2017 3.01 Randy Johnson    Added program description to Usage.                           #
+# 07/13/2017 3.02 Randy Johnson    Monor formatting changes to reports.                          #
+# 05/10/2021 3.03 Randy Johnson    Added standby_became_primary_scn                              #
+##################################################################################################
+
 
 # --------------------------------------
 # ---- Import Python Modules -----------
@@ -38,8 +41,8 @@ from Oracle       import ParseConnectString
 if (__name__ == '__main__'):
   Cmd            = basename(argv[0]).split('.')[0]
   CmdDesc        = 'Data Guard Info.'
-  Version        = '3.02'
-  VersionDate    = 'Tue Dec 12 13:58:54 GST 2017'
+  Version        = '3.03'
+  VersionDate    = 'Mon May 10 09:59:28 CDT 2021'
   DevState       = 'Production'
   Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
   Sql            = ''
@@ -47,6 +50,7 @@ if (__name__ == '__main__'):
   ErrChk         = False
   InStr          = ''
   ConnStr        = ''
+
 
   # For handling termination in stdout pipe; ex: when you run: oerrdump | head
   signal(SIGPIPE, SIG_DFL)
@@ -73,12 +77,13 @@ if (__name__ == '__main__'):
   Sql += "-- db_mode.sql\n"
   Sql += "-------------------------------------------------------------------------\n"
   if (Global):
-    Sql += "column inst_id        format 999  heading 'Inst'\n"
-  Sql += "column database_role  format a18  heading 'Role  ' \n"
-  Sql += "column open_mode      format a20  heading 'Open Mode'\n"
-  Sql += "column log_mode       format a14  heading 'Log Mode'\n"
-  Sql += "column flashback_on   format a13  heading 'Flashback On'\n"
-  Sql += "column force_logging  format a14  heading 'Force Logging'\n"
+    Sql += "column inst_id                     format 999  heading 'Inst'\n"
+  Sql += "column database_role               format a18  heading 'Role  ' \n"
+  Sql += "column open_mode                   format a20  heading 'Open Mode'\n"
+  Sql += "column log_mode                    format a14  heading 'Log Mode'\n"
+  Sql += "column flashback_on                format a13  heading 'Flashback On'\n"
+  Sql += "column force_logging               format a14  heading 'Force Logging'\n"
+  Sql += "column standby_became_primary_scn  format a26  heading 'Standby Became Primary SCN'\n"
   Sql += "\n"
   Sql += "  SELECT " + SqlHeader + "\n"
   if (Global):
@@ -90,6 +95,7 @@ if (__name__ == '__main__'):
   Sql += "       , INITCAP(log_mode)      log_mode\n"
   Sql += "       , INITCAP(flashback_on)  flashback_on\n"
   Sql += "       , INITCAP(force_logging) force_logging\n"
+  Sql += "       , INITCAP(standby_became_primary_scn) standby_became_primary_scn\n"
   if (Global):
     Sql += "    FROM gv$database\n"
     Sql += "ORDER BY inst_id;\n"
