@@ -1,0 +1,302 @@
+#!/bin/env python
+
+#--------------------------------------------------------------------------------------------------#
+# Name:   purge_schema                                                                             #
+# Author: Randy Johnson                                                                            #
+# Descr:  Purges all objects in a schema. This script is interactive and keyboard confirmation is  #
+#         required. Nothing will be purged without confirmation (y/yes) when prompted.             #
+#                                                                                                  #
+# History:                                                                                         #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 09/09/2021 1.00 Randy Johnson    First commit.                                                   #
+#--------------------------------------------------------------------------------------------------#
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ParseConnectString
+
+# --------------------------------------
+# ---- Function Definitions ------------
+# --------------------------------------
+# ---------------------------------------------------------------------------
+# Name: read_input()
+# Desc: Prompts for input from the keyboard and returns values entered.
+# Args: prompt - printed to the screen to prompt the user for input.
+# Retn: value  - whatever is entered from the keyboard.
+# ---------------------------------------------------------------------------
+def read_input(prompt):
+  prompt = "\n%s: " % prompt
+
+  if(version_info[0] >= 3):
+    return input(prompt)
+  else:
+    return raw_input(prompt)
+# ---------------------------------------------------------------------------
+# End read_input()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Name: get_owner()
+# Desc: Query the database for object owner.
+# Args: None
+# Retn: obj_owner
+# ---------------------------------------------------------------------------
+def get_owner():
+  obj_owner = ''
+
+  Sql  = "SET PAGES      0\n"
+  Sql += "SET ECHO     OFF\n"
+  Sql += "SET FEEDBACK OFF\n"
+  Sql += "\n"
+  if User:
+    Sql += "  SELECT username FROM dual WHERE TO_UPPER(username) = ;".format(User.upper())
+  else:
+    Sql += "  SELECT SYS_CONTEXT('userenv','session_user') FROM dual;"
+
+  if (ConnStr != ''):
+    Stdout = RunSqlplus(Sql, ConnStr)
+  else:
+    Stdout = RunSqlplus(Sql)
+
+  return Stdout.strip()
+# ---------------------------------------------------------------------------
+# End get_owner()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Name: get_detail()
+# Desc: Query the database for detail object info.
+# Args: None
+# Retn: object_detail
+# ---------------------------------------------------------------------------
+def get_detail():
+  obj_detail = []
+
+  Sql  = "SET PAGES      0\n"
+  Sql += "SET ECHO     OFF\n"
+  Sql += "SET FEEDBACK OFF\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         object_type  ||'~'||\n"
+  Sql += "         object_name\n"
+  Sql += "    FROM dba_objects\n"
+  if User:
+    Sql += "   WHERE owner = '{}'\n".format(User.upper())
+  else:
+    Sql += "   WHERE owner = SYS_CONTEXT('userenv','session_user')\n"
+  Sql += "ORDER BY object_type\n"
+  Sql += "       , object_name;"
+
+  if (ConnStr != ''):
+    Stdout = RunSqlplus(Sql, ConnStr)
+  else:
+    Stdout = RunSqlplus(Sql)
+
+  if Stdout.strip():
+    for row in Stdout.strip().split('\n'):
+      obj_type, obj_name = row.split('~')
+      obj_detail.append((obj_type, obj_name))
+
+  return obj_detail
+# ---------------------------------------------------------------------------
+# End get_detail()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Name: get_summary()
+# Desc: Query the database for summary object info.
+# Args: None
+# Retn: object_detail
+# ---------------------------------------------------------------------------
+def get_summary():
+  obj_summary = {}
+
+  Sql  = "SET PAGES      0\n"
+  Sql += "SET ECHO     OFF\n"
+  Sql += "SET FEEDBACK OFF\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         object_type  ||'~'||\n"
+  Sql += "         count(*)\n"
+  Sql += "    FROM dba_objects\n"
+  Sql += "   WHERE owner = '{}'\n".format(obj_owner)
+  Sql += "GROUP BY object_type\n"
+  Sql += "ORDER BY object_type;"
+
+  if (ConnStr != ''):
+    Stdout = RunSqlplus(Sql, ConnStr)
+  else:
+    Stdout = RunSqlplus(Sql)
+
+  if Stdout.strip():
+    for row in Stdout.strip().split('\n'):
+      obj_type, count = row.split('~')
+      if obj_type not in obj_summary:
+        obj_summary[obj_type] = count
+
+  return obj_summary
+# ---------------------------------------------------------------------------
+# End get_summary()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Name: report()
+# Desc: Print Detail Report
+# Args: None
+# Retn: None
+# ---------------------------------------------------------------------------
+def report():
+  ln = 0
+
+  if Report:
+    for row in obj_detail:
+      obj_type, obj_name = row
+      if not ln % 20:
+        print('')
+        print('{:<20} {:<80}'.format('Object Type', 'Object Name'))
+        print('{:<20} {:<80}'.format('-'*20, '-'*80))
+      ln += 1
+
+      print('{:<20} {:<80}'.format(obj_type, obj_name))
+# ---------------------------------------------------------------------------
+# End report()
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Name: gen_commands()
+# Desc: Generate the DDL commands to purge the schema.
+# Args: Drop
+# Retn: Drop
+# ---------------------------------------------------------------------------
+def gen_commands():
+  obj_type = ''
+  obj_name = ''
+  key      = ''
+  Drop     = ''
+
+  for row in obj_detail:
+    obj_type, obj_name = row
+    if obj_type == ('TABLE'):
+      Drop += 'DROP {} {}.{} CASCADE CONSTRAINTS PURGE;\n'.format(obj_type, obj_owner.lower(), obj_name.lower())
+    elif obj_type not in ('PACKAGE BODY', 'LOB', 'TABLE PARTITION', 'INDEX', 'INDEX PARTITION','TRIGGER'):
+      Drop += 'DROP {} {}.{};\n'.format(obj_type, obj_owner.lower(), obj_name.lower())
+
+  return Drop
+# ---------------------------------------------------------------------------
+# End gen_commands()
+# ---------------------------------------------------------------------------
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'Purge Schema'
+  Version        = '1.00'
+  VersionDate    = 'Thu Sep  9 17:34:14 CDT 2021'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  InStr          = ''
+  ConnStr        = ''
+  obj_summary    = {}
+  obj_detail     = {}
+  obj_owner      = ''
+  obj_type       = ''
+  obj_name       = ''
+  Drop           = ''
+  response       = ''
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  Usage  = '\n\n-------------------------------------------------------------------------------'
+  Usage += '\nReport/Drop all schema objects.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('-r',  dest='Report',  action='store_true', default=False,                 help="report only")
+  ArgParser.add_option('-u',  dest='User',                         default=False, type=str,       help="User schema to purge.")
+  ArgParser.add_option('--s', dest='Show',    action='store_true', default=False,                 help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer', action='store_true', default=False,                 help="print version info.")
+
+  Options, args = ArgParser.parse_args()
+  argc = len(args)
+
+  if (Options.ShowVer):
+    Banner = CmdDesc + ', Release ' + Version + ' Production, ' + VersionDate
+    print('\n%s' % Banner)
+    exit()
+
+  Report  = Options.Report
+  User    = Options.User
+  Show    = Options.Show
+  ShowVer = Options.ShowVer
+
+  if (ShowVer == True):
+    print('\n%s' % Banner)
+    exit()
+
+  obj_owner   = get_owner()
+  obj_summary = get_summary()
+  obj_detail  = get_detail()
+
+  if Report:
+    report()
+
+  if not obj_summary:
+    print('\nNo objects found.')
+  else:
+    print('\nSchema: {}'.format(obj_owner.upper()))
+    print('')
+    print('{:<30} {:>10}'.format('Object Type', 'Count'))
+    print('{:<30} {:>10}'.format('-'*30, '-'*10))
+
+    for obj_type in sorted(obj_summary):
+      count = obj_summary[obj_type]
+      print('{:<30} {:>10}'.format(obj_type, count))
+
+    response = read_input('Continue with Purge? [y/N]')
+    if response.lower() in ('y', 'yes'):
+      Drop = gen_commands()
+      if (ConnStr != ''):
+        Stdout = RunSqlplus(Drop, ConnStr)
+      else:
+        Stdout = RunSqlplus(Drop)
+
+    if response.lower() in ('y','yes'):
+      obj_summary = get_summary()
+      if obj_summary:
+        print('\nSchema: {}'.format(obj_owner.upper()))
+        print('')
+        print('{:<30} {:>10}'.format('Object Type', 'Count'))
+        print('{:<30} {:>10}'.format('-'*30, '-'*10))
+        for obj_type in sorted(obj_summary):
+          count = obj_summary[obj_type]
+          print('{:<30} {:>10}'.format(obj_type, count))
+      
+    if response.lower() in ('y','yes'):
+      if obj_summary:
+        print('\nIncomplete.')
+      else:
+        print('\nDone.')
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
