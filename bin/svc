@@ -1,0 +1,185 @@
+#!/bin/env python
+
+#--------------------------------------------------------------------------------------------------#
+# Name:   svc                                                                                      #
+# Author: Randy Johnson                                                                            #
+# Descr:  Reports SQL version count, and the reason.                                               #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 11/12/2021 1.00 Randy Johnson    First commit.                                                   #
+#--------------------------------------------------------------------------------------------------#
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from datetime     import datetime
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from signal       import SIGPIPE
+from signal       import SIG_DFL
+from signal       import signal
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from Oracle       import ParseConnectString
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+from Oracle       import ValidateDate
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'SQL Version Count'
+  Version        = '1.00'
+  VersionDate    = 'Thu Nov 11 12:10:36 CST 2021'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  Now            = datetime.now()
+  EndTime        = (Now.strftime('%Y-%m-%d %H:%M:%S'))
+  ConnStr        = ''
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nReport versions of a SQL statement.'
+
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('-i',  dest='SqlId',                          default='',    type=str, help="value for sql_id")
+  ArgParser.add_option('--s', dest='Show',      action='store_true', default=False,           help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer',   action='store_true', default=False,           help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  Show        = Options.Show
+  SqlId       = Options.SqlId
+  ShowVer     = Options.ShowVer
+
+  if (ShowVer == True):
+    print('\n%s' % Banner)
+    exit()
+
+  Sql  = "column version_count       format 999,999         heading 'Count'\n"
+  Sql += "column sql_id              format a15             heading 'SQL ID'\n"
+  Sql += "column address             format a20             heading 'SQL Address'\n"
+  Sql += "column hash_value          format a11     heading 'SQL Hash'\n"
+  Sql += "column parsing_schema_name format a15             heading 'Parsing Schema'\n"
+  Sql += "column reason              format a80             heading 'Reason'\n"
+  Sql += "\n"
+  Sql += "  SELECT " + SqlHeader + "\n"
+  Sql += "         sql_id,\n"
+  Sql += "         address,\n"
+  Sql += "         TO_CHAR(hash_value) hash_value,\n"
+  Sql += "         parsing_schema_name,\n"
+  Sql += "         version_count,\n"
+  Sql += "         reason\n"
+  Sql += "    FROM (   SELECT address,\n"
+  Sql += "                   LTRIM(''\n"
+  Sql += "                         || decode(MAX(unbound_cursor),            'Y', ' UNBOUND_CURSOR')\n"
+  Sql += "                         || decode(MAX(sql_type_mismatch),         'Y', ' SQL_TYPE_MISMATCH')\n"
+  Sql += "                         || decode(MAX(optimizer_mismatch),        'Y', ' OPTIMIZER_MISMATCH')\n"
+  Sql += "                         || decode(MAX(outline_mismatch),          'Y', ' OUTLINE_MISMATCH')\n"
+  Sql += "                         || decode(MAX(stats_row_mismatch),        'Y', ' STATS_ROW_MISMATCH')\n"
+  Sql += "                         || decode(MAX(literal_mismatch),          'Y', ' LITERAL_MISMATCH')\n"
+  Sql += "                         || decode(MAX(explain_plan_cursor),       'Y', ' EXPLAIN_PLAN_CURSOR')\n"
+  Sql += "                         || decode(MAX(buffered_dml_mismatch),     'Y', ' BUFFERED_DML_MISMATCH')\n"
+  Sql += "                         || decode(MAX(pdml_env_mismatch),         'Y', ' PDML_ENV_MISMATCH')\n"
+  Sql += "                         || decode(MAX(inst_drtld_mismatch),       'Y', ' INST_DRTLD_MISMATCH')\n"
+  Sql += "                         || decode(MAX(slave_qc_mismatch),         'Y', ' SLAVE_QC_MISMATCH')\n"
+  Sql += "                         || decode(MAX(typecheck_mismatch),        'Y', ' TYPECHECK_MISMATCH')\n"
+  Sql += "                         || decode(MAX(auth_check_mismatch),       'Y', ' AUTH_CHECK_MISMATCH')\n"
+  Sql += "                         || decode(MAX(bind_mismatch),             'Y', ' BIND_MISMATCH')\n"
+  Sql += "                         || decode(MAX(describe_mismatch),         'Y', ' DESCRIBE_MISMATCH')\n"
+  Sql += "                         || decode(MAX(language_mismatch),         'Y', ' LANGUAGE_MISMATCH')\n"
+  Sql += "                         || decode(MAX(translation_mismatch),      'Y', ' TRANSLATION_MISMATCH')\n"
+  Sql += "                         || decode(MAX(insuff_privs),              'Y', ' INSUFF_PRIVS')\n"
+  Sql += "                         || decode(MAX(insuff_privs_rem),          'Y', ' INSUFF_PRIVS_REM')\n"
+  Sql += "                         || decode(MAX(remote_trans_mismatch),     'Y', ' REMOTE_TRANS_MISMATCH')\n"
+  Sql += "                         || decode(MAX(logminer_session_mismatch), 'Y', ' LOGMINER_SESSION_MISMATCH')\n"
+  Sql += "                         || decode(MAX(incomp_ltrl_mismatch),      'Y', ' INCOMP_LTRL_MISMATCH')\n"
+  Sql += "                         || decode(MAX(overlap_time_mismatch),     'Y', ' OVERLAP_TIME_MISMATCH')\n"
+  Sql += "                         || decode(MAX(mv_query_gen_mismatch),     'Y', ' MV_QUERY_GEN_MISMATCH')\n"
+  Sql += "                         || decode(MAX(user_bind_peek_mismatch),   'Y', ' USER_BIND_PEEK_MISMATCH')\n"
+  Sql += "                         || decode(MAX(typchk_dep_mismatch),       'Y', ' TYPCHK_DEP_MISMATCH')\n"
+  Sql += "                         || decode(MAX(no_trigger_mismatch),       'Y', ' NO_TRIGGER_MISMATCH')\n"
+  Sql += "                         || decode(MAX(flashback_cursor),          'Y', ' FLASHBACK_CURSOR')\n"
+  Sql += "                         || decode(MAX(anydata_transformation),    'Y', ' ANYDATA_TRANSFORMATION')\n"
+  Sql += "                         || decode(MAX(top_level_rpi_cursor),      'Y', ' TOP_LEVEL_RPI_CURSOR')\n"
+  Sql += "                         || decode(MAX(different_long_length),     'Y', ' DIFFERENT_LONG_LENGTH')\n"
+  Sql += "                         || decode(MAX(logical_standby_apply),     'Y', ' LOGICAL_STANDBY_APPLY')\n"
+  Sql += "                         || decode(MAX(diff_call_durn),            'Y', ' DIFF_CALL_DURN')\n"
+  Sql += "                         || decode(MAX(bind_uacs_diff),            'Y', ' BIND_UACS_DIFF')\n"
+  Sql += "                         || decode(MAX(plsql_cmp_switchs_diff),    'Y', ' PLSQL_CMP_SWITCHS_DIFF')\n"
+  Sql += "                         || decode(MAX(cursor_parts_mismatch),     'Y', ' CURSOR_PARTS_MISMATCH')\n"
+  Sql += "                         || decode(MAX(stb_object_mismatch),       'Y', ' STB_OBJECT_MISMATCH')\n"
+  Sql += "                         || decode(MAX(pq_slave_mismatch),         'Y', ' PQ_SLAVE_MISMATCH')\n"
+  Sql += "                         || decode(MAX(top_level_ddl_mismatch),    'Y', ' TOP_LEVEL_DDL_MISMATCH')\n"
+  Sql += "                         || decode(MAX(multi_px_mismatch),         'Y', ' MULTI_PX_MISMATCH')\n"
+  Sql += "                         || decode(MAX(bind_peeked_pq_mismatch),   'Y', ' BIND_PEEKED_PQ_MISMATCH')\n"
+  Sql += "                         || decode(MAX(mv_rewrite_mismatch),       'Y', ' MV_REWRITE_MISMATCH')\n"
+  Sql += "                         || decode(MAX(roll_invalid_mismatch),     'Y', ' ROLL_INVALID_MISMATCH')\n"
+  Sql += "                         || decode(MAX(optimizer_mode_mismatch),   'Y', ' OPTIMIZER_MODE_MISMATCH')\n"
+  Sql += "                         || decode(MAX(px_mismatch),               'Y', ' PX_MISMATCH')\n"
+  Sql += "                         || decode(MAX(mv_staleobj_mismatch),      'Y', ' MV_STALEOBJ_MISMATCH')\n"
+  Sql += "                         || decode(MAX(flashback_table_mismatch),  'Y', ' FLASHBACK_TABLE_MISMATCH')\n"
+  Sql += "                         || decode(MAX(litrep_comp_mismatch),      'Y', ' LITREP_COMP_MISMATCH')\n"
+  Sql += "                         ) reason\n"
+  Sql += "               FROM v$sql_shared_cursor\n"
+  Sql += "           GROUP BY address\n"
+  Sql += "         )\n"
+  Sql += "    JOIN v$sqlarea USING (address)\n"
+  if SqlId:
+    Sql += "   WHERE sql_id = '{}'\n".format(SqlId)
+  Sql += "ORDER BY version_count DESC,\n"
+  Sql += "         address;"
+
+  Sql = Sql.strip()
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
