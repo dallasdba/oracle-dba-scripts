@@ -1,0 +1,153 @@
+#!/bin/env python
+
+#--------------------------------------------------------------------------------------------------#
+# Name: ebs_patchstatus                                                                            #
+# Auth: Randy Johnson                                                                              #
+# Desc: Prints a report of patches and their applied status.                                       #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 04/20/2021 1.00 Randy Johnson    First commit.                                                   #
+#--------------------------------------------------------------------------------------------------#
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from optparse     import OptionParser
+from os           import environ
+from os.path      import basename
+from signal       import SIG_DFL
+from signal       import SIGPIPE
+from signal       import signal
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+from Oracle       import ParseConnectString
+from Oracle       import RunSqlplus
+from Oracle       import SetOracleEnv
+
+
+# --------------------------------------
+# ---- Main Program --------------------
+# --------------------------------------
+if (__name__ == '__main__'):
+  Cmd            = basename(argv[0]).split('.')[0]
+  CmdDesc        = 'EBS Patch Status'
+  Version        = '1.00'
+  VersionDate    = 'Wed Apr 20 15:10:47 CDT 2022'
+  DevState       = 'Production'
+  Banner         = CmdDesc + ': Release ' + Version + ' '  + DevState + '. Last updated: ' + VersionDate
+  Sql            = ''
+  SqlHeader      = '/***** ' + CmdDesc.upper() + ' *****/'
+  ErrChk         = False
+  InStr          = ''
+  TnsName        = ''
+  Username       = ''
+  Password       = ''
+  ConnStr        = ''
+  plist          = []
+
+  plist.append('6640838')
+  plist.append('8551790')
+  plist.append('14825718')
+  plist.append('24498616')
+  plist.append('24690680')
+  plist.append('25380324')
+  plist.append('25449925')
+  plist.append('26825525')
+  plist.append('28156520')
+  plist.append('28700057')
+  plist.append('29024389')
+  plist.append('29058008')
+  plist.append('32645734')
+  plist.append('32922089')
+
+  # Process command line options
+  # ----------------------------------
+  Usage  =  '%s [options]'  % Cmd
+  Usage += '\n\n%s'         % CmdDesc
+  Usage += '\n-------------------------------------------------------------------------------'
+  Usage += '\nReports status of specied patches for EBS.'
+  ArgParser = OptionParser(Usage)
+
+  ArgParser.add_option('--s', dest='Show',       action='store_true', default=False,                 help="print SQL query.")
+  ArgParser.add_option('--v', dest='ShowVer',    action='store_true', default=False,                 help="print version info.")
+
+  # Parse command line arguments
+  Options, args = ArgParser.parse_args()
+
+  Show      = Options.Show
+  ShowVer   = Options.ShowVer
+
+  if (ShowVer):
+    print('\n%s' % Banner)
+    exit()
+
+  Sql  = SqlHeader + "\n"
+  Sql += "\n"
+  Sql += "SET SERVEROUTPUT ON\n"
+  Sql += "\n"
+  Sql += "DECLARE\n"
+  Sql += "  cnt  number := 0;\n"
+  Sql += "  m    number := 0;\n"
+  Sql += "  a    varchar2(100);\n"
+  Sql += "  type patch_list is varray({}) of number(10);\n".format(len(plist))
+  Sql += "\n"
+  Sql += "  ------------------------------------------------------------------------------------------\n"
+  Sql += "  -- Update the list of patches below as required - Don't forget to extend the varray above\n"
+  Sql += "  -- if the number of patches increases\n"
+  Sql += "  ------------------------------------------------------------------------------------------\n"
+  Sql += "  patches patch_list := patch_list(\n     {});\n".format('\n    ,'.join(plist))
+  Sql += "\n"
+  Sql += "BEGIN\n"
+  Sql += "  dbms_output.enable(5000000); -- set output buffer\n"
+  Sql += "  m := patches.count;\n"
+  Sql += "  LOOP\n"
+  Sql += "    cnt := cnt + 1;\n"
+  Sql += "    IF cnt > m then\n"
+  Sql += "      EXIT;\n"
+  Sql += "    END IF;\n"
+  Sql += "\n"
+  Sql += "    SELECT DECODE(ad_patch.is_patch_applied('R12',-1,patches(cnt),'US'),'EXPLICIT','APPLIED','NOT_APPLIED','NOT APPLIED') INTO a\n"
+  Sql += "      FROM dual;\n"
+  Sql += "    dbms_output.put_line(patches(cnt) || ' ' || a);\n"
+  Sql += "  END LOOP;\n"
+  Sql += "END;\n"
+  Sql += "/\n"
+  
+  Sql = Sql.strip()
+
+  if(Show):
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(Sql)
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Check/setup the Oracle environment
+  if (not('ORACLE_SID' in list(environ.keys()))):
+    print('ORACLE_SID is required.')
+    exit(1)
+  else:
+    # Set the ORACLE_HOME just in case it isn't set already.
+    if (not('ORACLE_HOME' in list(environ.keys()))):
+      (OracleSid, OracleHome) = SetOracleEnv(environ['ORACLE_SID'])
+
+  # Parse the connect string if any, prompt for username, password if needed.
+  if (len(args) > 0 and Show == False):
+    InStr = args[0]
+    ConnStr = ParseConnectString(InStr)
+
+  # Execute the report
+  if (ConnStr != ''):
+    (Stdout) = RunSqlplus(Sql, ErrChk, ConnStr)
+  else:
+    (Stdout) = RunSqlplus(Sql, ErrChk)
+
+  # Print the report
+  if (Stdout != ''):
+    print('\n%s' % Stdout)
+
+  exit(0)
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------
