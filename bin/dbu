@@ -33,6 +33,7 @@
 # 04/05/2022 1.05                  Improved tracing in run_sqlplus().                              #
 #                                  Removed get_inst_count() and renamed get_svc_count() to         #
 #                                   get_inst_count(). Renamed svc_count to inst_count.             #
+# 04/22/2022 1.06                  Added missing "section size" code in backup database/archivelog #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -2957,6 +2958,8 @@ class Rman:
         self.rcv    += "\n   duration {} partial".format(opts.max_duration)
       if opts.cumulative:
         self.rcv    += "\n   cumulative"
+      if opts.section_size:
+        self.rcv      += "\n   section size {}".format(opts.section_size)
       if opts.max_set_size:
         self.rcv    += "\n   maxsetsize {}".format(opts.max_set_size)
       if opts.files_per_set:
@@ -3051,6 +3054,8 @@ class Rman:
       self.rcv      += "\n   duration {} partial".format(opts.max_duration)
     if opts.cumulative:
       self.rcv      += "\n   cumulative"
+    if opts.section_size:
+      self.rcv      += "\n   section size {}".format(opts.section_size)
     if opts.max_set_size:
       self.rcv      += "\n   maxsetsize {}".format(opts.max_set_size)
     if opts.files_per_set:
@@ -3855,8 +3860,8 @@ def wipe_logs():
 if __name__ == '__main__':
   cmd         = basename(argv[0]).split('.')[0]
   cmd_long    = 'Database Backup Utility for Oracle'
-  vsn         = '1.05'
-  vsn_date    = 'Tue Apr 5 09:36:50 CDT 2022'
+  vsn         = '1.06'
+  vsn_date    = 'Fri Apr 22 11:26:15 CDT 2022'
   dev_state   = 'Production'
   banner      = cmd_long + ' ' + vsn + ' '  + dev_state + ' Release. ' + vsn_date
   sql_header  = '/***** ' + cmd_long.upper() + ' *****/'
