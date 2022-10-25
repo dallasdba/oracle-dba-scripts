@@ -1,0 +1,223 @@
+#!/usr/bin/env python
+
+#--------------------------------------------------------------------------------------------------#
+# Name: dbprivs                                                                                    #
+# Auth: Randy Johnson                                                                              #
+# Desc: Report database privileges.                                                                #
+#                                                                                                  #
+# Requirements:                                                                                    #
+# - The database must be open read-write or read-only.                                             #
+# - Oracle thick client including SQL*Plus (sqlplus).                                              #
+#                                                                                                  #
+# Date       Ver. Who              Change Description                                              #
+# ---------- ---- ---------------- -------------------------------------------------------------   #
+# 10/24/2022 1.00 Randy Johnson    First commit.                                                   #
+#--------------------------------------------------------------------------------------------------#
+
+# --------------------------------------
+# ---- Import Python Modules -----------
+# --------------------------------------
+from __future__   import print_function
+#---
+import sys
+#---
+from argparse     import ArgumentParser
+from datetime     import datetime
+from os           import environ
+from os.path      import abspath
+from os.path      import basename
+from signal       import SIG_DFL
+from signal       import signal
+from signal       import SIGPIPE
+from socket       import gethostname
+from subprocess   import PIPE
+from sys          import argv
+from sys          import exit
+from sys          import version_info
+#---
+from Oracle       import ParseConnectString
+from Oracle       import PrintMessage
+from Oracle       import SqlReport
+
+# --------------------------------------
+# ---- Main ----------------------------
+# --------------------------------------
+if __name__ == '__main__':
+  cmd_name       = basename(argv[0]).split(".")[0]
+  cmd_descr      = 'Database Privileges Report'
+  versn          = "1.00"
+  versn_date     = "Tue Oct 25 08:59:25 CDT 2022"
+  dev_state      = "Production"
+  banner         = cmd_descr + ": Release " + versn + " "  + dev_state + ". Last updated: " + versn_date
+  now            = datetime.now()
+  sql_header     = '/***** ' + cmd_descr.upper() + ' *****/'
+  errchk         = False
+  connstr        = ""
+  minvers        = 2.7
+  maxvers        = 3.10
+  python_version = version_info[0] + (version_info[1] * .1)
+
+  # For handling termination in stdout pipe; ex: when you run: oerrdump | head
+  signal(SIGPIPE, SIG_DFL)
+
+  if (not python_version >= minvers) and (not python_version <= maxvers):
+    PrintMessage('{} only tested with Python versions {} ... {}'.format(cmd_name, minvers, maxvers), 'note')
+    print()
+
+  usage  =  '%s [options]'  % cmd_name
+  usage += '\n\n%s'         % cmd_descr
+  usage += '\n-------------------------------------------------------------------------------'
+  usage += "\nReport Database Priileges."
+  usage += "\n"
+  parser = ArgumentParser(usage=usage)#, add_help=False)
+
+  parser.add_argument(nargs='*', dest="connstr",                                     type=str, help="connect string (null = sys as sysdba)")
+  parser.add_argument("-g",      dest="grantee",                      default='',    type=str, help="grantee")
+  parser.add_argument("-t",      dest="tables",  action="store_true", default=False,           help="include table privileges")
+  parser.add_argument("-o",      dest="orderby",                      default='',    type=str, help="sort order eg. 1,3,2,4,...")
+  parser.add_argument("--s",     dest="show",    action="store_true", default=False,           help="show SQL query")
+  parser.add_argument("--v",     dest="versn",   action="store_true", default=False,           help="print version info.")
+
+  # Parse command line arguments
+  args = parser.parse_args()
+
+  grantee = args.grantee.upper()
+  tables  = args.tables
+  show    = args.show
+  versn   = args.versn
+  connstr = ' '.join(args.connstr)
+  if args.orderby:
+    orderby = [ x.strip() for x in args.orderby.split(',') if x.strip() != '']
+  else:
+    orderby = []
+
+  if versn:
+    print("\n%s" % banner)
+    exit(0)
+
+  sql  = "col privtype form a8  heading 'Priv|Type'\n"
+  sql += "col admin    form a5  heading 'With|Admin'\n"
+  sql += "col colnm    form a30 heading 'Column Name'\n"
+  sql += "col grantee  form a30 heading 'Grantee'\n"
+  sql += "col grantor  form a30 heading 'Grantor'\n"
+  sql += "col objtype  form a17 heading 'Object Type'\n"
+  sql += "col owner    form a30 heading 'Object Owner'\n"
+  sql += "col priv     form a35 heading 'Privilege'\n"
+  sql += "col pwd      form a8  heading 'Password|Required'\n"
+  sql += "col tabnm    form a30 heading 'Table Name'\n"
+  sql += "\n"
+  sql += "  SELECT " + sql_header + "\n"
+  sql += "         a.*\n"
+  sql += "    FROM (SELECT 'ROLE'                privtype\n"
+  if not grantee:
+    sql += "             , grantee               grantee\n"
+  sql += "               , granted_role          priv\n"
+  sql += "               , admin_option          admin\n"
+  sql += "               , '--'                  tabnm\n"
+  sql += "               , '--'                  colnm\n"
+  sql += "               , '--'                  owner\n"
+  sql += "               , '--'                  objtype\n"
+  sql += "               , '--'                  grantor\n"
+  sql += "               , r.password_required   pwd\n"
+  sql += "            FROM dba_role_privs        rp\n"
+  sql += "               , dba_roles             r\n"
+  sql += "           WHERE r.role  = rp.granted_role\n"
+  if grantee:
+    sql += "             AND grantee = '" + grantee  + "'\n"
+  sql += "           UNION\n"
+  sql += "          SELECT 'SYSTEM'              privtype\n"
+  if not grantee:
+    sql += "             , grantee               grantee\n"
+  sql += "               , privilege             priv\n"
+  sql += "               , admin_option          admin\n"
+  sql += "               , '--'                  tabnm\n"
+  sql += "               , '--'                  colnm\n"
+  sql += "               , '--'                  owner\n"
+  sql += "               , '--'                  objtype\n"
+  sql += "               , '--'                  grantor\n"
+  sql += "               , '--'                  pwd\n"
+  sql += "            FROM dba_sys_privs\n"
+  if grantee:
+    sql += "           WHERE grantee = '" + grantee + "'\n"
+  if tables:
+    sql += "           UNION\n"
+    sql += "          SELECT 'TABLE'               privtype\n"
+    if not grantee:
+      sql += "               , grantee               grantee\n"
+    sql += "               , privilege             priv\n"
+    sql += "               , grantable             admin\n"
+    sql += "               , table_name            tabnm\n"
+    sql += "               , '--'                  colnm\n"
+    sql += "               , owner                 owner\n"
+    sql += "               , type                  objtype\n"
+    sql += "               , grantor               grantor\n"
+    sql += "               , '--'                  pwd\n"
+    sql += "            FROM dba_tab_privs\n"
+    if grantee:
+      sql += "           WHERE grantee = '" + grantee + "'\n"
+    sql += "           UNION\n"
+    sql += "          SELECT 'COLUMN'              privtype\n"
+    if not grantee:
+      sql += "             , grantee               grantee\n"
+    sql += "               , privilege             priv\n"
+    sql += "               , grantable             admin\n"
+    sql += "               , table_name            tabnm\n"
+    sql += "               , column_name           colnm\n"
+    sql += "               , owner                 owner\n"
+    sql += "               , '--'                  objtype\n"
+    sql += "               , grantor               grantor\n"
+    sql += "               , '--'                  pwd\n"
+    sql += "            FROM dba_col_privs\n"
+    if not grantee:
+      sql += "           WHERE grantee = '" + grantee + "'\n"
+  sql += "         ) a\n"
+  if orderby:
+    sql += "ORDER BY " + ', '.join(orderby)
+  else:
+    sql += "ORDER BY CASE\n"
+    sql += "           WHEN a.privtype = 'ROLE'   THEN 4\n"
+    sql += "           WHEN a.privtype = 'SYSTEM' THEN 1\n"
+    sql += "           WHEN a.privtype = 'TABLE'  THEN 2\n"
+    sql += "           WHEN a.privtype = 'COLUMN' THEN 3\n"
+    sql += "           ELSE 5\n"
+    sql += "         END\n"
+    sql += "       , CASE\n"
+    sql += "           WHEN a.priv IN ('EXECUTE') THEN 1\n"
+    sql += "           WHEN a.priv IN ('SELECT','UPDATE','INSERT','DELETE') THEN 3\n"
+    sql += "           ELSE 2\n"
+    sql += "         END\n"
+    sql += "       , a.tabnm\n"
+    sql += "       , a.colnm\n"
+    sql += "       , a.priv"
+
+  sql = sql.strip()
+
+  if show:
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    print(sql + ';')
+    print('-----------cut-----------cut-----------cut-----------cut-----------cut-----------')
+    exit()
+
+  # Parse the connect string if one was provided on the command line.
+  if connstr:
+    connstr = ParseConnectString(connstr)
+
+  # Instantiate the SqlReport object
+  if connstr:
+    sqr = SqlReport(sql, errchk, connstr)
+  else:
+    sqr = SqlReport(sql, errchk)
+
+  # Initialize the Sqlplus environment
+  sqr.set_env()
+
+  # Execute the report
+  sqr.run_sqlplus()
+
+  # Print the report
+  sqr.print_stdout()
+
+  exit()
+# --------------------------------------
+# ---- End Main Program ----------------
+# --------------------------------------

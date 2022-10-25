@@ -34,6 +34,8 @@
 #                                  Removed get_inst_count() and renamed get_svc_count() to         #
 #                                   get_inst_count(). Renamed svc_count to inst_count.             #
 # 04/22/2022 1.06                  Added missing "section size" code in backup database/archivelog #
+# 05/25/2022 1.07                  Fixed snapshot controlfile format, controlfile autobackup       #
+#                                   format. Fixed allocate channel for maintenance.                #
 #--------------------------------------------------------------------------------------------------#
 
 # --------------------------------------
@@ -2001,12 +2003,12 @@ class Rman:
         # Configure autobackup and snapshot controlfile names
         # --------------------------------------------------------
         self.configlist.append("configure controlfile autobackup on;")
-        if opts.db_unique_name and opts.db_reco_dest:
-          self.configlist.append("configure controlfile autobackup format for device type {} to '{}';".format(opts.device, opts.db_reco_dest))
-          self.configlist.append("configure snapshot controlfile name to '{}/{}/snapcf_{}.f';".format(opts.db_reco_dest, opts.db_unique_name, opts.db_unique_name.lower()))
+        if opts.db_reco_dest:
+          self.configlist.append("configure controlfile autobackup format for device type {} to '{}/{}/%F';".format(opts.device, opts.db_reco_dest, opts.db_unique_name.upper()))
+          self.configlist.append("configure snapshot controlfile name to '{}/{}/snapcf_{}.f';".format(opts.db_reco_dest, opts.db_unique_name.upper(), opts.db_unique_name))
         else:
-          self.configlist.append("configure controlfile autobackup format for device type {} to '%f';")
-          self.configlist.append("configure snapshot controlfile name clear;")
+          self.configlist.append("configure controlfile autobackup format for device type {} to '%F';".format(opts.device))
+          self.configlist.append("configure snapshot controlfile name to 'snapcf_{}.f';".format(opts.db_unique_name))
 
         self.header     += '\n' + '\n'.join(sorted(self.configlist))
 
@@ -2481,9 +2483,11 @@ class Rman:
     self.rcv        += "\n# Allocate Channel(s)"
     self.rcv        += "\n# ------------------------------"
     if opts.distributed_channels and opts.inst_count > 1:
-      self.rcv      += "\nallocate channel for maintenance device type {} connect {};".format(opts.device, opts.tgt_connstr)
+      self.rcv      += "\nallocate channel for maintenance device type {} connect {}".format(opts.device, opts.tgt_connstr)
     else:
-      self.rcv      += "\nallocate channel for maintenance device type {};".format(opts.device)
+      self.rcv      += "\nallocate channel for maintenance device type {}".format(opts.device)
+    if opts.format:
+      self.rcv      += "\n format {};".format(opts.format)
     self.rcv        += "\n"
     self.rcv        += "\n# ------------------------------"
     self.rcv        += "\n# Perform Operation(s)"
@@ -2526,10 +2530,13 @@ class Rman:
     self.rcv        += "\n# --------------------------------------------------------------"
     self.rcv        += "\nset command id to 'RMAN:DELETE OBSOLETE';"
     self.rcv        += "\n"
-    if opts.distributed_channels:
-      self.rcv      += "\nallocate channel for maintenance device type {} connect {};".format(opts.device, opts.tgt_connstr)
+    if opts.distributed_channels and opts.inst_count > 1:
+      self.rcv      += "\nallocate channel for maintenance device type {} connect {}".format(opts.device, opts.tgt_connstr)
     else:
-      self.rcv      += "\nallocate channel for maintenance device type {};".format(opts.device)
+      self.rcv      += "\nallocate channel for maintenance device type {}".format(opts.device)
+    if opts.format:
+      self.rcv      += "\n format {};".format(opts.format)
+    self.rcv        += "\n"
     if not self.rcv:
       self.rcv      += "\n"
       self.rcv      += "\n# --------------------------------"
@@ -3860,8 +3867,8 @@ def wipe_logs():
 if __name__ == '__main__':
   cmd         = basename(argv[0]).split('.')[0]
   cmd_long    = 'Database Backup Utility for Oracle'
-  vsn         = '1.06'
-  vsn_date    = 'Fri Apr 22 11:26:15 CDT 2022'
+  vsn         = '1.07'
+  vsn_date    = 'Wed May 25 12:29:33 CDT 2022'
   dev_state   = 'Production'
   banner      = cmd_long + ' ' + vsn + ' '  + dev_state + ' Release. ' + vsn_date
   sql_header  = '/***** ' + cmd_long.upper() + ' *****/'
